@@ -11,4 +11,4 @@
        
  :aliases {:cljd {:main-opts ["-m" "cljd.build"]}}
  :cljd/opts {:kind :flutter
-             :main mongol-drafts.main}}
+             :main asuult.main}}
