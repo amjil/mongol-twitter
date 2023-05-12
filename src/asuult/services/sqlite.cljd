@@ -1,0 +1,23 @@
+(ns quora.services.sqlite
+  (:require
+   ["package:sqflite/sqflite.dart" :as sql]
+   ["package:path/path.dart" :as path]))
+
+(declare add-column-if-not-exists)
+
+(defn initialize-db []
+  (let [dbpath (path/join (await (sql/getDatabasesPath))
+                          "database.db")]
+    (sql/openDatabase dbpath
+                      .onCreate (fn [^sql/Database db version]
+                                  )
+                      .version 1)))
+
+(defn add-column-if-not-exists [^sql/Database db table column new-column-sql]
+  (let [sql (str "SELECT COUNT (*) AS CNTREC 
+                  FROM pragma_table_info (?) 
+                  WHERE name= ?")
+        result (await (.rawQuery db sql [table column]))]
+    (when (zero? (-> result first (get "CNTREC")))
+      (.execute db new-column-sql))))
+

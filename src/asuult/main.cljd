@@ -1,0 +1,23 @@
+(ns asuult.main
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
+   [cljd.flutter.alpha2 :as f]
+   [asuult.widgets.theme :as theme]))
+
+(defn main []
+  (m/runApp
+   (m/MaterialApp
+    .title "Welcome to Flutter"
+    .theme theme/default-light-theme
+    .darkTheme theme/default-dark-theme
+    ;;  .theme (m/ThemeData .primarySwatch m.Colors/blue
+    ;;                      .fontFamily "MongolianBaiZheng")
+    .debugShowCheckedModeBanner false
+    .home
+    (m/Center
+     .child (mgl/MongolText
+             "Hello World"
+             .style (m/TextStyle
+                     .color m.Colors/blue
+                     .fontSize 32.0))))))

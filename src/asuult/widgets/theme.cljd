@@ -1,0 +1,39 @@
+(ns asuult.widgets.theme
+  (:require 
+   ["package:flutter/material.dart" :as m]))
+
+(def default-light-theme 
+  (m/ThemeData
+   .fontFamily "MongolianBaiZheng"
+   .scaffoldBackgroundColor (-> m/Colors .white)
+   .colorScheme
+   (.light m/ColorScheme
+           .primary m.Colors/black
+           .onPrimary m.Colors/black
+           .primaryVariant m.Colors/black
+           .outlineVariant (-> m/Colors .yellowAccent .-shade400)
+           .secondary m.Colors/red
+           .tertiary (-> m/Colors .blueGrey .-shade600)
+           .primaryContainer (-> m/Colors .blueGrey .-shade50)
+           .secondaryContainer (-> m/Colors .blueGrey .-shade100)
+           .tertiaryContainer (-> m/Colors .grey .-shade200))
+   .cardTheme (m/CardTheme .color (-> m/Colors .white))
+   .iconTheme (m/IconThemeData .color (-> m/Colors .blueGrey .-shade600))))
+
+(def default-dark-theme
+  (m/ThemeData
+   .fontFamily "MongolianBaiZheng"
+   .scaffoldBackgroundColor (-> m/Colors .black45)
+   .colorScheme
+   (.dark m/ColorScheme
+          .primary m.Colors/blueGrey
+          .onPrimary m.Colors/white
+          .primaryVariant m.Colors/white60
+          .outlineVariant (-> m/Colors .yellowAccent)
+          .secondary m.Colors/red
+          .tertiary (-> m/Colors .black45)
+          .primaryContainer (-> m/Colors .grey .-shade900)
+          .secondaryContainer (-> m/Colors .grey .-shade800)
+          .tertiaryContainer (-> m/Colors .grey .-shade700))
+   .cardTheme (m/CardTheme .color m.Colors/blueGrey)
+   .iconTheme (m/IconThemeData .color (-> m/Colors .yellowAccent .-shade700))))

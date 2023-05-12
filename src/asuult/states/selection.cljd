@@ -1,0 +1,86 @@
+(ns asuult.states.selection
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:flutter/services.dart" :as services]))
+
+(defn cursor-up [^m/TextEditingController controller]
+  (let [selection (.-selection controller)]
+    (when-not (zero? (.-start selection))
+      (let [offset (dec (.-start selection))]
+        (set! (.-selection controller)
+              (.copyWith selection
+                         .baseOffset offset
+                         .extentOffset offset))))))
+
+(defn cursor-down [^m/TextEditingController controller]
+  (let [text-length (count (.-text controller))
+        selection (.-selection controller)]
+    (when-not (= (.-start selection) text-length)
+      (let [offset (inc (.-start selection))]
+        (set! (.-selection controller)
+              (.copyWith selection
+                         .baseOffset offset
+                         .extentOffset offset))))))
+
+(defn cursor-before-word [^m/TextEditingController controller]
+  (when-not (zero? (.-start (.-selection controller)))
+    (let [selection-base (dec (.-start (.-selection controller)))
+          selection (.copyWith (.-selection controller)
+                               .baseOffset selection-base
+                               .extentOffset selection-base)
+          before-text (.textBefore selection (.-text controller))
+          splited-text (clojure.string/split before-text #" |\n")
+          text (if (clojure.string/ends-with? before-text " ")
+                 (-> splited-text drop-last last)
+                 (last splited-text))
+          offset (- (.-start selection) (count text))]
+      (set! (.-selection controller)
+            (.copyWith selection
+                       .baseOffset offset
+                       .extentOffset offset)))))
+
+(defn cursor-after-word [^m/TextEditingController controller]
+  (when-not (>= (.-start (.-selection controller)) (count (.-text controller)))
+    (let [selection-base (inc (.-start (.-selection controller)))
+          selection (.copyWith (.-selection controller)
+                               .baseOffset selection-base
+                               .extentOffset selection-base)
+          after-text (.textAfter selection (.-text controller))
+          splited-text (clojure.string/split after-text #" |\n")
+          text (if (clojure.string/starts-with? after-text " ")
+                 (second splited-text)
+                 (first splited-text))
+          offset (if (clojure.string/starts-with? after-text " ")
+                   (+ 1 (.-start selection) (count text))
+                   (+ (.-start selection) (count text)))]
+      (set! (.-selection controller)
+            (.copyWith selection
+                       .baseOffset offset
+                       .extentOffset offset)))))
+
+(defn select-all [^m/TextEditingController controller]
+  (set! (.-selection controller)
+        (services/TextSelection
+         .baseOffset 0
+         .extentOffset (-> controller .-text .-length))))
+
+(defn copy [^m/TextEditingController controller]
+  (let [selection (.-selection controller)
+        selected-text (.substring (.-text controller)
+                                  (.-start selection)
+                                  (.-end selection))
+        clipboard-data (services/ClipboardData .text selected-text)]
+    (services.Clipboard/setData clipboard-data)))
+
+(defn paste [^m/TextEditingController controller]
+  (let [selection (.-selection controller)
+        text (.-text controller)
+        clipboard-data (await (services.Clipboard/getData (.kTextPlain services/Clipboard)))
+        clipboard-text (.-text clipboard-data)
+        new-text (.replaceRange text (.-start selection) (.-end selection) clipboard-text)
+        new-str-length (.-length clipboard-text)]
+    (set! (.-text controller) new-text)
+    (set! (.-selection controller)
+          (.copyWith selection
+                     .baseOffset (+ (.-start selection) new-str-length)
+                     .extentOffset (+ (.-start selection) new-str-length)))))
