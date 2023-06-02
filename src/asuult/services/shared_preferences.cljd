@@ -1,4 +1,4 @@
-(ns mongol-drafts.services.shared-preferences
+(ns asuult.services.shared-preferences
   (:require 
    ["package:shared_preferences/shared_preferences.dart" :as sp]))
 

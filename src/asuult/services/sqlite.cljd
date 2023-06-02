@@ -1,4 +1,4 @@
-(ns quora.services.sqlite
+(ns asuult.services.sqlite
   (:require
    ["package:sqflite/sqflite.dart" :as sql]
    ["package:path/path.dart" :as path]))
