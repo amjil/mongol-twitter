@@ -3,8 +3,9 @@
    ["package:flutter/material.dart" :as m]
    ["package:mongol/mongol.dart" :as mgl]
    [cljd.flutter.alpha2 :as f]
-   [asuult.widgets.theme :as theme]
-   [asuult.screens.home :as home]))
+   [asuult.common.theme :as theme]
+   [asuult.screens.home :as home]
+   ))
 
 (defn main []
   (m/runApp

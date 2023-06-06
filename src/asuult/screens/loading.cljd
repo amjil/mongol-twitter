@@ -1,0 +1,12 @@
+(ns asuult.screens.loading
+  (:require
+   ["package:flutter/material.dart" :as m]
+   [cljd.flutter.alpha2 :as f]))
+
+(defn ^m/Widget loading-screen [ctx]
+  (f/widget
+   :get [m/Navigator]
+   (m/Scaffold
+    .body
+    (m/Center
+     .child (m/CircularProgressIndicator)))))

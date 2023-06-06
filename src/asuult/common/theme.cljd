@@ -1,4 +1,4 @@
-(ns asuult.widgets.theme
+(ns asuult.common.theme
   (:require 
    ["package:flutter/material.dart" :as m]))
 

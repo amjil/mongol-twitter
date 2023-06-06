@@ -8,8 +8,8 @@
   (f/widget
    :get [m/Navigator]
    (m/Scaffold
-    .appBar (m/AppBar
-             .title (m/Text "Home Screen"))
+    ;; .appBar (m/AppBar
+    ;;          .title (m/Text "Home Screen"))
     .body
     (m/Center
      .child (mgl/MongolText
