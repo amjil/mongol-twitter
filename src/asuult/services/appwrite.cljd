@@ -1,0 +1,21 @@
+(ns asuult.services.appwrite
+  (:require
+   ["package:appwrite/appwrite.dart" :as appw]))
+
+(def endpoint "http://appwrite.amjil.local/v1")
+
+(def project-id "asuult")
+
+(def database-id "64803b4b13c2a135b6c5")
+
+(def bucket-id "64803be74260a84a635a")
+
+(defn image-url [image-id]
+  (str endpoint "/storage/buckets/" bucket-id "/files/" image-id "/view?project=" project-id "&mode=admin"))
+
+(def client 
+  (let [c (appw/Client)]
+    (.setEndpoint c endpoint)
+    (.setProject c project-id)
+    (.setSelfSigned c .status true)
+    c))
