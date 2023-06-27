@@ -1,4 +1,4 @@
-(ns asuult.services.appwrite
+(ns jirgee.services.appwrite
   (:require
    ["package:appwrite/appwrite.dart" :as appw]))
 

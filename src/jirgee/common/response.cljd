@@ -1,0 +1,5 @@
+(ns jirgee.common.response)
+
+;; (defn reponse-messagegs [e]
+;;   (condp = (.-code e)
+;;     ))

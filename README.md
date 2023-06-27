@@ -1,4 +1,4 @@
-# mongol_quora
+# mongol_twitter 
 
 A new Flutter project.
 
@@ -27,8 +27,8 @@ This Mongolian Flutter App is made possible by the following projects:
 1. Install the `clj` command.
 2. clone menu-bar repo `git clone https://github.com/amjil/mongol-menu-bar`.
 3. clone menu-bar repo `git clone https://github.com/amjil/mongol-virtual-keyboard`.
-4. clone menu-bar repo `git clone https://github.com/amjil/mongol-quora`.
-5. Into the drafts folder `cd mongol-quora`
+4. clone menu-bar repo `git clone https://github.com/amjil/mongol-twitter`.
+5. Into the drafts folder `cd mongol-twitter`
 5. Init the example `clj -M:cljd init`
 6. Copy pubspec.yaml.bak to pubspec.yaml `cp pubspec.yaml.bak pubspec.yaml`
 7. Open a simulator `open -a Simulator`

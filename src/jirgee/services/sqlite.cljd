@@ -1,4 +1,4 @@
-(ns asuult.services.sqlite
+(ns jirgee.services.sqlite
   (:require
    ["package:sqflite/sqflite.dart" :as sql]
    ["package:path/path.dart" :as path]))

@@ -1,4 +1,4 @@
-(ns asuult.services.auth
+(ns jirgee.services.auth
   (:require
    ["package:appwrite/appwrite.dart" :as appw]
    [asuult.services.appwrite :as appw-service]
@@ -6,10 +6,8 @@
 
 (defn login [email pass]
   (try
-    (dart:core/print "1111")
     (let [account (await (appw/Account appw-service/client))
           user (await (.createEmailSession account .email email .password pass))]
-      (dart:core/print "aaaaa")
       (dart:core/print (str "user = " (.-userId user)))
       ;; Todo set user to SharedPreferences
       ;; (sp/set-value {:type :string :key "id" :value "aaa"})

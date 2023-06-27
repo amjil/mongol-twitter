@@ -1,4 +1,4 @@
-(ns asuult.services.shared-preferences
+(ns jirgee.services.shared-preferences
   (:require 
    ["package:shared_preferences/shared_preferences.dart" :as sp]))
 

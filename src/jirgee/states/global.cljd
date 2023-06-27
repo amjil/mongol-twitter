@@ -1,4 +1,4 @@
-(ns asuult.states.global
+(ns jirgee.states.global
   (:require 
    ["package:flutter/material.dart" :as m]
    [virtual-keyboard.options :as keyboard-options]))

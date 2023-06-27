@@ -1,4 +1,4 @@
-(ns asuult.states.history
+(ns jirgee.states.history
   (:require
    ["package:flutter/material.dart" :as m]
    ["package:diff_match_patch/diff_match_patch.dart" :as diff-patch]))

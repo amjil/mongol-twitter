@@ -1,10 +1,10 @@
-(ns asuult.main
+(ns jirgee.main
   (:require
    ["package:flutter/material.dart" :as m]
    ["package:mongol/mongol.dart" :as mgl]
    [cljd.flutter.alpha2 :as f]
-   [asuult.common.theme :as theme]
-   [asuult.screens.home :as home]
+   [jirgee.common.theme :as theme]
+   [jirgee.screens.home :as home]
    ))
 
 (defn main []
