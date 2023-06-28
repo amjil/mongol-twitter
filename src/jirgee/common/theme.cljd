@@ -37,3 +37,14 @@
           .tertiaryContainer (-> m/Colors .grey .-shade700))
    .cardTheme (m/CardTheme .color m.Colors/blueGrey)
    .iconTheme (m/IconThemeData .color (-> m/Colors .yellowAccent .-shade700))))
+
+;; static const Color backgroundColor = Colors.black;
+;; static const Color searchBarColor = Color.fromRGBO (32, 35, 39, 1);
+;; static const Color blueColor = Color.fromRGBO (29, 155, 240, 1);
+;; static const Color whiteColor = Colors.white;
+;; static const Color greyColor = Colors.grey;
+;; static const Color redColor = Color.fromRGBO (249, 25, 127, 1);
+(def background-color m.Colors/black)
+(def white-color m.Colors/white)
+(def blue-color (.fromRGBO m/Color 29 155 240 1))
+(def grey-color m.Colors/grey)
