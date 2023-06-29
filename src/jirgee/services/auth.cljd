@@ -1,27 +1,24 @@
 (ns jirgee.services.auth
   (:require
    ["package:appwrite/appwrite.dart" :as appw]
-   [jirgee.services.appwrite :as appw-service]
-   [jirgee.services.shared-preferences :as sp]))
+   [jirgee.services.appwrite :as appw-service]))
 
-(defn login [email pass]
+(defn login [info right left]
   (try
     (let [account (await (appw/Account appw-service/client))
-          user (await (.createEmailSession account .email email .password pass))]
-      (dart:core/print (str "user = " (.-userId user)))
-      ;; Todo set user to SharedPreferences
-      ;; (sp/set-value {:type :string :key "id" :value "aaa"})
-      {:success true :msg "success"})
+          user (await (.createEmailSession account .email (:email info) .password (:password info)))]
+      (right))
     (catch appw/AppwriteException e
-      (dart:core/print (str "error = " (.-message e) " code = " (.-code e)))
-      {:success false :msg (.-message e)})))
+      (left {:msg (.-message e) :code (.-code e)}))))
 
-(defn sign-up [email pass name]
+(defn sign-up [info right left]
   (try
     (let [account (await (appw/Account appw-service/client))
-          result (await (.create account .userId (.unique appw/ID) .email email .password pass .name name))]
-      (dart:core/print (str "result = " result))
-      {:success true :msg "success"})
+          result (await (.create account 
+                                 .userId (.unique appw/ID) 
+                                 .email (:email info) 
+                                 .password (:password info) 
+                                 .name (:name info)))]
+      (right (assoc info :id (.-$id result))))
     (catch appw/AppwriteException e
-      (dart:core/print (str "error = " (.-message e)))
-      {:success false :msg (.-message e)})))
+      (left {:msg (.-message e) :code (.-code e)}))))
