@@ -36,7 +36,7 @@
                               (fn []
                                 (dart:core/print "abc hello button")
                                 ;; (auth-service/sign-up "sqbh@sina.com" "123123123" "test000")
-                                (auth-service/login "sqbh@sina.com" "123123123")
+                                ;; (auth-service/login "sqbh@sina.com" "123123123")
                                 ))
                   (mgl/MongolText
                    "Hello World"

@@ -3,7 +3,9 @@
    ["package:flutter/material.dart" :as m]
    ["package:mongol/mongol.dart" :as mgl]
    [cljd.flutter.alpha2 :as f]
-   [jirgee.common.theme :as theme]))
+   [jirgee.common.theme :as theme]
+   [jirgee.services.auth :as auth-service]
+   [jirgee.common.utils :as utils]))
 
 (defn auth-form-field [controller hint-text]
   (m/TextFormField
@@ -45,13 +47,16 @@
    (m/Padding
     .padding (.symmetric m/EdgeInsets .horizontal 20))
    (m/Column
-    .children 
+    .children
     [(auth-form-field email-controller "Email")
      (m/SizedBox .height 25)
      (auth-form-field password-controller "Password")
      (m/SizedBox .height 40)
      (m/Align
       .alignment m.Alignment/topRight
-      .child (rounded-button #(dart:core/print "hello")
+      .child (rounded-button (fn [] (auth-service/login {:email "sqbh@sina.com" :password "123123123"}
+                                                        ;; #(dart:core/print "yesssssss")
+                                                        #(utils/show-toast ctx "yessss")
+                                                        #(dart:core/print "ooppes")))
                              "Done" nil nil))
      (m/SizedBox .height 40)])))
