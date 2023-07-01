@@ -5,21 +5,9 @@
    ["package:flutter_styled_toast/flutter_styled_toast.dart" :as styled-toast]
    [cljd.flutter.alpha2 :as f]))
 
-
 (defn show-toast [ctx msg]
-  (styled-toast/showToastWidget (mgl/MongolText "hello styled toast") .context ctx)
-
-;;   (-> m/ScaffoldMessenger
-;;       (.of ctx)
-;;       (.showSnackBar
-;;        (m/SnackBar .content
-;;                    (m/Align
-;;                     .alignment m.Alignment/centerRight
-;;                     .child
-;;                     (mgl/MongolText msg))
-
-;;                    .behavior m.SnackBarBehavior/floating
-
-;;                 ;;    .margin (.all m/EdgeInsets 50)
-;;                    )))
-  )
+  (styled-toast/showToastWidget
+   (mgl/MongolText msg) .context ctx
+   .reverseAnimation styled-toast.StyledToastAnimation/fade
+   .animation styled-toast.StyledToastAnimation/fade
+   .position styled-toast.StyledToastPosition/center))
