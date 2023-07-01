@@ -4,7 +4,9 @@
    ["package:mongol/mongol.dart" :as mgl]
    [jirgee.services.appwrite :as appw]
    [jirgee.services.auth :as auth-service]
-   [cljd.flutter.alpha2 :as f]))
+   [jirgee.services.user :as user-service]
+   [cljd.flutter.alpha2 :as f]
+   ))
 
 (defn bar-button [child on-press]
   (f/widget
@@ -34,9 +36,7 @@
       (m/Column
        .children [(bar-button (m/Text "hello text" )
                               (fn []
-                                (dart:core/print "abc hello button")
-                                ;; (auth-service/sign-up "sqbh@sina.com" "123123123" "test000")
-                                ;; (auth-service/login "sqbh@sina.com" "123123123")
+                                (user-service/get-user)
                                 ))
                   (mgl/MongolText
                    "Hello World"

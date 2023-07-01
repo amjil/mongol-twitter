@@ -55,7 +55,6 @@
      (m/Align
       .alignment m.Alignment/topRight
       .child (rounded-button (fn [] (auth-service/login {:email "sqbh@sina.com" :password "123123123"}
-                                                        ;; #(dart:core/print "yesssssss")
                                                         #(utils/show-toast ctx "yessss")
                                                         #(dart:core/print "ooppes")))
                              "Done" nil nil))

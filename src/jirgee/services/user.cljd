@@ -1,0 +1,10 @@
+(ns jirgee.services.user
+  (:require 
+   [jirgee.services.shared-preferences :as sp]))
+
+(defn get-user []
+  (let [user-id (await (sp/get-value {:type :string :key "user-id"}))]
+    (dart:core/print (str "user-id = " user-id))
+    (if (empty? user-id)
+      (dart:core/print "Empty user-id")
+      (dart:core/print "Yes user-id"))))
