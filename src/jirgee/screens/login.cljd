@@ -5,36 +5,8 @@
    [cljd.flutter.alpha2 :as f]
    [jirgee.common.theme :as theme]
    [jirgee.services.auth :as auth-service]
-   [jirgee.common.utils :as utils]))
-
-(defn auth-form-field [controller hint-text]
-  (m/TextFormField
-   .controller controller
-   .decoration 
-   (m/InputDecoration
-    .focusedBorder
-    (m/OutlineInputBorder
-     .borderRadius (.circular m/BorderRadius 5)
-     .borderSide (m/BorderSide .color theme/blue-color .width 3))
-    .enabledBorder (m/OutlineInputBorder
-                    .borderRadius (.circular m/BorderRadius 5)
-                    .borderSide 
-                    (m/BorderSide .color theme/grey-color))
-    .contentPadding (.all m/EdgeInsets 22)
-    .hintText hint-text
-    .hintStyle (m/TextStyle .fontSize 18))))
-
-(defn rounded-button [on-tap label bg-color text-color]
-  (m/InkWell
-   .onTap on-tap
-   .child (m/Chip
-           .label
-           (mgl/MongolText label
-                           .style (m/TextStyle
-                                   .color (if (nil? text-color) theme/background-color text-color)
-                                   .fontSize 16))
-           .backgroundColor (if (nil? bg-color) theme/white-color bg-color)
-           .labelPadding (.symmetric m/EdgeInsets .horizontal 5 .vertical 20))))
+   [jirgee.common.utils :as utils]
+   [jirgee.widgets.auth :as auth-widgets]))
 
 (defn ^m/Widget login-screen [ctx]
   (f/widget
@@ -48,14 +20,14 @@
     .padding (.symmetric m/EdgeInsets .horizontal 20))
    (m/Column
     .children
-    [(auth-form-field email-controller "Email")
+    [(auth-widgets/auth-form-field email-controller "Email")
      (m/SizedBox .height 25)
-     (auth-form-field password-controller "Password")
+     (auth-widgets/auth-form-field password-controller "Password")
      (m/SizedBox .height 40)
      (m/Align
       .alignment m.Alignment/topRight
-      .child (rounded-button (fn [] (auth-service/login {:email "sqbh@sina.com" :password "123123123"}
-                                                        #(utils/show-toast ctx "yessss")
-                                                        #(dart:core/print "ooppes")))
-                             "Done" nil nil))
+      .child (auth-widgets/rounded-button (fn [] (auth-service/login ctx
+                                                                     {:email "sqbh@sina.com" :password "123123123"}
+                                                                     #(utils/show-toast ctx "yessss")))
+                                          "Done" nil nil))
      (m/SizedBox .height 40)])))

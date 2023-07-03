@@ -1,12 +1,40 @@
 (ns jirgee.screens.sign-up
   (:require
    ["package:flutter/material.dart" :as m]
-   [cljd.flutter.alpha2 :as f]))
+   [cljd.flutter.alpha2 :as f]
+   [jirgee.states.global :as gs]
+   [jirgee.screens.loading :as loading-screen]
+   [jirgee.widgets.auth :as auth-widgets]
+   [jirgee.services.auth :as auth-service]
+   [jirgee.common.utils :as utils]))
 
 (defn ^m/Widget sign-up-screen [ctx]
   (f/widget
    :get [m/Navigator]
-   (m/Scaffold
-    .body
-    (m/Center
-     .child (m/Text "sign-up")))))
+   :watch [{:keys [is-loading?]} gs/state]
+   :managed [email-controller (m/TextEditingController)
+             password-controller (m/TextEditingController)
+             password-confirmation-controller (m/TextEditingController)]
+   (if (true? is-loading?)
+     (loading-screen/loading-screen ctx)
+     (m/Scaffold
+      .body
+      (m/Center
+      ;;  .child (m/Text "sign-up")
+       .child
+       (m/Padding
+        .padding (.all m/EdgeInsets 20)
+        .child
+        (m/Column
+         .children
+         [(auth-widgets/auth-form-field email-controller "Email")
+          (m/SizedBox .height 25)
+          (auth-widgets/auth-form-field password-controller "Password")
+          (m/SizedBox .height 25)
+          (auth-widgets/auth-form-field password-confirmation-controller "Password Confirmation")
+          (m/SizedBox .height 40)
+          (m/Align
+           .alignment m.Alignment/topRight
+           .child (auth-widgets/rounded-button (fn [] (auth-service/sign-up ctx
+                                                                            {:email "sqbh@sina.com" :password "123123123"}))
+                                               "Done" nil nil))])))))))

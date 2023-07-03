@@ -1,24 +1,35 @@
 (ns jirgee.services.auth
   (:require
    ["package:appwrite/appwrite.dart" :as appw]
-   [jirgee.services.appwrite :as appw-service]))
+   [jirgee.services.appwrite :as appw-service]
+   [jirgee.services.user :as user-service]
+   [jirgee.common.utils :as utils]))
 
-(defn login [info right left]
+(defn login [ctx info right]
   (try
     (let [account (await (appw/Account appw-service/client))
           user (await (.createEmailSession account .email (:email info) .password (:password info)))]
       (right))
     (catch appw/AppwriteException e
-      (left {:msg (.-message e) :code (.-code e)}))))
+      (utils/show-toast ctx (.-message e)))))
 
-(defn sign-up [info right left]
+(defn sign-up [ctx info]
   (try
     (let [account (await (appw/Account appw-service/client))
-          result (await (.create account 
-                                 .userId (.unique appw/ID) 
-                                 .email (:email info) 
-                                 .password (:password info) 
-                                 .name (:name info)))]
-      (right (assoc info :id (.-$id result))))
+          result (await (.create account
+                                 .userId (.unique appw/ID)
+                                 .email (:email info)
+                                 .password (:password info)
+                                 .name (:name info)))
+          id (.-$id result)
+          user-model nil]
+      (user-service/save-user ctx {:email (:email info)
+                                   :name ""
+                                   :followers []
+                                   :following []
+                                   :profilePic ""
+                                   :bannerPic ""
+                                   :uid id
+                                   :bio ""}))
     (catch appw/AppwriteException e
-      (left {:msg (.-message e) :code (.-code e)}))))
+      (utils/show-toast ctx (.-message e)))))

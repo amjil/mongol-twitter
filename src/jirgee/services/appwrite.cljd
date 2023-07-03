@@ -10,6 +10,8 @@
 
 (def bucket-id "64803be74260a84a635a")
 
+(def user-collection "")
+
 (defn image-url [image-id]
   (str endpoint "/storage/buckets/" bucket-id "/files/" image-id "/view?project=" project-id "&mode=admin"))
 

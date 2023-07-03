@@ -1,0 +1,34 @@
+(ns jirgee.widgets.auth
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
+   [jirgee.common.theme :as theme]))
+
+(defn auth-form-field [controller hint-text]
+  (m/TextFormField
+   .controller controller
+   .decoration
+   (m/InputDecoration
+    .focusedBorder
+    (m/OutlineInputBorder
+     .borderRadius (.circular m/BorderRadius 5)
+     .borderSide (m/BorderSide .color theme/blue-color .width 3))
+    .enabledBorder (m/OutlineInputBorder
+                    .borderRadius (.circular m/BorderRadius 5)
+                    .borderSide
+                    (m/BorderSide .color theme/grey-color))
+    .contentPadding (.all m/EdgeInsets 22)
+    .hintText hint-text
+    .hintStyle (m/TextStyle .fontSize 18))))
+
+(defn rounded-button [on-tap label bg-color text-color]
+  (m/InkWell
+   .onTap on-tap
+   .child (m/Chip
+           .label
+           (mgl/MongolText label
+                           .style (m/TextStyle
+                                   .color (if (nil? text-color) theme/background-color text-color)
+                                   .fontSize 16))
+           .backgroundColor (if (nil? bg-color) theme/white-color bg-color)
+           .labelPadding (.symmetric m/EdgeInsets .horizontal 5 .vertical 20))))
