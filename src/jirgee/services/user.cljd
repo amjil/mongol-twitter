@@ -1,10 +1,8 @@
 (ns jirgee.services.user
-  (:require 
-   ["package:appwrite/appwrite.dart" :as appw]
+  (:require
    [jirgee.services.shared-preferences :as sp]
    [jirgee.states.global :as gs]
-   [jirgee.common.utils :as utils]
-   [jirgee.services.appwrite :as appw-service]))
+   [jirgee.common.utils :as utils]))
 
 (defn get-user [ctx]
   (stream
@@ -20,13 +18,4 @@
    (.asStream (sp/get-value {:type :string :key "user-id"}))))
 
 (defn save-user [ctx info]
-  (try
-    (let [db (appw/Databases appw-service/client)
-          result (await (.createDocument db
-                                         .databaseId appw-service/database-id
-                                         .collectionId appw-service/user-collection
-                                         .documentId (:uid info)
-                                         .data info))]
-      nil)
-    (catch appw/AppwriteException e
-      (utils/show-toast ctx (.-message e)))))
+  nil)
