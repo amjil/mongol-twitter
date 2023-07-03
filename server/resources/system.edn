@@ -50,6 +50,19 @@
  :db.sql/migrations {:store :database,
                      :db {:datasource #ig/ref :db.sql/connection},
                      :migrate-on-init? true}
- :db.sql/connection #profile {:dev {:jdbc-url "jdbc:postgresql://10.1.0.3:5432/jirgee_dev?user=appuser&password=appuer"},
-                              :test {:jdbc-url "jdbc:postgresql://10.1.0.3:5432/jirgee_test?user=appuser&password=appuer"},
-                              :prod {:jdbc-url #env JDBC_URL}}}
+ :db.sql/connection
+;;  #profile {:dev {:jdbc-url "jdbc:postgresql://10.1.0.3:5432/jirgee_dev?user=appuser&password=appuer"},
+;;            :test {:jdbc-url "jdbc:postgresql://10.1.0.3:5432/jirgee_test?user=appuser&password=appuer"},
+;;            :prod {:jdbc-url #env JDBC_URL}}
+ #profile {:dev {:jdbc-url      #or [#env JDBC_URL "jdbc:postgresql://10.1.0.3:5432/jirgee_dev?user=appuser&password=appuer"]
+                 :auto-commit        true
+                 :read-only          false
+                 :connection-timeout 30000
+                 :validation-timeout 5000
+                 :idle-timeout       600000
+                 :max-lifetime       1800000
+                 :minimum-idle       1
+                 :maximum-pool-size  10
+                 :pool-name          "pool-name"
+                ;;   :driver-class-name  "com.mysql.jdbc.Driver"
+                 }}}
