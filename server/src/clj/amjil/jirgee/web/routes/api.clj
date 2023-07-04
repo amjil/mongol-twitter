@@ -38,7 +38,13 @@
            :swagger {:info {:title "amjil.jirgee API"}}
            :handler (swagger/create-swagger-handler)}}]
    ["/health"
-    {:get health/healthcheck!}]])
+    {:get health/healthcheck!}]
+   ["/ws"
+    (fn [request]
+      {:undertow/websocket
+       {:on-open (fn [{:keys [channel]}] (println "WS open!"))
+        :on-message (fn [{:keys [channel data]}] (prn "message received"))
+        :on-close-message (fn [{:keys [channel message]}] (println "WS closeed!"))}})]])
 
 (derive :reitit.routes/api :reitit/routes)
 
