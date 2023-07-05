@@ -1,6 +1,7 @@
 (ns amjil.jirgee.web.routes.api
   (:require
     [amjil.jirgee.web.controllers.health :as health]
+    [amjil.jirgee.web.controllers.ws :as ws]
     [amjil.jirgee.web.middleware.exception :as exception]
     [amjil.jirgee.web.middleware.formats :as formats]
     [integrant.core :as ig]
@@ -40,11 +41,7 @@
    ["/health"
     {:get health/healthcheck!}]
    ["/ws"
-    (fn [request]
-      {:undertow/websocket
-       {:on-open (fn [{:keys [channel]}] (println "WS open!"))
-        :on-message (fn [{:keys [channel data]}] (prn "message received"))
-        :on-close-message (fn [{:keys [channel message]}] (println "WS closeed!"))}})]])
+    ws/handler]])
 
 (derive :reitit.routes/api :reitit/routes)
 
