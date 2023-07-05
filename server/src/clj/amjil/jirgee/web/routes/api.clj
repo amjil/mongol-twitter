@@ -1,6 +1,7 @@
 (ns amjil.jirgee.web.routes.api
   (:require
     [amjil.jirgee.web.controllers.health :as health]
+    [amjil.jirgee.web.controllers.ws :as ws]
     [amjil.jirgee.web.middleware.exception :as exception]
     [amjil.jirgee.web.middleware.formats :as formats]
     [integrant.core :as ig]
@@ -38,7 +39,9 @@
            :swagger {:info {:title "amjil.jirgee API"}}
            :handler (swagger/create-swagger-handler)}}]
    ["/health"
-    {:get health/healthcheck!}]])
+    {:get health/healthcheck!}]
+   ["/ws"
+    ws/handler]])
 
 (derive :reitit.routes/api :reitit/routes)
 
