@@ -7,6 +7,7 @@
 
     ;; Edges       
     [kit.edge.server.undertow]
+    [kit.edge.db.sql.hikari]
     [amjil.jirgee.web.handler]
 
     ;; Routes
