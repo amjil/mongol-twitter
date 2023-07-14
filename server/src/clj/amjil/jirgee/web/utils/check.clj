@@ -6,6 +6,7 @@
 (derive :system.exception/business ::user-already-exists)
 (derive :system.exception/business ::user-locked)
 (derive :system.exception/business ::user-password-do-not-match)
+(derive :system.exception/business ::nil-occurred)
 
 (defn check-must-exist [entity info]
   (when (empty? entity)
@@ -25,4 +26,9 @@
 (defn check-password [entity params info]
   (when-not (hashers/check (:password params) (:encrypted_password entity))
     (throw (ex-info info {:type ::user-password-do-not-match
+                          :message info}))))
+
+(defn check-not-nil [entity info]
+  (when (nil? entity)
+    (throw (ex-info info {:type ::nil-occurred
                           :message info}))))

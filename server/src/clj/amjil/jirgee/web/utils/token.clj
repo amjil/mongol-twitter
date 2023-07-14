@@ -18,5 +18,6 @@
         claims {:id  id
                 :jti uuid
                 :exp exp}]
-    (encrypt claims secret {:alg :a256kw
-                            :enc :a128gcm})))
+    (encrypt claims (codecs/hex->bytes secret)
+             {:alg :a256kw
+              :enc :a128gcm})))

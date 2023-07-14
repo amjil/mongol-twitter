@@ -37,7 +37,7 @@
  :reitit.routes/api
  {:base-path "/api"
   :env #ig/ref :system/env
-  :token-secret #or [#env COOKIE_SECRET "WOGIFEMQLHJGDKCR"]
+  :token-secret #or [#env TOKEN_SECRET "fdee5675d06a5d97e9cdd94f9f9a411805cdeb2ee74383665588170f307b5a14"]
   :db-conn #ig/ref :db.sql/hikari-connection
   :query-fn #ig/ref :db.sql/query-fn}
 

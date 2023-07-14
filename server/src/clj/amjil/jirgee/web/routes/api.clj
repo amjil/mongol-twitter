@@ -50,7 +50,15 @@
              :responses {200 {:body {:token string?}}}
              :handler (fn [{{:keys [body]} :parameters headers :headers addr :remote-addr}]
                         {:status 200 :body
-                         (auth/login (:db-conn _opts) (:token-secret _opts) body)})}}]]
+                         (auth/login (:db-conn _opts) (:token-secret _opts) body)})}}]
+    ["/signup"
+     {:post {:summary "sign up."
+             :parameters {:body {:email string?
+                                 :password string?}}
+             :responses {200 {:body {:token string?}}}
+             :handler (fn [{{:keys [body]} :parameters headers :headers addr :remote-addr}]
+                        {:status 200 :body
+                         (auth/signup (:db-conn _opts) (:token-secret _opts) body)})}}]]
    ["/fail"
     {:get (fn [_]
             (throw (ex-info "fail" {:type :system.exception/not-found})))}]
