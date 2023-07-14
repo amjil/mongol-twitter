@@ -1,20 +1,20 @@
 (ns amjil.jirgee.core
   (:require
-    [clojure.tools.logging :as log]
-    [integrant.core :as ig]
-    [amjil.jirgee.config :as config]
-    [amjil.jirgee.env :refer [defaults]]
+   [clojure.tools.logging :as log]
+   [integrant.core :as ig]
+   [amjil.jirgee.config :as config]
+   [amjil.jirgee.env :refer [defaults]]
 
     ;; Edges       
-    [kit.edge.server.undertow]
-    [kit.edge.db.sql.hikari]
-    [amjil.jirgee.web.handler]
+   [kit.edge.server.undertow]
+   [amjil.jirgee.web.handler]
 
     ;; Routes
-    [amjil.jirgee.web.routes.api]
-    
-    [kit.edge.db.sql.conman] 
-    [kit.edge.db.sql.migratus])
+   [amjil.jirgee.web.routes.api]
+
+   [kit.edge.db.sql.conman]
+   [kit.edge.db.sql.hikari]
+   [kit.edge.db.sql.migratus])
   (:gen-class))
 
 ;; log uncaught exceptions in threads

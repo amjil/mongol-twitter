@@ -1,8 +1,8 @@
 (ns amjil.jirgee.web.controllers.health
   (:require
-    [ring.util.http-response :as http-response])
+   [ring.util.http-response :as http-response])
   (:import
-    [java.util Date]))
+   [java.util Date]))
 
 (defn healthcheck!
   [req]
