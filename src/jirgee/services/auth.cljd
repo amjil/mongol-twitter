@@ -1,10 +1,21 @@
 (ns jirgee.services.auth
   (:require
    [jirgee.services.user :as user-service]
-   [jirgee.common.utils :as utils]))
+   [jirgee.common.utils :as utils]
+   ["package:http/http.dart" :as http]
+   ["dart:convert" :as convert]))
 
 (defn login [ctx info right]
-  nil)
+  (dart:core/print "aaaa"))
 
 (defn sign-up [ctx info]
-  nil)
+  (dart:core/print "sign-up")
+  (let [result (await
+                (http/post (Uri/parse "http://localhost:3002/api/auth/signup")
+                           .headers {"Content-Type" "application/json; charset=UTF-8"}
+                           .body
+                           (convert/jsonEncode
+                            {"email" "2@2.com" "password" "123456"})))]
+    (dart:core/print (str "result = " result))
+    (dart:core/print (.-statusCode result))
+    (dart:core/print (.-body result))))
