@@ -6,7 +6,16 @@
    ["dart:convert" :as convert]))
 
 (defn login [ctx info right]
-  (dart:core/print "aaaa"))
+  (dart:core/print "login")
+  (let [result (await
+                (http/post (Uri/parse "http://localhost:3002/api/auth/login")
+                           .headers {"Content-Type" "application/json; charset=UTF-8"}
+                           .body
+                           (convert/jsonEncode
+                            {"email" "2@2.com" "password" "123456"})))
+        response (convert/jsonDecode (.-body result))]
+    (dart:core/print (.-statusCode result))
+    (dart:core/print (str "response = " (get response "token")))))
 
 (defn sign-up [ctx info]
   (dart:core/print "sign-up")
@@ -16,6 +25,5 @@
                            .body
                            (convert/jsonEncode
                             {"email" "2@2.com" "password" "123456"})))]
-    (dart:core/print (str "result = " result))
     (dart:core/print (.-statusCode result))
     (dart:core/print (.-body result))))
