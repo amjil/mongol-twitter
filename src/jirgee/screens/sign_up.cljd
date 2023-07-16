@@ -19,22 +19,24 @@
      (loading-screen/loading-screen ctx)
      (m/Scaffold
       .body
-      (m/Center
-      ;;  .child (m/Text "sign-up")
+      (m/SafeArea
        .child
-       (m/Padding
-        .padding (.all m/EdgeInsets 20)
+       (m/Center
+        ;;  .child (m/Text "sign-up")
         .child
-        (m/Column
-         .children
-         [(auth-widgets/auth-form-field email-controller "Email")
-          (m/SizedBox .height 25)
-          (auth-widgets/auth-form-field password-controller "Password")
-          (m/SizedBox .height 25)
-          (auth-widgets/auth-form-field password-confirmation-controller "Password Confirmation")
-          (m/SizedBox .height 40)
-          (m/Align
-           .alignment m.Alignment/topRight
-           .child (auth-widgets/rounded-button (fn [] (auth-service/sign-up ctx
-                                                                            {:email "sqbh@sina.com" :password "123123123"}))
-                                               "Done" nil nil))])))))))
+        (m/Padding
+         .padding (.all m/EdgeInsets 20)
+         .child
+         (m/Column
+          .children
+          [(auth-widgets/auth-form-field email-controller "Email")
+           (m/SizedBox .height 25)
+           (auth-widgets/auth-form-field password-controller "Password")
+           (m/SizedBox .height 25)
+           (auth-widgets/auth-form-field password-confirmation-controller "Password Confirmation")
+           (m/SizedBox .height 40)
+           (m/Align
+            .alignment m.Alignment/topRight
+            .child (auth-widgets/rounded-button (fn [] (auth-service/sign-up ctx
+                                                                             {:email "sqbh@sina.com" :password "123123123"}))
+                                                "Done" nil nil))]))))))))
