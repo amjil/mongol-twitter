@@ -5,6 +5,7 @@
    [amjil.jirgee.web.controllers.ws :as ws]
    [amjil.jirgee.web.middleware.exception :as exception]
    [amjil.jirgee.web.middleware.formats :as formats]
+   [amjil.jirgee.web.middleware.core :as middleware]
    [integrant.core :as ig]
    [reitit.coercion.malli :as malli]
    [reitit.ring.coercion :as coercion]
@@ -58,7 +59,18 @@
              :responses {200 {:body {:token string?}}}
              :handler (fn [{{:keys [body]} :parameters headers :headers addr :remote-addr}]
                         {:status 200 :body
-                         (auth/signup (:db-conn _opts) (:token-secret _opts) body)})}}]]
+                         (auth/signup (:db-conn _opts) (:token-secret _opts) body)})}}]
+    ["/update_password"
+     {:post {:summary "update password."
+             :middleware [[middleware/wrap-restricted]]
+             :parameters {:body {:current_password string?
+                                 :new_password string?}}
+             :responses {200 {:body any?}}
+            ;;  :handler (fn [{{:keys [body]} :parameters uinfo :identity headers :headers addr :remote-addr}]
+             :handler (fn [req]
+                        {:status 200 :body
+                        ;;  (auth/update-password (:db-conn _opts) uinfo body)})}}]]
+                         (auth/update-password nil nil req)})}}]]
    ["/fail"
     {:get (fn [_]
             (throw (ex-info "fail" {:type :system.exception/not-found})))}]
