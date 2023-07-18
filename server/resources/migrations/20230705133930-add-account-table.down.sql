@@ -1,1 +1,1 @@
-drop table IF EXISTS accounts;
+drop table IF EXISTS users;

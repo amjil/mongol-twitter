@@ -1,4 +1,4 @@
-CREATE TABLE accounts (
+CREATE TABLE users (
     id serial primary key,
     username text,
     mobile text,
@@ -21,12 +21,12 @@ CREATE TABLE accounts (
     updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
 );
 --;;
-create unique index account_mobile_index on accounts(mobile);
+create unique index users_mobile_index on users(mobile);
 --;;
-create unique index account_username_index on accounts(username);
+create unique index users_username_index on users(username);
 --;;
-create unique index account_email_index on accounts(email);
+create unique index users_email_index on users(email);
 --;;
-create unique index account_reset_password_token_index on accounts(reset_password_token);
+create unique index users_reset_password_token_index on users(reset_password_token);
 --;;
-create unique index account_unlock_token_index on accounts(unlock_token);
+create unique index users_unlock_token_index on users(unlock_token);
