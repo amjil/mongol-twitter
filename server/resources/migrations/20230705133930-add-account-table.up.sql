@@ -1,5 +1,5 @@
 CREATE TABLE users (
-    id serial primary key,
+    "id" uuid DEFAULT uuid_generate_v4 () primary key,
     username text,
     mobile text,
     email text,

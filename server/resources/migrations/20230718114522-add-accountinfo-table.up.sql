@@ -1,5 +1,5 @@
 CREATE TABLE user_info (
-  id serial primary key,
+  id uuid primary key,
   screen_name varchar(255) DEFAULT NULL ,
   sex smallint DEFAULT NULL ,
   bio varchar(100) DEFAULT NULL ,
