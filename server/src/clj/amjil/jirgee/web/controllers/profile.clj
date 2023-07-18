@@ -23,7 +23,7 @@
         (throw (ex-info msg {:type :system.exception/business :message msg}))))
 
     ;; update ->>
-    (let [sqlmap {:update :accounts
+    (let [sqlmap {:update :users
                   :set    {:encrypted_password   (hashers/derive (:new_password params))
                            :updated_at           [:raw "now()"]}
                   :where  [:= :id (:id uinfo)]}]
