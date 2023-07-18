@@ -2,6 +2,7 @@
   (:require
    [amjil.jirgee.web.controllers.health :as health]
    [amjil.jirgee.web.controllers.auth :as auth]
+   [amjil.jirgee.web.controllers.profile :as profile]
    [amjil.jirgee.web.controllers.ws :as ws]
    [amjil.jirgee.web.middleware.exception :as exception]
    [amjil.jirgee.web.middleware.formats :as formats]
@@ -19,11 +20,11 @@
    :swagger    {:id ::api}
    :middleware [;; query-params & form-params
                 parameters/parameters-middleware
-                  ;; content-negotiation
+                ;; content-negotiation
                 muuntaja/format-negotiate-middleware
-                  ;; encoding response body
+                ;; encoding response body
                 muuntaja/format-response-middleware
-                  ;; exception handling
+                ;; exception handling
                 coercion/coerce-exceptions-middleware
                   ;; decoding request body
                 muuntaja/format-request-middleware
@@ -59,18 +60,18 @@
              :responses {200 {:body {:token string?}}}
              :handler (fn [{{:keys [body]} :parameters headers :headers addr :remote-addr}]
                         {:status 200 :body
-                         (auth/signup (:db-conn _opts) (:token-secret _opts) body)})}}]
+                         (auth/signup (:db-conn _opts) (:token-secret _opts) body)})}}]]
+   ["/profile"
+    {:swagger {:tags ["profile"]}}
     ["/update_password"
      {:post {:summary "update password."
              :middleware [[middleware/wrap-restricted]]
              :parameters {:body {:current_password string?
                                  :new_password string?}}
              :responses {200 {:body any?}}
-            ;;  :handler (fn [{{:keys [body]} :parameters uinfo :identity headers :headers addr :remote-addr}]
-             :handler (fn [req]
+             :handler (fn [{{:keys [body]} :parameters uinfo :identity headers :headers addr :remote-addr}]
                         {:status 200 :body
-                        ;;  (auth/update-password (:db-conn _opts) uinfo body)})}}]]
-                         (auth/update-password nil nil req)})}}]]
+                         (profile/update-password (:db-conn _opts) uinfo body)})}}]]
    ["/fail"
     {:get (fn [_]
             (throw (ex-info "fail" {:type :system.exception/not-found})))}]
