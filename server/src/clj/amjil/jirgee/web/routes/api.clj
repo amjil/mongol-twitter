@@ -99,7 +99,7 @@
     ;;          :middleware [[middleware/wrap-restricted]]}
     ;;   }]
     ]
-    
+
    ["/tweets"
     {:swagger {:tags ["tweets"]}
      :post {:summary "new tweet."
@@ -110,6 +110,33 @@
             :handler (fn [{{:keys [body]} :parameters uinfo :identity}]
                        {:status 200 :body
                         (tweet/new-tweet (:db-conn _opts) uinfo body)})}}]
+   ["/tweets/:id"
+    {:swagger {:tags ["tweets"]}
+     :delete {:summary    "remove tweet."
+              :parameters {:path {:id string?}}
+              :responses  {200 {:body any?}}
+              :handler    (fn [{{{id :id} :path} :parameters
+                                uinfo            :identity}]
+                            {:status 200 :body
+                             (tweet/delete-tweet (:db-conn _opts) uinfo id)})}}]
+   ["/tweets/:id/favorite"
+    {:swagger {:tags ["tweets"]}
+     :post {:summary    "favorite tweet."
+            :parameters {:path {:id string?}}
+            :responses  {200 {:body any?}}
+            :handler    (fn [{{{id :id} :path} :parameters
+                              uinfo            :identity}]
+                          {:status 200 :body
+                           (tweet/favorite-tweet (:db-conn _opts) uinfo id)})}}]
+   ["/tweets/:id/unfavorite"
+    {:swagger {:tags ["tweets"]}
+     :delete {:summary    "unfavorite tweet."
+              :parameters {:path {:id string?}}
+              :responses  {200 {:body any?}}
+              :handler    (fn [{{{id :id} :path} :parameters
+                                uinfo            :identity}]
+                            {:status 200 :body
+                             (tweet/unfavorite-tweet (:db-conn _opts) uinfo id)})}}]
 
    ["/fail"
     {:get (fn [_]
