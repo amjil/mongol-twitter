@@ -7,6 +7,7 @@
    [amjil.jirgee.web.middleware.exception :as exception]
    [amjil.jirgee.web.middleware.formats :as formats]
    [amjil.jirgee.web.middleware.core :as middleware]
+   [spec-tools.data-spec :as ds]
    [integrant.core :as ig]
    [reitit.coercion.malli :as malli]
    [reitit.ring.coercion :as coercion]
@@ -63,6 +64,13 @@
                          (auth/signup (:db-conn _opts) (:token-secret _opts) body)})}}]]
    ["/profile"
     {:swagger {:tags ["profile"]}}
+    ["/user_info"
+     {:get {:summary "get user info."
+            :middleware [[middleware/wrap-restricted]]
+            :responses {200 {:body any?}}
+            :handler (fn [{uinfo :identity}]
+                       {:status 200 :body
+                        (profile/user-info (:db-conn _opts) uinfo)})}}]
     ["/update_password"
      {:post {:summary "update password."
              :middleware [[middleware/wrap-restricted]]
@@ -71,7 +79,26 @@
              :responses {200 {:body any?}}
              :handler (fn [{{:keys [body]} :parameters uinfo :identity headers :headers addr :remote-addr}]
                         {:status 200 :body
-                         (profile/update-password (:db-conn _opts) uinfo body)})}}]]
+                         (profile/update-password (:db-conn _opts) uinfo body)})}}]
+    ["/update_info"
+     {:post {:summary "update user info."
+             :middleware [[middleware/wrap-restricted]]
+             :parameters {:body [:map
+                                 [:screen_name {:optional true} string?]
+                                 [:sex {:optional true} int?]
+                                 [:bio {:optional true} string?]
+                                 [:location {:optional true} string?]
+                                 [:birth_date {:optional true} string?]]}
+             :responses {200 {:body any?}}
+             :handler (fn [{{:keys [body]} :parameters uinfo :identity}]
+                        {:status 200 :body
+                         (profile/update-info (:db-conn _opts) uinfo body)})}}]
+    ;; ["/set_profile_image"
+    ;;  {:post {:summary "set profile image."
+    ;;          :middleware [[middleware/wrap-restricted]]}
+    ;;   }]
+    ]
+
    ["/fail"
     {:get (fn [_]
             (throw (ex-info "fail" {:type :system.exception/not-found})))}]

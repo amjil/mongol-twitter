@@ -25,6 +25,9 @@
   (let [result (db/insert! conn :users {:email (:email params)
                                         :encrypted_password  (hashers/derive (:password params))})]
     (check/check-not-nil (:id result) "Account Save Error!")
+    
+    (db/insert! conn :user_info {:id (:id result)})
+
     {:token (token/jwt-token secret (:id result))}))
 
 (defn- check-before-signup 

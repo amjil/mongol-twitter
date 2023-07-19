@@ -1,8 +1,10 @@
 (ns amjil.jirgee.web.controllers.profile
   (:require
+   [clojure.tools.logging :as log]
    [amjil.jirgee.web.utils.db :as db]
    [honey.sql :as hsql]
-   [buddy.hashers :as hashers]))
+   [buddy.hashers :as hashers]
+   [amjil.jirgee.web.utils.check :as check]))
 
 (defn update-password
   [conn uinfo params]
@@ -10,12 +12,10 @@
     (let [msg "Token error!"]
       (throw (ex-info msg {:type :system.exception/business :message msg}))))
 
-  (let [entity (db/get-by-id conn :accounts (:id uinfo))]
+  (let [entity (db/find-one-by-keys conn :users ["id = ?::uuid" (:id uinfo)])]
 
     ;; check the entity 
-    (when (nil? entity)
-      (let [msg "Maybe Token had outdated!"]
-        (throw (ex-info msg {:type :system.exception/business :message msg}))))
+    (check/check-must-exist entity "Maybe Token had outdated!")
 
     ;; check the current password
     (when-not (hashers/check (:current_password params) (:encrypted_password entity))
@@ -29,3 +29,19 @@
                   :where  [:= :id (:id uinfo)]}]
       (db/execute! conn (hsql/format sqlmap))
       {})))
+
+(defn user-info 
+  [conn uinfo]
+  (let [entity (db/find-one-by-keys conn :users ["id = ?::uuid" (:id uinfo)])]
+
+    ;; check the entity 
+    (check/check-must-exist entity "Maybe Token had outdated!")
+
+    (let [info (db/find-one-by-keys conn :user_info ["id = ?::uuid" (:id uinfo)])]
+      info)))
+
+(defn update-info 
+  [conn token info]
+  (log/warn "info = " info)
+  (db/update! conn :user_info info ["id = ?::uuid" (:id token)])
+  {})

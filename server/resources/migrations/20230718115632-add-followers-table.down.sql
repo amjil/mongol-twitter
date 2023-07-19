@@ -1,1 +1,1 @@
-drop table IF EXISTS fllowers;
+drop table IF EXISTS followers;
