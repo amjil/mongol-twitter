@@ -3,6 +3,7 @@
    [amjil.jirgee.web.controllers.health :as health]
    [amjil.jirgee.web.controllers.auth :as auth]
    [amjil.jirgee.web.controllers.profile :as profile]
+   [amjil.jirgee.web.controllers.tweet :as tweet]
    [amjil.jirgee.web.controllers.ws :as ws]
    [amjil.jirgee.web.middleware.exception :as exception]
    [amjil.jirgee.web.middleware.formats :as formats]
@@ -98,6 +99,17 @@
     ;;          :middleware [[middleware/wrap-restricted]]}
     ;;   }]
     ]
+    
+   ["/tweets"
+    {:swagger {:tags ["tweets"]}
+     :post {:summary "new tweet."
+            :middleware [[middleware/wrap-restricted]]
+            :parameters {:body [:map
+                                [:content string?]]}
+            :responses {200 {:body any?}}
+            :handler (fn [{{:keys [body]} :parameters uinfo :identity}]
+                       {:status 200 :body
+                        (tweet/new-tweet (:db-conn _opts) uinfo body)})}}]
 
    ["/fail"
     {:get (fn [_]
