@@ -62,3 +62,17 @@
     (db/insert! conn :replies {:tweet_id (UUID/fromString id)
                                :reply_id (:id result)})))
 
+(defn tweet-links
+  [conn uinfo id info]
+  (let [entity (db/find-one-by-keys conn :tweets ["user_id = ?" (UUID/fromString (:id uinfo))])
+        info "Not authorized to operate"]
+    (when (not= (UUID/fromString (:id uinfo)) (:user_id entity))
+      (throw (ex-info info {:type :system.exception/unauthorized
+                            :message info}))))
+  (db/insert! 
+   conn 
+   :tweet_entities
+   {:tweet_id (UUID/fromString id)
+    :media_links
+    (into-array String (:links info))})
+  {})

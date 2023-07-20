@@ -161,6 +161,18 @@
                               uinfo            :identity}]
                           {:status 200 :body
                            (tweet/reply (:db-conn _opts) uinfo id body)})}}]
+   ["/tweets/:id/media_links"
+    {:swagger {:tags ["tweets"]}
+     :post {:summary    "tweet media_links."
+            :parameters {:path {:id string?}
+                         :body [:map
+                                [:links [:set string?]]]}
+            :responses  {200 {:body any?}}
+            :handler    (fn [{{{id :id} :path
+                               body     :body} :parameters
+                              uinfo            :identity}]
+                          {:status 200 :body
+                           (tweet/tweet-links (:db-conn _opts) uinfo id body)})}}]
 
    ["/fail"
     {:get (fn [_]

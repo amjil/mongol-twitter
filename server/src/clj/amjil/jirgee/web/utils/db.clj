@@ -2,7 +2,9 @@
   (:require
    [next.jdbc :as jdbc]
    [next.jdbc.sql :as sql]
-   [next.jdbc.result-set :as rs]))
+   [next.jdbc.result-set :as rs])
+  (:import
+   [java.sql Array]))
 
 (defn update! [conn t w s]
   (sql/update! conn t w s
@@ -49,3 +51,10 @@
                   (merge
                    {:builder-fn rs/as-unqualified-lower-maps}
                    opt))))
+
+
+;;;;;;;
+(extend-protocol rs/ReadableColumn
+  Array
+  (read-column-by-label [^Array v _]    (vec (.getArray v)))
+  (read-column-by-index [^Array v _ _]  (vec (.getArray v))))
