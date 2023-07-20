@@ -137,6 +137,30 @@
                                 uinfo            :identity}]
                             {:status 200 :body
                              (tweet/unfavorite-tweet (:db-conn _opts) uinfo id)})}}]
+   ["/tweets/:id/retweet"
+    {:swagger {:tags ["tweets"]}
+     :post {:summary    "retweet tweet."
+            :parameters {:path {:id string?}
+                         :body [:map
+                                [:content string?]]}
+            :responses  {200 {:body any?}}
+            :handler    (fn [{{{id :id} :path
+                               body     :body} :parameters
+                              uinfo            :identity}]
+                          {:status 200 :body
+                           (tweet/retweet (:db-conn _opts) uinfo id body)})}}]
+   ["/tweets/:id/reply"
+    {:swagger {:tags ["tweets"]}
+     :post {:summary    "reply tweet."
+            :parameters {:path {:id string?}
+                         :body [:map
+                                [:content string?]]}
+            :responses  {200 {:body any?}}
+            :handler    (fn [{{{id :id} :path
+                               body     :body} :parameters
+                              uinfo            :identity}]
+                          {:status 200 :body
+                           (tweet/reply (:db-conn _opts) uinfo id body)})}}]
 
    ["/fail"
     {:get (fn [_]

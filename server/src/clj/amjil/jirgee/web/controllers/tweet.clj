@@ -41,4 +41,24 @@
     :tweet_id (UUID/fromString id)})
   {})
 
+(defn retweet
+  [conn uinfo id info]
+  (let [result (db/insert! conn
+                           :tweets
+                           {:user_id (UUID/fromString (:id uinfo))
+                            :content (:content info)}
+                           {:return-keys true})]
+    (db/insert! conn :retweets {:tweet_id (UUID/fromString id)
+                                :retweet_id (:id result)}))
+  {})
+
+(defn reply 
+  [conn uinfo id info]
+  (let [result (db/insert! conn
+                           :tweets
+                           {:user_id (UUID/fromString (:id uinfo))
+                            :content (:content info)}
+                           {:return-keys true})]
+    (db/insert! conn :replies {:tweet_id (UUID/fromString id)
+                               :reply_id (:id result)})))
 

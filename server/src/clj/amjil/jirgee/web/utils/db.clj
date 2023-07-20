@@ -27,9 +27,15 @@
    (sql/find-by-keys conn t w
                      {:builder-fn rs/as-unqualified-lower-maps})))
 
-(defn insert! [conn t info]
-  (sql/insert! conn t info
-               {:builder-fn rs/as-unqualified-lower-maps}))
+(defn insert! 
+  ([conn t info]
+   (sql/insert! conn t info
+                {:builder-fn rs/as-unqualified-lower-maps}))
+  ([conn t info opt]
+   (sql/insert! conn t info 
+                (merge 
+                 {:builder-fn rs/as-unqualified-lower-maps}
+                 opt))))
 
 (defn delete! [conn t w]
   (sql/delete! conn t w))
