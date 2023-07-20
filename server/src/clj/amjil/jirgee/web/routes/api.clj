@@ -4,6 +4,7 @@
    [amjil.jirgee.web.controllers.auth :as auth]
    [amjil.jirgee.web.controllers.profile :as profile]
    [amjil.jirgee.web.controllers.tweet :as tweet]
+   [amjil.jirgee.web.controllers.user :as user]
    [amjil.jirgee.web.controllers.ws :as ws]
    [amjil.jirgee.web.middleware.exception :as exception]
    [amjil.jirgee.web.middleware.formats :as formats]
@@ -173,6 +174,26 @@
                               uinfo            :identity}]
                           {:status 200 :body
                            (tweet/tweet-links (:db-conn _opts) uinfo id body)})}}]
+   ["/users/follow"
+    {:swagger {:tags ["users"]}
+     :post {:summary    "user follow."
+            :parameters {:body [:map
+                                [:id string?]]}
+            :responses  {200 {:body any?}}
+            :handler    (fn [{{body     :body} :parameters
+                              uinfo            :identity}]
+                          {:status 200 :body
+                           (user/follow (:db-conn _opts) uinfo body)})}}]
+   ["/users/unfollow"
+    {:swagger {:tags ["users"]}
+     :post {:summary    "user unfollow."
+            :parameters {:body [:map
+                                [:id string?]]}
+            :responses  {200 {:body any?}}
+            :handler    (fn [{{body     :body} :parameters
+                              uinfo            :identity}]
+                          {:status 200 :body
+                           (user/unfollow (:db-conn _opts) uinfo body)})}}]
 
    ["/fail"
     {:get (fn [_]
