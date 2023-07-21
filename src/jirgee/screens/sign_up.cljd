@@ -1,7 +1,10 @@
 (ns jirgee.screens.sign-up
   (:require
    ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
+   ["package:flutter/gestures.dart" :as gestures]
    [cljd.flutter.alpha2 :as f]
+   [jirgee.common.theme :as theme]
    [jirgee.states.global :as gs]
    [jirgee.screens.loading :as loading-screen]
    [jirgee.widgets.auth :as auth-widgets]
@@ -10,6 +13,7 @@
 
 (defn ^m/Widget sign-up-screen [ctx]
   (f/widget
+   :context context
    :get [m/Navigator]
    :watch [{:keys [is-loading?]} gs/state]
    :managed [email-controller (m/TextEditingController)
@@ -35,8 +39,23 @@
            (m/SizedBox .height 25)
            (auth-widgets/auth-form-field password-confirmation-controller "Password Confirmation")
            (m/SizedBox .height 40)
-           (m/Align
-            .alignment m.Alignment/topRight
-            .child (auth-widgets/rounded-button (fn [] (auth-service/sign-up ctx
-                                                                             {:email "sqbh@sina.com" :password "123123123"}))
-                                                "Done" nil nil))]))))))))
+           (m/Row
+            .mainAxisAlignment m.MainAxisAlignment/spaceAround
+            .children
+            [(m/SizedBox .height 100
+                         .child
+                         (m/GestureDetector
+                          .onTap (fn []
+                                   (.pushNamed navigator "/login")
+                                   nil)
+                          .child
+                          (mgl/MongolRichText
+                           .text (m/TextSpan
+                                  .text "Already have an account?"
+                                  .style (m/TextStyle .fontSize 16)
+                                  .children [(m/TextSpan .text " Login"
+                                                         .style (m/TextStyle .color theme/blue-color
+                                                                             .fontSize 16))]))))
+             (auth-widgets/rounded-button (fn [] (auth-service/sign-up ctx
+                                                                       {:email "sqbh@sina.com" :password "123123123"}))
+                                          "Done" nil nil)])]))))))))
