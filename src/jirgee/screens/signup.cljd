@@ -1,4 +1,4 @@
-(ns jirgee.screens.sign-up
+(ns jirgee.screens.signup
   (:require
    ["package:flutter/material.dart" :as m]
    ["package:mongol/mongol.dart" :as mgl]
@@ -11,7 +11,7 @@
    [jirgee.services.auth :as auth-service]
    [jirgee.common.utils :as utils]))
 
-(defn ^m/Widget sign-up-screen [ctx]
+(defn ^m/Widget signup-screen [ctx]
   (f/widget
    :context context
    :get [m/Navigator]
@@ -56,6 +56,6 @@
                                   .children [(m/TextSpan .text " Login"
                                                          .style (m/TextStyle .color theme/blue-color
                                                                              .fontSize 16))]))))
-             (auth-widgets/rounded-button (fn [] (auth-service/sign-up ctx
+             (auth-widgets/rounded-button (fn [] (auth-service/signup ctx
                                                                        {:email "sqbh@sina.com" :password "123123123"}))
                                           "Done" nil nil)])]))))))))

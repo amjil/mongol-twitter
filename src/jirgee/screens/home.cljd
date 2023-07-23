@@ -4,7 +4,7 @@
    ["package:mongol/mongol.dart" :as mgl]
    [jirgee.services.auth :as auth-service]
    [jirgee.services.user :as user-service]
-   [jirgee.screens.sign-up :as sign-screen]
+   [jirgee.screens.signup :as sign-screen]
    [jirgee.screens.loading :as loading-screen]
    [jirgee.states.global :as gs]
    [cljd.flutter.alpha2 :as f]))
@@ -27,21 +27,19 @@
   (f/widget
   ;;  :context ctx
   ;;  :let [user-id-getter-stream :progress-widget]
-   :watch [user-id-getter-stream
-           (user-service/get-user ctx)
+   :watch [user-token-getter-stream
+           (user-service/get-token ctx)
            :default :progress-widget
-           {:keys [user-id]} gs/state]
+           {:keys [user-token]} gs/state]
    (cond
-     (= :progress-widget user-id-getter-stream)
+     (= :progress-widget user-token-getter-stream)
      (loading-screen/loading-screen ctx)
 
-     (empty? user-id)
-     (sign-screen/sign-up-screen ctx)
+     (empty? user-token)
+     (sign-screen/signup-screen ctx)
 
      :else
      (m/Scaffold
-      ;; .appBar (m/AppBar
-      ;;          .title (m/Text "Home Screen"))
       .body
       (m/SafeArea
        .child

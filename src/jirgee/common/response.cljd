@@ -1,5 +1,10 @@
-(ns jirgee.common.response)
+(ns jirgee.common.response
+  (:require
+   ["dart:convert" :as convert]
+   [jirgee.common.utils :as utils]))
 
-;; (defn reponse-messagegs [e]
-;;   (condp = (.-code e)
-;;     ))
+(defn response-message [ctx response success-fn]
+  (let [response-body (convert/jsonDecode (.-body response))]
+    (if (not= 200 (.-statusCode response))
+      (utils/show-toast ctx (get-in response-body ["data" "message"]))
+      (success-fn response-body))))

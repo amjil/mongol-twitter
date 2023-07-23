@@ -4,18 +4,19 @@
    [jirgee.states.global :as gs]
    [jirgee.common.utils :as utils]))
 
-(defn get-user [ctx]
+(defn get-token [ctx]
   (stream
    (map (fn [result]
-          (swap! gs/state assoc :user-id result)
-          (dart:core/print (str "result = " result))
-          :ok-user))
+          (swap! gs/state assoc :user-token result)
+          :ok-token))
    (map (fn [[er st]]
           (utils/show-toast ctx "error get user-id")
-          (dart:core/print "bbbbb")
-          :error-user))
+          :error-token))
    :as-values
-   (.asStream (sp/get-value {:type :string :key "user-id"}))))
+   (.asStream (sp/get-value {:type :string :key "user-token"}))))
 
-(defn save-user [ctx info]
-  nil)
+(defn save-token [token]
+  (dart:core/print (str "token = " token))
+  (sp/set-value {:type :string :key "user-token"
+                 :value token})
+  (swap! gs/state assoc :user-token token))
