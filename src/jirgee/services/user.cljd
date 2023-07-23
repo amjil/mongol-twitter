@@ -20,3 +20,7 @@
   (sp/set-value {:type :string :key "user-token"
                  :value token})
   (swap! gs/state assoc :user-token token))
+
+(defn delete-token []
+  (sp/remove-value "user-token")
+  (swap! gs/state assoc :user-token nil))

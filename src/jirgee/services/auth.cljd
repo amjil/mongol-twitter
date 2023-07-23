@@ -4,6 +4,7 @@
    [jirgee.common.utils :as utils]
    [jirgee.common.response :as response]
 
+   ["package:flutter/widgets.dart" :as widgets]
    ["package:http/http.dart" :as http]
    ["dart:convert" :as convert]))
 
@@ -19,7 +20,7 @@
      result
      (fn [x] 
        (user-service/save-token (get x "token"))
-       (.pushNamed navigator "/")))))
+       (.pushNamedAndRemoveUntil navigator "/" (widgets.ModalRoute/withName "/"))))))
 
 (defn signup [ctx navigator info]
   (dart:core/print (get info "password"))

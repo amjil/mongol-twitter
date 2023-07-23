@@ -47,7 +47,8 @@
         (m/Column
          .children [(bar-button (m/Text "hello text")
                                 (fn []
-                                  (dart:core/print "yesss")))
+                                  (dart:core/print "yesss")
+                                  (user-service/delete-token)))
                     (mgl/MongolText
                      "Hello World"
                      .style (m/TextStyle
