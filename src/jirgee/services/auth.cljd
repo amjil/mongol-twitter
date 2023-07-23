@@ -7,7 +7,7 @@
    ["package:http/http.dart" :as http]
    ["dart:convert" :as convert]))
 
-(defn login [ctx info right]
+(defn login [ctx navigator info right]
   (let [result (await
                 (http/post (Uri/parse "http://localhost:3002/api/auth/login")
                            .headers {"Content-Type" "application/json; charset=UTF-8"}
@@ -17,7 +17,9 @@
     (response/response-message
      ctx
      result
-     #(user-service/save-token (get % "token")))))
+     (fn [x] 
+       (user-service/save-token (get x "token"))
+       (.pushNamed navigator "/")))))
 
 (defn signup [ctx navigator info]
   (dart:core/print (get info "password"))

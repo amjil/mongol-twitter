@@ -43,7 +43,8 @@
                                                    .style (m/TextStyle .color theme/blue-color
                                                                        .fontSize 16))]))))
        (auth-widgets/rounded-button (fn [] (auth-service/login ctx
-                                                               {"email" (.-text email-controller) 
+                                                               navigator
+                                                               {"email" (.-text email-controller)
                                                                 "password" (.-text password-controller)}
                                                                #(utils/show-toast ctx "yessss")))
                                     "Done" nil nil)])])))
