@@ -5,7 +5,9 @@
    [cljd.flutter.alpha2 :as f]
    [jirgee.common.theme :as theme]
    [jirgee.screens.home :as home]
-   [jirgee.screens.login :as login]))
+   [jirgee.screens.login :as login]
+   [jirgee.screens.signup :as signup]
+   ))
 
 (defn main []
   (m/runApp
@@ -15,5 +17,6 @@
     .darkTheme theme/default-dark-theme
     .initialRoute "/"
     .routes       {"/" home/home-screen
-                   "/login" login/login-screen}
+                   "/login" login/login-screen
+                   "/signup" signup/signup-screen}
     .debugShowCheckedModeBanner false)))

@@ -8,27 +8,30 @@
    ["dart:convert" :as convert]))
 
 (defn login [ctx info right]
-  (dart:core/print "login")
   (let [result (await
                 (http/post (Uri/parse "http://localhost:3002/api/auth/login")
                            .headers {"Content-Type" "application/json; charset=UTF-8"}
                            .body
                            (convert/jsonEncode
                             info)))]
-
-    ;; (dart:core/print (str "response = " (get response "token")))
     (response/response-message
      ctx
      result
      #(user-service/save-token (get % "token")))))
 
-(defn signup [ctx info]
-  (dart:core/print "sign-up")
-  (let [result (await
-                (http/post (Uri/parse "http://localhost:3002/api/auth/signup")
-                           .headers {"Content-Type" "application/json; charset=UTF-8"}
-                           .body
-                           (convert/jsonEncode
-                            {"email" "2@2.com" "password" "123456"})))]
-    (dart:core/print (.-statusCode result))
-    (dart:core/print (.-body result))))
+(defn signup [ctx navigator info]
+  (dart:core/print (get info "password"))
+  (dart:core/print (get info "password_confirmation"))
+  (if (not= (get info "password")
+            (get info "password_confirmation"))
+    (utils/show-toast ctx "Password confirmation")
+    (let [result (await
+                  (http/post (Uri/parse "http://localhost:3002/api/auth/signup")
+                             .headers {"Content-Type" "application/json; charset=UTF-8"}
+                             .body
+                             (convert/jsonEncode
+                              info)))]
+      (response/response-message
+       ctx
+       result
+       (fn [_] (.pushNamed navigator "/login"))))))

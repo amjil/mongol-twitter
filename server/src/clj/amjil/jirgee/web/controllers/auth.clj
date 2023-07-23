@@ -28,7 +28,7 @@
     
     (db/insert! conn :user_info {:id (:id result)})
 
-    {:token (token/jwt-token secret (:id result))}))
+    {}))
 
 (defn- check-before-signup 
   [conn params]

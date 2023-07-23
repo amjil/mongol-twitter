@@ -26,7 +26,6 @@
 (defn ^m/Widget home-screen [ctx]
   (f/widget
   ;;  :context ctx
-  ;;  :let [user-id-getter-stream :progress-widget]
    :watch [user-token-getter-stream
            (user-service/get-token ctx)
            :default :progress-widget

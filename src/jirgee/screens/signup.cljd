@@ -56,6 +56,10 @@
                                   .children [(m/TextSpan .text " Login"
                                                          .style (m/TextStyle .color theme/blue-color
                                                                              .fontSize 16))]))))
-             (auth-widgets/rounded-button (fn [] (auth-service/signup ctx
-                                                                       {:email "sqbh@sina.com" :password "123123123"}))
+             (auth-widgets/rounded-button (fn [] (auth-service/signup
+                                                  ctx
+                                                  navigator
+                                                  {"email" (.-text email-controller)
+                                                   "password" (.-text password-controller)
+                                                   "password_confirmation" (.-text password-confirmation-controller)}))
                                           "Done" nil nil)])]))))))))
