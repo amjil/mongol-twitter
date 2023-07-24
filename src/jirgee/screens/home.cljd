@@ -49,7 +49,7 @@
          .children [(bar-button (m/Text "hello text")
                                 (fn []
                                   (dart:core/print "yesss")
-                                  (utils/show-indicator ctx gs/state)))
+                                  (user-service/delete-token)))
                     (mgl/MongolText
                      "Hello World"
                      .style (m/TextStyle

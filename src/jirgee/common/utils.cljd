@@ -3,6 +3,7 @@
    ["package:flutter/material.dart" :as m]
    ["package:mongol/mongol.dart" :as mgl]
    ["package:flutter_styled_toast/flutter_styled_toast.dart" :as styled-toast]
+   [jirgee.states.global :as gs]
    [cljd.flutter.alpha2 :as f]))
 
 (defn show-toast [ctx msg]
@@ -12,8 +13,8 @@
    .animation styled-toast.StyledToastAnimation/fade
    .position styled-toast.StyledToastPosition/center))
 
-(defn show-indicator [ctx states]
-  (let [is-displayed? (:indicator-displayed @states)]
+(defn show-indicator [ctx]
+  (let [is-displayed? (:indicator-displayed @gs/state)]
     (when (or (nil? is-displayed?) (false? is-displayed?))
       (m/showDialog
        .context ctx
@@ -21,10 +22,13 @@
        .builder (f/build
                  (f/widget
                   :context ctx
+                  :get [m/Navigator]
                   :let [indicator-state (do
-                                          (swap! states assoc :indicator-context ctx)
-                                          (swap! states assoc :indicator-displayed true)
+                                          (swap! gs/state assoc :indicator-displayed true)
                                           true)]
+                  :bg-watcher ([{displayed? :indicator-displayed} gs/state]
+                               (when (false? displayed?)
+                                 (.pop navigator)))
                   (m/WillPopScope
                    .onWillPop ^:async (fn [] false)
                    .child (m/SimpleDialog

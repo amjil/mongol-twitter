@@ -1,6 +1,7 @@
 (ns jirgee.services.auth
   (:require
    [jirgee.services.user :as user-service]
+   [jirgee.states.global :as gs]
    [jirgee.common.utils :as utils]
    [jirgee.common.response :as response]
 
@@ -9,6 +10,7 @@
    ["dart:convert" :as convert]))
 
 (defn login [ctx ^widgets/NavigatorState navigator info right]
+  (utils/show-indicator ctx)
   (let [result (await
                 (http/post (Uri/parse "http://localhost:3002/api/auth/login")
                            .headers {"Content-Type" "application/json; charset=UTF-8"}

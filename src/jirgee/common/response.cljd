@@ -2,10 +2,12 @@
   (:require
    ["dart:convert" :as convert]
    ["package:http/http.dart" :as http]
+   [jirgee.states.global :as gs]
    [jirgee.common.utils :as utils]))
 
 (defn response-message [ctx ^http/Response response success-fn]
   (let [response-body (convert/jsonDecode (.-body response))]
+    (swap! gs/state assoc :indicator-displayed false)
     (if (not= 200 (.-statusCode response))
       (utils/show-toast ctx (get-in response-body ["data" "message"]))
       (success-fn response-body))))
