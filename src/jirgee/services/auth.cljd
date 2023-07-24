@@ -12,7 +12,7 @@
 (defn login [ctx ^widgets/NavigatorState navigator info right]
   (utils/show-indicator ctx)
   (let [result (await
-                (http/post (Uri/parse "http://localhost:3002/api/auth/login")
+                (http/post (Uri/parse (str utils/base-url "/api/auth/login"))
                            .headers {"Content-Type" "application/json; charset=UTF-8"}
                            .body
                            (convert/jsonEncode
@@ -25,13 +25,12 @@
        (.popUntil navigator (widgets.ModalRoute/withName "/"))))))
 
 (defn signup [ctx ^widgets/NavigatorState navigator info]
-  (dart:core/print (get info "password"))
-  (dart:core/print (get info "password_confirmation"))
+  (utils/show-indicator ctx)
   (if (not= (get info "password")
             (get info "password_confirmation"))
     (utils/show-toast ctx "Password confirmation")
     (let [result (await
-                  (http/post (Uri/parse "http://localhost:3002/api/auth/signup")
+                  (http/post (Uri/parse (str utils/base-url "/api/auth/signup"))
                              .headers {"Content-Type" "application/json; charset=UTF-8"}
                              .body
                              (convert/jsonEncode
