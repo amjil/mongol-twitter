@@ -110,7 +110,17 @@
             :responses {200 {:body any?}}
             :handler (fn [{{:keys [body]} :parameters uinfo :identity}]
                        {:status 200 :body
-                        (tweet/new-tweet (:db-conn _opts) uinfo body)})}}]
+                        (tweet/new-tweet (:db-conn _opts) uinfo body)})}
+     :get {:summary "query tweets."
+           :middleware [[middleware/wrap-restricted]]
+           :parameters {:query [:map
+                                [:limit {:optional true} int?]
+                                [:offset {:optional true} int?]]}
+           :responses {200 {:body any?}}
+           :handler (fn [{{:keys [query]} :parameters uinfo :identity}]
+                      {:status 200 :body
+                       (tweet/query-tweet (:query-fn _opts) uinfo query)})}
+     }]
    ["/tweets/:id"
     {:swagger {:tags ["tweets"]}
      :delete {:summary    "remove tweet."

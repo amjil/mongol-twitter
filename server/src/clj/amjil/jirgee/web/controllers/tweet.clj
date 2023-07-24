@@ -14,6 +14,13 @@
               (assoc params :user_id (UUID/fromString (:id uinfo))))
   {})
 
+(defn query-tweet
+  [query-fn uinfo params]
+  (let [limit (or (:limit params) 20)
+        offset (or (:offset params) 1)]
+    (query-fn :query-followed-tweets {:limit limit :offset offset
+                                      :user-id (UUID/fromString (:id uinfo))})))
+
 (defn delete-tweet
   [conn uinfo id]
   (db/delete! 
