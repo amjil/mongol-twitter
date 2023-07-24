@@ -8,7 +8,7 @@
    ["package:http/http.dart" :as http]
    ["dart:convert" :as convert]))
 
-(defn login [ctx navigator info right]
+(defn login [ctx ^widgets/NavigatorState navigator info right]
   (let [result (await
                 (http/post (Uri/parse "http://localhost:3002/api/auth/login")
                            .headers {"Content-Type" "application/json; charset=UTF-8"}
@@ -22,7 +22,7 @@
        (user-service/save-token (get x "token"))
        (.popUntil navigator (widgets.ModalRoute/withName "/"))))))
 
-(defn signup [ctx navigator info]
+(defn signup [ctx ^widgets/NavigatorState navigator info]
   (dart:core/print (get info "password"))
   (dart:core/print (get info "password_confirmation"))
   (if (not= (get info "password")
