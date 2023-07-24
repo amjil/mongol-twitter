@@ -6,7 +6,7 @@
    [jirgee.states.global :as gs]
    [cljd.flutter.alpha2 :as f]))
 
-(def base-url "http://localhost:3002")
+(def base-url "localhost:3002")
 
 (defn show-toast [ctx msg]
   (styled-toast/showToastWidget

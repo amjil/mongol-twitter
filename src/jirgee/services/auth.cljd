@@ -12,7 +12,7 @@
 (defn login [ctx ^widgets/NavigatorState navigator info right]
   (utils/show-indicator ctx)
   (let [result (await
-                (http/post (Uri/parse (str utils/base-url "/api/auth/login"))
+                (http/post (Uri/http utils/base-url "/api/auth/login")
                            .headers {"Content-Type" "application/json; charset=UTF-8"}
                            .body
                            (convert/jsonEncode
@@ -30,7 +30,7 @@
             (get info "password_confirmation"))
     (utils/show-toast ctx "Password confirmation")
     (let [result (await
-                  (http/post (Uri/parse (str utils/base-url "/api/auth/signup"))
+                  (http/post (Uri/http utils/base-url "/api/auth/signup")
                              .headers {"Content-Type" "application/json; charset=UTF-8"}
                              .body
                              (convert/jsonEncode
