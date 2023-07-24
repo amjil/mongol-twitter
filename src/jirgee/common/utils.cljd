@@ -3,6 +3,7 @@
    ["package:flutter/material.dart" :as m]
    ["package:mongol/mongol.dart" :as mgl]
    ["package:flutter_styled_toast/flutter_styled_toast.dart" :as styled-toast]
+   ["dart:async" :as a]
    [cljd.flutter.alpha2 :as f]))
 
 (defn show-toast [ctx msg]
@@ -11,3 +12,45 @@
    .reverseAnimation styled-toast.StyledToastAnimation/fade
    .animation styled-toast.StyledToastAnimation/fade
    .position styled-toast.StyledToastPosition/center))
+
+(defn show-indicator [ctx states]
+  (let [is-displayed? (:indicator-displayed @states)]
+    (when (or (nil? is-displayed?) (false? is-displayed?))
+      (m/showDialog
+       .context ctx
+       .barrierDismissible false
+       .builder (fn [ctx]
+                  (f/widget
+                   :watch [indicator-progress
+                           (stream
+                            (map (fn [result]
+                                   (swap! states assoc :indicator-context ctx)
+                                   (swap! states assoc :indicator-displayed true)
+                                   :ok-token))
+                            (map (fn [[er st]]
+                                   :error-token))
+                            :as-values
+                            (.asStream (a.Future/value true)))
+                           :default :progress-widget]
+                   (m/WillPopScope
+                    .onWillPop ^:async (fn [] false)
+                    .child (m/SimpleDialog
+                            .children [(m/Center
+                                        .child (m/Column
+                                                .mainAxisSize m.MainAxisSize/min
+                                                .children [(m/Padding .padding (.only m/EdgeInsets .left 16 .top 16 .right 16)
+                                                                      .child (m/CircularProgressIndicator))
+                                                           (m/Padding .padding (.all m/EdgeInsets 16)
+                                                                      .child (m/Text "Loading..."))]))]))))))))
+      ;; (m/showDialog
+      ;;  .context ctx
+      ;;  .builder (fn [context]
+      ;;             (m/SimpleDialog
+      ;;              .backgroundColor m.Colors/white
+      ;;              .children [(m/Center
+      ;;                          .child (m/Column
+      ;;                                  .mainAxisSize m.MainAxisSize/min
+      ;;                                  .children [(m/Padding .padding (.only m/EdgeInsets .left 16 .top 16 .right 16)
+      ;;                                                        .child (m/CircularProgressIndicator))
+      ;;                                             (m/Padding .padding (.all m/EdgeInsets 16)
+      ;;                                                        .child (m/Text "Loading..."))]))]))))))

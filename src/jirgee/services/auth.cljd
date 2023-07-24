@@ -18,9 +18,9 @@
     (response/response-message
      ctx
      result
-     (fn [x] 
+     (fn [x]
        (user-service/save-token (get x "token"))
-       (.pushNamedAndRemoveUntil navigator "/" (widgets.ModalRoute/withName "/"))))))
+       (.popUntil navigator (widgets.ModalRoute/withName "/"))))))
 
 (defn signup [ctx navigator info]
   (dart:core/print (get info "password"))
