@@ -1,0 +1,26 @@
+(ns jirgee.services.tweet
+  (:require
+   [jirgee.states.global :as gs]
+   [jirgee.common.utils :as utils]
+   [jirgee.common.response :as response]
+
+   ["package:flutter/widgets.dart" :as widgets]
+   ["package:http/http.dart" :as http]
+   ["dart:convert" :as convert]))
+
+(defn get-tweets [ctx info]
+  (utils/show-indicator ctx)
+  (let [result (await
+                (http/get (Uri/http utils/base-url "/api/tweets" info)
+                          .headers {"Content-Type" "application/json; charset=UTF-8"}))]
+    (response/response-message
+     ctx
+     result
+     (fn [x]
+       (let [limit (:limit info)
+             has-more? (if (empty? limit)
+                         (>= (count x) 20)
+                         (>= (count x) limit))]
+         (swap! gs/state assoc :tweets {:has-more? has-more?
+                                        :list (concat (get-in @gs/state [:tweets :list])
+                                                      x)}))))))
