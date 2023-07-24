@@ -28,9 +28,9 @@
                   :let [indicator-state (do
                                           (swap! gs/state assoc :indicator-displayed true)
                                           true)]
-                  :bg-watcher ([{displayed? :indicator-displayed} gs/state]
-                               (when (false? displayed?)
-                                 (.pop navigator)))
+                  ;; :bg-watcher ([{displayed? :indicator-displayed} gs/state]
+                  ;;              (when (false? displayed?)
+                  ;;                (.pop navigator)))
                   (m/WillPopScope
                    .onWillPop ^:async (fn [] false)
                    .child (m/SimpleDialog

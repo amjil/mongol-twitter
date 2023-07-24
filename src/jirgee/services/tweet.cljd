@@ -8,11 +8,12 @@
    ["package:http/http.dart" :as http]
    ["dart:convert" :as convert]))
 
-(defn get-tweets [ctx info]
+(defn get-tweets [ctx navigator info]
   (utils/show-indicator ctx)
   (let [result (await
                 (http/get (Uri/http utils/base-url "/api/tweets" info)
-                          .headers {"Content-Type" "application/json; charset=UTF-8"}))]
+                          .headers {"Content-Type" "application/json; charset=UTF-8"
+                                    "Authorization" (str "Token " (get @gs/state :user-token ))}))]
     (response/response-message
      ctx
      result
@@ -23,4 +24,5 @@
                          (>= (count x) limit))]
          (swap! gs/state assoc :tweets {:has-more? has-more?
                                         :list (concat (get-in @gs/state [:tweets :list])
-                                                      x)}))))))
+                                                      x)})
+         (.pop navigator))))))

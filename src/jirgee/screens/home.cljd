@@ -4,6 +4,7 @@
    ["package:mongol/mongol.dart" :as mgl]
    [jirgee.services.auth :as auth-service]
    [jirgee.services.user :as user-service]
+   [jirgee.services.tweet :as tweet-service]
    [jirgee.screens.signup :as sign-screen]
    [jirgee.screens.loading :as loading-screen]
    [jirgee.common.utils :as utils]
@@ -24,9 +25,38 @@
       .padding (.all m/EdgeInsets 2)
       .child child)))))
 
+(defn tweet-list []
+  (f/widget
+   :get [m/Navigator]
+   :context ctx
+  ;;  :let [result_ (tweet-service/get-tweets ctx {})]
+  ;;  :watch [{{tweet-list :list
+  ;;            tweet-no-more :has-more?} :tweets} gs/state]
+   (m/Scaffold)
+   .body
+   (m/SafeArea)
+   (m/Center)
+   (m/Column
+    .children
+    [(bar-button (m/Text "hello text")
+                 (fn []
+                   (dart:core/print "yesss")
+                  ;;  (user-service/delete-token)
+                   (tweet-service/get-tweets ctx navigator nil)
+                                     ;; (dart:core/print 
+                                     ;; (Uri/http "localhost:3002" "/api/tweets" {"limit" "10" "offset" "1"}))
+                   nil))
+     (mgl/MongolText
+      "Hello World111"
+      .style (m/TextStyle
+              .color m.Colors/blue
+              .fontSize 32.0))])))
+
 (defn ^m/Widget home-screen [ctx]
   (f/widget
   ;;  :context ctx
+   :get [m/Navigator]
+  ;;  :let [result ]
    :watch [user-token-getter-stream
            (user-service/get-token ctx)
            :default :progress-widget
@@ -39,19 +69,4 @@
      (sign-screen/signup-screen ctx)
 
      :else
-     (m/Scaffold
-      .body
-      (m/SafeArea
-       .child
-       (m/Center
-        .child
-        (m/Column
-         .children [(bar-button (m/Text "hello text")
-                                (fn []
-                                  (dart:core/print "yesss")
-                                  (user-service/delete-token)))
-                    (mgl/MongolText
-                     "Hello World"
-                     .style (m/TextStyle
-                             .color m.Colors/blue
-                             .fontSize 32.0))])))))))
+     (tweet-list))))
