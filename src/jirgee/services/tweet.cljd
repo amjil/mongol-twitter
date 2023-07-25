@@ -9,7 +9,6 @@
    ["dart:convert" :as convert]))
 
 (defn get-tweets [ctx navigator info]
-  (utils/show-indicator ctx)
   (let [result (await
                 (http/get (Uri/http utils/base-url "/api/tweets" info)
                           .headers {"Content-Type" "application/json; charset=UTF-8"
@@ -24,5 +23,18 @@
                          (>= (count x) limit))]
          (swap! gs/state assoc :tweets {:has-more? has-more?
                                         :list (concat (get-in @gs/state [:tweets :list])
-                                                      x)})
-         (.pop navigator))))))
+                                                      x)}))))
+    true))
+
+
+(defn query-tweets-stream [ctx navigator info]
+  (stream
+   (map (fn [result]
+          (dart:core/print "query success >>>>")
+          :ok-token))
+   (map (fn [[er st]]
+          (utils/show-toast ctx "error when query_tweets")
+          ;; (.pop navigator)
+          :error-token))
+   :as-values
+   (.asStream (get-tweets ctx navigator info))))

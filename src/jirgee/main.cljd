@@ -3,6 +3,8 @@
    ["package:flutter/material.dart" :as m]
    ["package:mongol/mongol.dart" :as mgl]
    [cljd.flutter.alpha2 :as f]
+   [jirgee.states.global :as gs]
+   [jirgee.services.shared-preferences :as sp]
    [jirgee.common.theme :as theme]
    [jirgee.screens.home :as home]
    [jirgee.screens.login :as login]
@@ -10,13 +12,17 @@
    ))
 
 (defn main []
-  (m/runApp
-   (m/MaterialApp
-    .title "Welcome to Flutter"
-    .theme theme/default-light-theme
-    .darkTheme theme/default-dark-theme
-    .initialRoute "/"
-    .routes       {"/" home/home-screen
-                   "/login" login/login-screen
-                   "/signup" signup/signup-screen}
-    .debugShowCheckedModeBanner false)))
+  (m.WidgetsFlutterBinding/ensureInitialized)
+  (let [token (await (sp/get-value {:type :string :key "user-token"}))]
+    (when (not-empty token)
+      (swap! gs/state assoc :user-token token))
+    (m/runApp
+     (m/MaterialApp
+      .title "Welcome to Flutter"
+      .theme theme/default-light-theme
+      .darkTheme theme/default-dark-theme
+      .initialRoute "/"
+      .routes       {"/" home/home-screen
+                     "/login" login/login-screen
+                     "/signup" signup/signup-screen}
+      .debugShowCheckedModeBanner false))))

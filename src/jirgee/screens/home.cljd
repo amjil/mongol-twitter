@@ -29,9 +29,6 @@
   (f/widget
    :get [m/Navigator]
    :context ctx
-  ;;  :let [result_ (tweet-service/get-tweets ctx {})]
-  ;;  :watch [{{tweet-list :list
-  ;;            tweet-no-more :has-more?} :tweets} gs/state]
    (m/Scaffold)
    .body
    (m/SafeArea)
@@ -54,17 +51,11 @@
 
 (defn ^m/Widget home-screen [ctx]
   (f/widget
-  ;;  :context ctx
+   :context ctx
    :get [m/Navigator]
-  ;;  :let [result ]
-   :watch [user-token-getter-stream
-           (user-service/get-token ctx)
-           :default :progress-widget
+   :watch [result (tweet-service/get-tweets ctx navigator nil)
            {:keys [user-token]} gs/state]
    (cond
-     (= :progress-widget user-token-getter-stream)
-     (loading-screen/loading-screen ctx)
-
      (empty? user-token)
      (sign-screen/signup-screen ctx)
 

@@ -16,18 +16,19 @@
    .position styled-toast.StyledToastPosition/center))
 
 (defn show-indicator [ctx]
-  (let [is-displayed? (:indicator-displayed @gs/state)]
-    (when (or (nil? is-displayed?) (false? is-displayed?))
+  ;; (let [is-displayed? (:indicator-displayed @gs/state)]
+  ;;   (when (or (nil? is-displayed?) (false? is-displayed?))
+      ;; (swap! gs/state assoc :indicator-displayed true)
       (m/showDialog
        .context ctx
        .barrierDismissible false
        .builder (f/build
                  (f/widget
-                  :context ctx
-                  :get [m/Navigator]
-                  :let [indicator-state (do
-                                          (swap! gs/state assoc :indicator-displayed true)
-                                          true)]
+                  ;; :context ctx
+                  ;; :get [m/Navigator]
+                  ;; :let [indicator-state (do
+                  ;;                         (swap! gs/state assoc :indicator-displayed true)
+                  ;;                         true)]
                   ;; :bg-watcher ([{displayed? :indicator-displayed} gs/state]
                   ;;              (when (false? displayed?)
                   ;;                (.pop navigator)))
@@ -40,4 +41,4 @@
                                                .children [(m/Padding .padding (.only m/EdgeInsets .left 16 .top 16 .right 16)
                                                                      .child (m/CircularProgressIndicator))
                                                           (m/Padding .padding (.all m/EdgeInsets 16)
-                                                                     .child (m/Text "Loading..."))]))]))))))))
+                                                                     .child (m/Text "Loading..."))]))]))))))
