@@ -1,0 +1,90 @@
+(ns jirgee.screens.tweet
+  (:require 
+   ["package:flutter/material.dart" :as m]
+   ["package:flutter/painting.dart" :as painting]
+   ["package:mongol/mongol.dart" :as mgl]
+   ["package:carousel_slider/carousel_slider.dart" :as carousel-slider]
+   ["package:flutter_svg/svg.dart" :as svg]
+   [cljd.flutter.alpha2 :as f]
+   [jirgee.states.global :as gs]
+   [jirgee.common.theme :as theme]
+   [jirgee.widgets.rounded-small-button :as custom-button]))
+
+(defn create-tweet [images]
+  (f/widget
+   :context ctx
+   :get [m/Navigator]
+   :watch [{userinfo :user-info
+            {is-loading :is-loading} :tweets} gs/state]
+   :managed [text-controller (m/TextEditingController)]
+   (m/Scaffold
+    .appBar (m/AppBar
+             .leading (m/IconButton .icon (m/Icon m.Icons/close .size 30))
+             .actions (custom-button/button
+                       "Tweet"
+                       #(dart:core/print "custom button ....")))
+    .body
+    (if (or (true? is-loading) (nil? userinfo))
+      (m/SizedBox)
+      (m/SafeArea
+       .child
+       (m/SingleChildScrollView
+        .scrollDirection m.Axis/horizontal
+        .child
+        (m/Row
+         .children
+         [(m/Column
+           .children
+           [(m/CircleAvatar
+             .backgroundImage (painting/NetworkImage (get userinfo "profile_image_url"))
+             .radius 30)
+            (m/SizedBox .height 15)
+            (m/Expanded
+             .child
+             (mgl/MongolTextField
+              .controller text-controller
+              .style (m/TextStyle .fontSize 22)
+              .decoration (m/InputDecoration
+                           .hintText "What's happening?"
+                           .hintStyle (m/TextStyle
+                                       .color theme/grey-color
+                                       .fontSize 22
+                                       .fontWeight m.FontWeight/w600)
+                           .border m.InputBorder/none)))])
+          (if (not-empty images)
+            (carousel-slider/CarouselSlider
+             .items (-> images
+                        (.map (fn [file]
+                                (m/Container .height (-> m/MediaQuery
+                                                         (.of ctx)
+                                                         .size
+                                                         .height
+                                                         (/ 1.8))
+                                             .margin (.symmetric m/EdgeInsets .vertical 5)
+                                             .child (.file m/Image file))))
+                        (.toList))
+             .options (carousel-slider/CarouselOptions
+                       .height 400
+                       .enableInfiniteScroll false)))]))))
+                       .bottomNavigationBar 
+                       (m/Container 
+                        .padding (.only m/EdgeInsets .bottom 10)
+                        .decoration (m/BoxDecoration
+                                     .border
+                                     (m/Border .top (m/BorderSide .color theme/grey-color .width 0.3)))
+                        .child 
+                        (m/Row
+                         .children
+                         [(m/Padding
+                           .padding (.copyWith (.all m/EdgeInsets 8) .left 15 .right 15)
+                           .child (m/GestureDetector
+                                   .onTap #(dart:core/print "On pick images ...")
+                                   .child (.asset svg/SvgPicture "assets/svgs/gallery.svg")))
+                          (m/Padding
+                           .padding (.copyWith (.all m/EdgeInsets 8) .left 15 .right 15)
+                           .child (.asset svg/SvgPicture
+                                          "assets/svgs/gif.svg"))
+                          (m/Padding
+                           .padding (.copyWith (.all m/EdgeInsets 8) .left 15 .right 15)
+                           .child (.asset svg/SvgPicture
+                                          "assets/svgs/emoji.svg"))])))))

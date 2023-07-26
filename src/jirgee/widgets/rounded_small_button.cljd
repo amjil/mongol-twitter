@@ -1,0 +1,15 @@
+(ns jirgee.widgets.rounded-small-button
+  (:require 
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
+   [cljd.flutter.alpha2 :as f]
+   [jirgee.common.theme :as theme]))
+
+(defn button [label ontap]
+  (m/InkWell
+   .onTap ontap
+   .child 
+   (m/Chip 
+    .label (m/Text label .style (m/TextStyle .color theme/blue-color .fontSize 16))
+    .backgroundColor theme/white-color
+    .labelPadding (.symmetric m/EdgeInsets .horizontal 20 .vertical 5))))
