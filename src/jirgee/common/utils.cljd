@@ -3,6 +3,8 @@
    ["package:flutter/material.dart" :as m]
    ["package:mongol/mongol.dart" :as mgl]
    ["package:flutter_styled_toast/flutter_styled_toast.dart" :as styled-toast]
+   ["package:image_picker/image_picker.dart" :as ip]
+   ["dart:io" :as io]
    [jirgee.states.global :as gs]
    [cljd.flutter.alpha2 :as f]))
 
@@ -42,3 +44,13 @@
                                                                      .child (m/CircularProgressIndicator))
                                                           (m/Padding .padding (.all m/EdgeInsets 16)
                                                                      .child (m/Text "Loading..."))]))]))))))
+  
+(defn pick-images []
+  (let [picker (ip/ImagePicker)
+        files (await (.pickMultiImage picker))]
+    (-> files
+        (.map (fn [file]
+                (io/File (.-path file))))
+        (.toList))
+    ;; (map #(io/File (.-path %)) files)
+    ))
