@@ -1,0 +1,48 @@
+(ns jirgee.widgets.tweet-card
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
+   ["package:timeago/timeago.dart" :as timeago]
+   [cljd.flutter.alpha2 :as f]
+   [jirgee.common.theme :as theme]
+   [jirgee.states.global :as gs]))
+
+(defn card [tweet]
+  (let [userinfo (get @gs/state :user-info)]
+    (if (empty? userinfo)
+      (m/SizedBox)
+      (f/widget
+       :get [m/Navigator]
+       :watch []
+       (m/GestureDetector
+        .onTap (fn [] (.pushNamed navigator "/tweet_reply" .arguments tweet)))
+       (m/Row
+        .children 
+        [(m/Column 
+          .crossAxisAlignment m.CrossAxisAlignment/start
+          .children
+          [(m/Container
+            .margin (.all m/EdgeInsets 10)
+            .child (m/GestureDetector
+                    .onTap (fn []
+                             (.pushNamed navigator "/user_profile" .arguments {"id" (get tweet "user_id")}))
+                    .child (m/CircleAvatar .backgroundImage (m/NetworkImage (get tweet "profile_image_url"))
+                                           .radius 35)))
+           (m/Expanded 
+            .child
+            (m/Row 
+             .crossAxisAlignment m.CrossAxisAlignment/start
+             .children
+             [
+              (m/Column
+               .children 
+               [(m/Container .margin (.only m/EdgeInsets .right 5)
+                             .child (m/Text (get tweet "screen_name")
+                                            .style
+                                            (m/TextStyle .fontWeight m.FontWeight/bold
+                                                         .fontSize 19)))
+                (mgl/MongolText (timeago/format (get tweet "created_at") .locale "mn_my")
+                                .style (m/TextStyle .color theme/grey-color .fontSize 17))
+                ])
+             ]))])
+         (m/VerticalDivider .color theme/grey-color)])))))
