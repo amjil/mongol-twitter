@@ -3,7 +3,10 @@
    ["package:flutter/material.dart" :as m]
    ["package:mongol/mongol.dart" :as mgl]
    ["package:timeago/timeago.dart" :as timeago]
+   ["package:flutter_svg/svg.dart" :as svg]
    [cljd.flutter.alpha2 :as f]
+   [jirgee.widgets.hashtag-text :as hashtag]
+   [jirgee.widgets.carousel-image :as c-img]
    [jirgee.common.theme :as theme]
    [jirgee.states.global :as gs]))
 
@@ -33,16 +36,41 @@
             (m/Row 
              .crossAxisAlignment m.CrossAxisAlignment/start
              .children
-             [
+             [(if (empty? (get tweet "retweeted_by"))
+                (m/SizedBox)
+                (m/Column
+                 .children 
+                 [(.asset svg/SvgPicture
+                          "assets/svgs/retweet.svg"
+                          .color theme/grey-color
+                          .height 20)
+                  (m/SizedBox .height 2)
+                  (mgl/MongolText (str (get tweet "retweeted_by") " retweeted")
+                                  .style (m/TextStyle .color theme/grey-color
+                                                      .fontSize 16
+                                                      .fontWeight m.FontWeight/w500))]))
               (m/Column
-               .children 
+               .children
                [(m/Container .margin (.only m/EdgeInsets .right 5)
                              .child (m/Text (get tweet "screen_name")
                                             .style
                                             (m/TextStyle .fontWeight m.FontWeight/bold
                                                          .fontSize 19)))
                 (mgl/MongolText (timeago/format (get tweet "created_at") .locale "mn_my")
-                                .style (m/TextStyle .color theme/grey-color .fontSize 17))
-                ])
-             ]))])
+                                .style (m/TextStyle .color theme/grey-color .fontSize 17))])
+              (if (empty? (get tweet "replied_to"))
+                (m/SizedBox)
+                (mgl/MongolRichText 
+                 .text (m/TextSpan
+                        .text "Replying to"
+                        .style (m/TextStyle .color theme/grey-color .fontSize 16)
+                        .children [(m/TextSpan .text (str " @" (get tweet "replied_to"))
+                                               .style
+                                               (m/TextStyle .color theme/blue-color 
+                                                            .fontSize 16))])))
+              (hashtag/hashtag-text (get tweet "content"))
+              (if-not (empty? (get tweet "media_links"))
+                (c-img/view (get tweet "media_links")))
+              ;; (if-not (empty? (get tweet "link")))
+              ]))])
          (m/VerticalDivider .color theme/grey-color)])))))
