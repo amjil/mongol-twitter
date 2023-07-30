@@ -4,11 +4,14 @@
    ["package:mongol/mongol.dart" :as mgl]
    ["package:timeago/timeago.dart" :as timeago]
    ["package:flutter_svg/svg.dart" :as svg]
+   ["package:like_button/like_button.dart" :as like-button]
    [cljd.flutter.alpha2 :as f]
    [jirgee.widgets.hashtag-text :as hashtag]
    [jirgee.widgets.carousel-image :as c-img]
+   [jirgee.widgets.tweet-icon-button :as icon-button]
    [jirgee.common.theme :as theme]
-   [jirgee.states.global :as gs]))
+   [jirgee.states.global :as gs]
+   [like_button.dart :as like-button]))
 
 (defn card [tweet]
   (let [userinfo (get @gs/state :user-info)]
@@ -31,15 +34,15 @@
                              (.pushNamed navigator "/user_profile" .arguments {"id" (get tweet "user_id")}))
                     .child (m/CircleAvatar .backgroundImage (m/NetworkImage (get tweet "profile_image_url"))
                                            .radius 35)))
-           (m/Expanded 
+           (m/Expanded
             .child
-            (m/Row 
+            (m/Row
              .crossAxisAlignment m.CrossAxisAlignment/start
              .children
              [(if (empty? (get tweet "retweeted_by"))
                 (m/SizedBox)
                 (m/Column
-                 .children 
+                 .children
                  [(.asset svg/SvgPicture
                           "assets/svgs/retweet.svg"
                           .color theme/grey-color
@@ -60,17 +63,65 @@
                                 .style (m/TextStyle .color theme/grey-color .fontSize 17))])
               (if (empty? (get tweet "replied_to"))
                 (m/SizedBox)
-                (mgl/MongolRichText 
+                (mgl/MongolRichText
                  .text (m/TextSpan
                         .text "Replying to"
                         .style (m/TextStyle .color theme/grey-color .fontSize 16)
                         .children [(m/TextSpan .text (str " @" (get tweet "replied_to"))
                                                .style
-                                               (m/TextStyle .color theme/blue-color 
+                                               (m/TextStyle .color theme/blue-color
                                                             .fontSize 16))])))
               (hashtag/hashtag-text (get tweet "content"))
               (if-not (empty? (get tweet "media_links"))
                 (c-img/view (get tweet "media_links")))
-              ;; (if-not (empty? (get tweet "link")))
-              ]))])
+              ;; (if-not (empty? (get tweet "link"))
+                ;;  AnyLinkPreview)
+              (m/Container
+               .margin (.only m/EdgeInsets .top 10 .right 20)
+               .child
+               (m/Column
+                .mainAxisAlignment m.MainAxisAlignment/spaceBetween
+                .children
+                [(icon-button/button
+                  "assets/svgs/views.svg"
+                  (str (+ (get tweet "comments_count")
+                          (get tweet "reshare_count")
+                          (get tweet "likes_count")))
+                  (fn [] nil))
+                 (icon-button/button
+                  "assets/svgs/comment.svg"
+                  (str (get tweet "comments_count"))
+                  (fn [] nil))
+                 (icon-button/button
+                  "assets/svgs/retweet.svg"
+                  (str (get tweet "reshare_count"))
+                  (fn [] nil))
+                 (like-button/LikeButton
+                  .size 25
+                  .onTap ^:async (fn [is-liked]
+                                   nil)
+                  .isLiked (get tweet "currentuser_like")
+                  .likeBuilder (fn [is-liked]
+                                 (if is-liked
+                                   (.asset m/SvgPicture
+                                           "assets/svgs/like_filled.svg"
+                                           .color
+                                           theme/red-color)
+                                   (.asset m/SvgPicture
+                                           "assets/svgs/like_outlined.svg"
+                                           .color
+                                           theme/grey-color)))
+                  .likeCount (get tweet "likes_count")
+                  .countBuilder (fn [likes-count is-liked text]
+                                  (m/Padding .padding (.only m/EdgeInsets .top 2)
+                                             .child (mgl/MongolText text
+                                                                    .style
+                                                                    (m/TextStyle .color (if is-liked
+                                                                                          theme/red-color
+                                                                                          theme/white-color)
+                                                                                 .fontSize 16)))))
+                 (m/IconButton
+                  .onPressed (fn [] nil)
+                  .icon (m/Icon (.share_outlined m/Icons) .size 25 .color theme/grey-color))]))
+              (m/SizedBox .width 1)]))])
          (m/VerticalDivider .color theme/grey-color)])))))
