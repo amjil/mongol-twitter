@@ -1,0 +1,24 @@
+(ns jirgee.screens.reply-tweet
+  (:require
+   ["package:flutter/material.dart" :as m]
+   [cljd.flutter.alpha2 :as f]
+   [jirgee.widgets.tweet-card :as tweet-card]))
+
+(defn reply [tweet replies]
+  (f/widget 
+   :get [m/Navigator]
+   (m/Scaffold
+    .appBar (m/AppBar
+             .title (m/Text "Tweet"))
+
+    .body
+    (m/Row
+     .children
+     [(tweet-card/card tweet)
+      (m/Expanded
+       .child
+       (.builder m/ListView
+                 .itemCount (.length replies)
+                 .itemBuilder (fn [_ index]
+                                (let [tweet (nth replies index)]
+                                  (tweet-card/card tweet)))))]))))

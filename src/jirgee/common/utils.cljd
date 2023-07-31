@@ -49,7 +49,7 @@
   (let [picker (ip/ImagePicker)
         files (await (.pickMultiImage picker))]
     (-> files
-        (.map (fn [file]
+        (.map (fn [^ip/XFile file]
                 (io/File (.-path file))))
         (.toList))
     ;; (map #(io/File (.-path %)) files)

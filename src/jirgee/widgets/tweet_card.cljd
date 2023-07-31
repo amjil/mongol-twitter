@@ -10,8 +10,7 @@
    [jirgee.widgets.carousel-image :as c-img]
    [jirgee.widgets.tweet-icon-button :as icon-button]
    [jirgee.common.theme :as theme]
-   [jirgee.states.global :as gs]
-   [like_button.dart :as like-button]))
+   [jirgee.states.global :as gs]))
 
 (defn card [tweet]
   (let [userinfo (get @gs/state :user-info)]
@@ -103,11 +102,11 @@
                   .isLiked (get tweet "currentuser_like")
                   .likeBuilder (fn [is-liked]
                                  (if is-liked
-                                   (.asset m/SvgPicture
+                                   (.asset svg/SvgPicture
                                            "assets/svgs/like_filled.svg"
                                            .color
                                            theme/red-color)
-                                   (.asset m/SvgPicture
+                                   (.asset svg/SvgPicture
                                            "assets/svgs/like_outlined.svg"
                                            .color
                                            theme/grey-color)))
