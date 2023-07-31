@@ -1,4 +1,4 @@
-(ns jirgee.screens.tweet
+(ns jirgee.screens.new-tweet
   (:require 
    ["package:flutter/material.dart" :as m]
    ["package:flutter/painting.dart" :as painting]
