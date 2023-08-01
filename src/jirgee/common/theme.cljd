@@ -49,3 +49,4 @@
 (def blue-color (.fromRGBO m/Color 29 155 240 1))
 (def grey-color m.Colors/grey)
 (def red-color (.fromRGBO m/Color 249 25 127 1))
+(def search-bar-color (.fromRGBO m/Color 32 35 39 1))

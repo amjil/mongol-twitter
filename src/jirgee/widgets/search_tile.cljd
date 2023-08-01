@@ -1,0 +1,22 @@
+(ns jirgee.widgets.search-tile
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
+   [cljd.flutter.alpha2 :as f]
+   [jirgee.common.theme :as theme]))
+
+(defn view [userinfo]
+  (f/widget 
+   (mgl/MongolListTile
+    .onTap (fn [] nil)
+    .leading (m/CircleAvatar .backgroundImage (m/NetworkImage (get userinfo "profile_image_url"))
+                             .radius 30)
+    .title (m/Text (get userinfo "screen_name")
+                   .style
+                   (m/TextStyle .fontSize 18 .fontWeight (.w600 m/FontWeight)))
+    .subtitle (m/Row .crossAxisAlignment (.start m/CrossAxisAlignment)
+                     .children
+                     [(m/Text (str "@" (get userinfo "screen_name"))
+                              :style (m/TextStyle .fontSize 16))
+                      (m/Text (get userinfo "bio")
+                              :style (m/TextStyle .color theme/white-color))]))))
