@@ -39,13 +39,12 @@
         .child
         (m/Row
          .children
-         [
-          (m/Column
+         [(m/Column
            .crossAxisAlignment m.CrossAxisAlignment/start
            .children
            [(m/CircleAvatar
             ;;  .backgroundImage (painting/NetworkImage (get userinfo "profile_image_url"))
-             .backgroundImage 
+             .backgroundImage
             ;;  (painting/NetworkImage "https://flutter.github.io/assets-for-api-docs/assets/widgets/owl.jpg")
              (m/AssetImage "assets/images/pexels-landon-parenteau-6946663.jpg")
              .radius 30)
@@ -65,28 +64,26 @@
               .maxLines nil))])
 
           (if-not (empty? imgs)
-            (m/Container 
+            (m/Container
              .width 480
              .child
-            (carousel-slider/CarouselSlider
-             .items (-> imgs
-                        (.map (fn [^io/File file]
-                                (m/Container .width 400
+             (carousel-slider/CarouselSlider
+              .items (-> imgs
+                         (.map (fn [^io/File file]
+                                 (m/Container .width 400
                                             ;;  (-> m/MediaQuery
                                             ;;             (.of ctx)
                                             ;;             .size
                                             ;;             .width
                                             ;;              (/ 1.8)
                                             ;;             )
-                                             .margin (.symmetric m/EdgeInsets .vertical 5)
-                                             .child (.file m/Image file))))
-                        (.toList))
-             .options (carousel-slider/CarouselOptions
-                       .height 400
-                       .enableInfiniteScroll false)))
-            (m/SizedBox))
-          ])
-          )))
+                                              .margin (.symmetric m/EdgeInsets .vertical 5)
+                                              .child (.file m/Image file))))
+                         (.toList))
+              .options (carousel-slider/CarouselOptions
+                        .height 400
+                        .enableInfiniteScroll false)))
+            (m/SizedBox))]))))
     .bottomNavigationBar
     (m/Container
      .padding (.only m/EdgeInsets .bottom 10)
@@ -113,8 +110,7 @@
        (m/Padding
         .padding (.copyWith (.all m/EdgeInsets 8) .left 15 .right 15)
         .child (.asset svg/SvgPicture
-                       "assets/svgs/emoji.svg"))]))
-                       )))
+                       "assets/svgs/emoji.svg"))])))))
 
 (defn ^m/Widget screen [ctx]
   (create-tweet))

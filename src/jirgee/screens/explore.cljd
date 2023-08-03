@@ -1,0 +1,39 @@
+(ns jirgee.screens.explore
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
+   [cljd.flutter.alpha2 :as f]
+   [jirgee.states.global :as gs]
+   [jirgee.widgets.search-tile :as search-tile]
+   [jirgee.common.theme :as theme]
+   [jirgee.common.utils :as utils]))
+
+(defn view [users]
+  (let [border (m/OutlineInputBorder
+                .borderRadius (.circular m/BorderRadius 50)
+                .borderSide (m/BorderSide .color theme/search-bar-color))]
+    (f/widget
+     :managed [search-controller (m/TextEditingController)]
+     (m/Scaffold
+      .appBar nil
+      .body
+      (m/Row
+       .children
+       [(m/SizedBox
+         .width 50
+         .child
+         (mgl/MongolTextField
+          .controller search-controller
+          .decoration
+          (m/InputDecoration .contentPadding
+                             (.copyWith (.all m/EdgeInsets 10) .left 20)
+                             .fillColor theme/search-bar-color
+                             .filled true
+                             .enabledBorder border
+                             .focusedBorder border
+                             .hintText "Search Twitter")))
+        (.builder m/ListView
+                  .itemCount (.length users)
+                  .itemBuilder (fn [ctx i]
+                                 (let [user (nth users i)]
+                                   (search-tile/view user))))]))))) 
