@@ -1,0 +1,15 @@
+(ns jirgee.screens.profile-view
+  (:require
+   ["package:flutter/material.dart" :as m]
+   [cljd.flutter.alpha2 :as f]
+   [jirgee.widgets.user-profile :as user-profile]))
+
+(defn view [userinfo]
+  (let [tweets []]
+    (f/widget
+     (m/Scaffold
+      .appBar  nil)
+     .body
+     (m/SafeArea
+      .child
+      (user-profile/view userinfo tweets)))))

@@ -1,0 +1,61 @@
+(ns jirgee.screens.profile-edit
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
+   [cljd.flutter.alpha2 :as f]
+   [jirgee.states.global :as gs]
+   [jirgee.widgets.user-profile :as user-profile]
+   [jirgee.common.theme :as theme]
+   [jirgee.common.utils :as utils]))
+
+(defn view [info]
+  (let [file (atom nil)]
+    (f/widget
+     :managed [name-controller (m/TextEditingController)
+               bio-controller (m/TextEditingController)]
+     (m/Scaffold
+      .appBar (m/AppBar
+               .title (m/Text "Edit Profile")
+               .centerTitle false
+               .actions [(m/TextButton .onPressed (fn [] (dart:core/print "Edit Profile Save Button"))
+                                       .child (m/Text "Text"))])
+      .body
+      (m/Column
+       .children
+       [(m/SizedBox
+         .height 200
+         .child
+         (m/Stack
+          .children
+          [(m/GestureDetector
+            .onTap (fn [] (dart:core/print "Select Banner Image"))
+            .child (m/Container
+                    .width double/infinity
+                    .height 150
+                    .decoration (m/BoxDecoration .borderRadius (.circular m/BorderRadius 10))
+                    .child (if (not= @file nil)
+                             (.file m/Image @file .fit (.fitWidth m/BoxFit))
+                             (if (empty? (get info "profile_banner_url"))
+                               (m/Container .color theme/blue-color)
+                               (.network m/Image  (get info "profile_banner_url") .fit (.fitWidth m/BoxFit))))))
+           (m/Positioned
+            .bottom 20
+            .left 20
+            .child (m/GestureDetector
+                    .onTap (fn [] (dart:core/print "Select Profile Imageg"))
+                    :child (if (nil? @file)
+                             (m/CircleAvatar .backgroundImage (m/NetworkImage
+                                                               (get info "profile_banner_url"))
+                                             .radius 40)
+                             (m/CircleAvatar .backgroundImage (m/FileImage @file)
+                                             .radius 40))))]))
+        (m/Row
+         .children
+         [(mgl/MongolTextField
+           .controller name-controller
+           .decoration (m/InputDecoration .hintText "Name" .contentPadding (.all m/EdgeInsets 18)))
+          (m/SizedBox .width 20)
+          (mgl/MongolTextField
+           .controller bio-controller
+           .decoration (m/InputDecoration .hintText "Bio" .contentPadding (.all m/EdgeInsets 18))
+           .maxLines 4)])])))))

@@ -9,46 +9,42 @@
    [jirgee.common.theme :as theme]))
 
 (defn view [user tweets]
-  (f/widget 
-   (m/Scaffold
-    .appBar  nil)
-   .body
-   (m/SafeArea)
+  (f/widget
    (m/NestedScrollView
-    .scrollDirection m.Axis/horizontal)
-   .body
-   (m/Row
-    .children 
-    [(m/Column
-      .children
-      [(mgl/MongolText
-        (get user "screen_name")
-        .style
-        (m/TextStyle .fontSize 25 .fontWeight (.bold m/FontWeight)))
-       (when (true? (get user "is_blue"))
-         (m/Padding
-          .padding (.only m/EdgeInsets .left 3)
-          .child (.asset svg/SvgPicture "assets/svgs/verified.svg")))])
-     (mgl/MongolText
-      (str "@" (get user "screen_name"))
-      .style (m/TextStyle .fontSize 17 .color theme/grey-color))
-     (mgl/MongolText
-      (get user "bio")
-      .style (m/TextStyle .fontSize 17))
-     (m/SizedBox .width 10)
-     (m/Column
-      .children
-      [(follow-count/widget
-        (get user "followings_count")
-        "Following")
-       (m/SizedBox .height 15)
-       (follow-count/widget
-        (get user "followers_count")
-        "Followers")])
-     (m/SizedBox .width 2)
-     (m/VerticalDivider .color theme/white-color)
-     (.builder m/ListView
-               .itemCount (count tweets)
-               .itemBuilder (fn [_ i]
-                              (let [tweet (nth tweets i)]
-                                (tweet-card/card tweet))))])))
+    .scrollDirection m.Axis/horizontal
+    .body
+    (m/Row
+     .children
+     [(m/Column
+       .children
+       [(mgl/MongolText
+         (get user "screen_name")
+         .style
+         (m/TextStyle .fontSize 25 .fontWeight (.bold m/FontWeight)))
+        (when (true? (get user "is_blue"))
+          (m/Padding
+           .padding (.only m/EdgeInsets .left 3)
+           .child (.asset svg/SvgPicture "assets/svgs/verified.svg")))])
+      (mgl/MongolText
+       (str "@" (get user "screen_name"))
+       .style (m/TextStyle .fontSize 17 .color theme/grey-color))
+      (mgl/MongolText
+       (get user "bio")
+       .style (m/TextStyle .fontSize 17))
+      (m/SizedBox .width 10)
+      (m/Column
+       .children
+       [(follow-count/widget
+         (get user "followings_count")
+         "Following")
+        (m/SizedBox .height 15)
+        (follow-count/widget
+         (get user "followers_count")
+         "Followers")])
+      (m/SizedBox .width 2)
+      (m/VerticalDivider .color theme/white-color)
+      (.builder m/ListView
+                .itemCount (count tweets)
+                .itemBuilder (fn [_ i]
+                               (let [tweet (nth tweets i)]
+                                 (tweet-card/card tweet))))]))))
