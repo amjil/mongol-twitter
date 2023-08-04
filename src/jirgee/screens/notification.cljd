@@ -1,0 +1,19 @@
+(ns jirgee.screens.notification
+  (:require
+   ["package:flutter/material.dart" :as m]
+   [cljd.flutter.alpha2 :as f]
+   [jirgee.states.global :as gs]
+   [jirgee.widgets.notification-tile :as notification-tile]))
+
+
+(defn view []
+  (f/widget
+   (m/Scaffold
+    .appBar (m/AppBar .title (m/Text "Notifications")))
+   .body
+   (.builder m/ListView
+             .itemCount (:notifications @gs/state)
+             .itemBuilder (fn [ctx i]
+                            (let [n (nth (:notifications @gs/state) i)]
+                              (notification-tile/view n))))))
+

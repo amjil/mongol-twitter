@@ -1,0 +1,30 @@
+(ns jirgee.widgets.notification-tile
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
+   ["package:flutter_svg/svg.dart" :as svg]
+   [cljd.flutter.alpha2 :as f]
+   [jirgee.common.theme :as theme]))
+
+
+(defn view [n]
+  (f/widget 
+   (mgl/MongolListTile 
+    .leading 
+    (condp = (get n "notification_type")
+      "follow"
+      (m/Icon (.person m/Icons) .color theme/blue-color)
+      
+      "like"
+      (.asset svg/SvgPicture
+              "assets/svgs/like_filled.svg"
+              :color theme/red-color 
+              :height 20)
+      
+      "retweet" 
+      (.asset svg/SvgPicture
+              "assets/svgs/retweet.svg"
+              :color theme/white-color 
+              :height 20)
+      (m/SizedBox))
+    .title (mgl/MongolText (get n "content")))))
