@@ -20,7 +20,9 @@
        :get [m/Navigator]
        :watch []
        (m/GestureDetector
-        .onTap (fn [] (.pushNamed navigator "/tweet_reply" .arguments tweet)))
+        .onTap (fn []
+                 (.pushNamed navigator "/tweet_reply" .arguments tweet)
+                 nil))
        (m/Row
         .children 
         [(m/Column 
@@ -30,7 +32,8 @@
             .margin (.all m/EdgeInsets 10)
             .child (m/GestureDetector
                     .onTap (fn []
-                             (.pushNamed navigator "/user_profile" .arguments {"id" (get tweet "user_id")}))
+                             (.pushNamed navigator "/user_profile" .arguments {"id" (get tweet "user_id")})
+                             nil)
                     .child (m/CircleAvatar .backgroundImage (m/NetworkImage (get tweet "profile_image_url"))
                                            .radius 35)))
            (m/Expanded

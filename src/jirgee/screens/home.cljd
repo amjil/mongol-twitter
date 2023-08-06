@@ -9,6 +9,9 @@
    [jirgee.states.global :as gs]
    [jirgee.common.theme :as theme]
    [jirgee.widgets.drawer :as drawer]
+   [jirgee.widgets.tweet-list :as tweet-list]
+   [jirgee.screens.notification :as notification]
+   [jirgee.screens.explore :as explore]
    [cljd.flutter.alpha2 :as f]))
 
 (defn bar-button [child on-press]
@@ -78,8 +81,12 @@
                                 .height 30)
                  .centerTitle true)
                 nil)
-      .body (m/IndexedStack .index page
-                            .children [])
+      .body
+      (m/IndexedStack
+       .index page
+       .children [(tweet-list/view)
+                  (explore/view)
+                  (notification/view)])
       .floatingActionButton
       (m/FloatingActionButton
        .onPressed (fn []
@@ -92,7 +99,7 @@
       (c/CupertinoTabBar
        .currentIndex page
        .onTap (fn [i] (reset! page-num i))
-       .backgroundColor theme/background-color 
+       .backgroundColor theme/background-color
        .items [(m/BottomNavigationBarItem
                 .icon
                 (.asset svg/SvgPicture

@@ -8,11 +8,11 @@
    ["package:http/http.dart" :as http]
    ["dart:convert" :as convert]))
 
-(defn get-tweets [ctx navigator info]
+(defn ^:async get-tweets [ctx navigator info]
   (let [result (await
                 (http/get (Uri/http utils/base-url "/api/tweets" info)
                           .headers {"Content-Type" "application/json; charset=UTF-8"
-                                    "Authorization" (str "Token " (get @gs/state :user-token ))}))]
+                                    "Authorization" (str "Token " (get @gs/state :user-token))}))]
     (response/response-message
      ctx
      result
@@ -38,3 +38,25 @@
           :error-token))
    :as-values
    (.asStream (get-tweets ctx navigator info))))
+
+(defn create-tweet [ctx navigator info]
+  (let [result (await
+                (http/post (Uri/http utils/base-url "/api/tweets" info)
+                           .headers {"Content-Type" "application/json; charset=UTF-8"
+                                     "Authorization" (str "Token " (get @gs/state :user-token))}))]
+    (response/response-message
+     ctx
+     result
+     (fn [_]
+       (get-tweets ctx navigator nil)))))
+
+(defn delete-tweet [ctx navigator id]
+  (let [result (await
+                (http/delete (Uri/http utils/base-url "/api/tweets/" id)
+                             .headers {"Content-Type" "application/json; charset=UTF-8"
+                                       "Authorization" (str "Token " (get @gs/state :user-token))}))]
+    (response/response-message
+     ctx
+     result
+     (fn [_]
+       (get-tweets ctx navigator nil)))))

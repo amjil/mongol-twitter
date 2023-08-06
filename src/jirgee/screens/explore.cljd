@@ -8,11 +8,12 @@
    [jirgee.common.theme :as theme]
    [jirgee.common.utils :as utils]))
 
-(defn view [users]
+(defn view []
   (let [border (m/OutlineInputBorder
                 .borderRadius (.circular m/BorderRadius 50)
                 .borderSide (m/BorderSide .color theme/search-bar-color))]
     (f/widget
+     :watch [{users :users} gs/state]
      :managed [search-controller (m/TextEditingController)]
      (m/Scaffold
       .appBar nil

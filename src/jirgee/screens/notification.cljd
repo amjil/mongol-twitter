@@ -8,12 +8,13 @@
 
 (defn view []
   (f/widget
+   :watch [{notifications :notifications} gs/state]
    (m/Scaffold
     .appBar (m/AppBar .title (m/Text "Notifications")))
    .body
    (.builder m/ListView
-             .itemCount (:notifications @gs/state)
+             .itemCount notifications
              .itemBuilder (fn [ctx i]
-                            (let [n (nth (:notifications @gs/state) i)]
+                            (let [n (nth notifications i)]
                               (notification-tile/view n))))))
 

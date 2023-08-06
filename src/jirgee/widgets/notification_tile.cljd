@@ -18,13 +18,13 @@
       "like"
       (.asset svg/SvgPicture
               "assets/svgs/like_filled.svg"
-              :color theme/red-color 
-              :height 20)
+              .color theme/red-color 
+              .height 20)
       
       "retweet" 
       (.asset svg/SvgPicture
               "assets/svgs/retweet.svg"
-              :color theme/white-color 
-              :height 20)
+              .color theme/white-color 
+              .height 20)
       (m/SizedBox))
     .title (mgl/MongolText (get n "content")))))

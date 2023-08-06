@@ -1,0 +1,16 @@
+(ns jirgee.widgets.tweet-list
+  (:require
+   ["package:flutter/material.dart" :as m]
+   [cljd.flutter.alpha2 :as f]
+   [jirgee.widgets.tweet-card :as tweet-card]
+   [jirgee.states.global :as gs]))
+
+(defn view []
+  (f/widget
+   :watch [{tweets :tweets} gs/state]
+   (.builder m/ListView
+             .itemCount (count tweets)
+             .itemBuilder (fn [ctx i]
+                            (let [tweet (nth tweets i)]
+                              (tweet-card/card tweet))))))
+
