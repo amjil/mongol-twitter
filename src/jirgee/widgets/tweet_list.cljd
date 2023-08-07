@@ -9,6 +9,7 @@
   (f/widget
    :watch [{tweets :tweets} gs/state]
    (.builder m/ListView
+             .scrollDirection m.Axis/horizontal
              .itemCount (count tweets)
              .itemBuilder (fn [ctx i]
                             (let [tweet (nth tweets i)]

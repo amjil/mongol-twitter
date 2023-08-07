@@ -14,59 +14,6 @@
    [jirgee.screens.explore :as explore]
    [cljd.flutter.alpha2 :as f]))
 
-(defn bar-button [child on-press]
-  (f/widget
-   :context ctx
-   (m/Material
-    .color (-> m/Theme (.of ctx) .-scaffoldBackgroundColor)
-    .child
-    (m/InkWell
-     .customBorder (m/CircleBorder)
-     .onTap on-press
-     .child
-     (m/Padding
-      .padding (.all m/EdgeInsets 2)
-      .child child)))))
-
-(defn tweet-list []
-  (f/widget
-   :get [m/Navigator]
-   :context ctx
-   (m/Scaffold)
-   .body
-   (m/SafeArea)
-   (m/Center)
-   (m/Column
-    .children
-    [(bar-button (m/Text "hello text")
-                 (fn []
-                   (dart:core/print "yesss")
-                  ;;  (user-service/delete-token)
-                   (tweet-service/get-tweets ctx navigator nil)
-                                     ;; (dart:core/print 
-                                     ;; (Uri/http "localhost:3002" "/api/tweets" {"limit" "10" "offset" "1"}))
-                   nil))
-     (mgl/MongolText
-      "Hello World111"
-      .style (m/TextStyle
-              .color m.Colors/blue
-              .fontSize 32.0))])))
-
-(defn ^m/Widget home-screen [ctx]
-  (f/widget
-   :context ctx
-   :get [m/Navigator]
-   :watch [result (tweet-service/get-tweets ctx navigator nil)
-           {:keys [user-token]} gs/state]
-   (cond
-     (empty? user-token)
-     (sign-screen/signup-screen ctx)
-
-     :else
-    ;;  (new-tweet-screen/create-tweet)
-    (tweet-list)
-     )))
-
 (defn home []
   (let [page-num (atom 0)]
     (f/widget
@@ -119,3 +66,17 @@
                           "assets/svgs/notif_filled.svg"
                           "assets/svgs/notif_outlined.svg")
                         .color theme/white-color))])))))
+
+(defn ^m/Widget home-screen [ctx]
+  (f/widget
+   :context ctx
+   :get [m/Navigator]
+   :watch [result (tweet-service/get-tweets ctx navigator nil)
+           {:keys [user-token]} gs/state]
+   (cond
+     (empty? user-token)
+     (sign-screen/signup-screen ctx)
+
+     :else
+     (home))))
+

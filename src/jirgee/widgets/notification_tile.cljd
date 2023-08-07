@@ -27,4 +27,6 @@
               .color theme/white-color 
               .height 20)
       (m/SizedBox))
-    .title (mgl/MongolText (get n "content")))))
+    .title (mgl/MongolText (if (empty? (get n "content"))
+                             "No Content"
+                             (get n "content"))))))

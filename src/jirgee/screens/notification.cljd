@@ -12,8 +12,10 @@
    (m/Scaffold
     .appBar (m/AppBar .title (m/Text "Notifications")))
    .body
+   (m/SafeArea)
    (.builder m/ListView
-             .itemCount notifications
+             .scrollDirection m.Axis/horizontal
+             .itemCount (count notifications)
              .itemBuilder (fn [ctx i]
                             (let [n (nth notifications i)]
                               (notification-tile/view n))))))
