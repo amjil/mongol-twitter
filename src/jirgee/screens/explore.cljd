@@ -34,7 +34,7 @@
                              .focusedBorder border
                              .hintText "Search Twitter")))
         (.builder m/ListView
-                  .itemCount (.length users)
+                  .itemCount (count users)
                   .itemBuilder (fn [ctx i]
                                  (let [user (nth users i)]
                                    (search-tile/view user))))]))))) 

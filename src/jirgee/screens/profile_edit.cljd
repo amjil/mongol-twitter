@@ -43,7 +43,7 @@
             .left 20
             .child (m/GestureDetector
                     .onTap (fn [] (dart:core/print "Select Profile Imageg"))
-                    :child (if (nil? @file)
+                    .child (if (nil? @file)
                              (m/CircleAvatar .backgroundImage (m/NetworkImage
                                                                (get info "profile_banner_url"))
                                              .radius 40)
