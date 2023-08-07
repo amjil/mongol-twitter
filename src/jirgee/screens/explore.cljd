@@ -16,25 +16,28 @@
      :watch [{users :users} gs/state]
      :managed [search-controller (m/TextEditingController)]
      (m/Scaffold
-      .appBar nil
-      .body
-      (m/Row
-       .children
-       [(m/SizedBox
-         .width 50
-         .child
-         (mgl/MongolTextField
-          .controller search-controller
-          .decoration
-          (m/InputDecoration .contentPadding
-                             (.copyWith (.all m/EdgeInsets 10) .left 20)
-                             .fillColor theme/search-bar-color
-                             .filled true
-                             .enabledBorder border
-                             .focusedBorder border
-                             .hintText "Search Twitter")))
+      .appBar nil)
+     .body
+     (m/SafeArea)
+     (m/Row
+      .children
+      [(m/SizedBox
+        .width 50
+        .child
+        (mgl/MongolTextField
+         .controller search-controller
+         .decoration
+         (m/InputDecoration .contentPadding
+                            (.copyWith (.all m/EdgeInsets 10) .left 20)
+                            .fillColor theme/search-bar-color
+                            .filled true
+                            .enabledBorder border
+                            .focusedBorder border
+                            .hintText "Search Twitter")))
+       (m/Expanded
+        .child
         (.builder m/ListView
                   .itemCount (count users)
                   .itemBuilder (fn [ctx i]
                                  (let [user (nth users i)]
-                                   (search-tile/view user))))]))))) 
+                                   (search-tile/view user)))))])))) 
