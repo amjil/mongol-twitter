@@ -5,7 +5,7 @@
    [clojure.string :as str]
    [jirgee.common.theme :as theme]))
 
-(defn hashtag-text-span [sub-text]
+(defn hashtag-text-span [^String sub-text]
   (cond 
     (.startsWith sub-text "#")
     (m/TextSpan .text (str sub-text " ")
@@ -20,7 +20,7 @@
                                     .fontSize 18))
     
     :else (m/TextSpan .text (str sub-text " ")
-                      .style (m/TextStyle :fontSize 18))))
+                      .style (m/TextStyle .fontSize 18))))
 
 (defn hashtag-text [text]
   (let [spans (->>

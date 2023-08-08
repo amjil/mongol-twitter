@@ -10,7 +10,8 @@
    [jirgee.states.global :as gs]
    [jirgee.common.theme :as theme]
    [jirgee.common.utils :as utils]
-   [jirgee.widgets.rounded-small-button :as custom-button]))
+   [jirgee.widgets.rounded-small-button :as custom-button]
+   [jirgee.services.tweet :as tweet-service]))
 
 (defn create-tweet []
   (f/widget
@@ -19,7 +20,7 @@
    :let [images (atom [])]
    :watch [{userinfo :user-info
             {is-loading :is-loading} :tweets} gs/state
-           imgs images]
+           ^#/(List io/File)imgs images]
    :managed [text-controller (m/TextEditingController)]
    (m/Scaffold
     .appBar (m/AppBar
@@ -28,7 +29,7 @@
                        .icon (m/Icon m.Icons/close .size 30))
              .actions [(custom-button/button
                         "Tweet"
-                        #(dart:core/print "custom button ...."))])
+                        #(tweet-service/create-tweet ctx navigator {"content" (.-text text-controller)}))])
     .body
     (if false;(or (true? is-loading) (nil? userinfo))
       (m/SizedBox)

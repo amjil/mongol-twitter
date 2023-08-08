@@ -3,8 +3,8 @@
    ["package:flutter/material.dart" :as m]
    ["package:mongol/mongol.dart" :as mgl]
    [cljd.flutter.alpha2 :as f]
-   [jirgee.common.theme :as theme]))
-
+   [jirgee.common.theme :as theme]
+   [jirgee.services.user :as user-service]))
 
 (defn view []
   (f/widget
@@ -34,5 +34,5 @@
         .title
         (mgl/MongolText "Log Out" .style (m/TextStyle .fontSize 22))
         .onTap (fn []
-                 ;; Log out
+                 (user-service/delete-token)
                  nil))])))))

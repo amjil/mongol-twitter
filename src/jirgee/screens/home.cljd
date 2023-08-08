@@ -17,6 +17,7 @@
 (defn home []
   (let [page-num (atom 0)]
     (f/widget
+     :context ctx
      :get [m/Navigator]
      :watch [page page-num]
      (m/Scaffold
@@ -45,7 +46,11 @@
       .bottomNavigationBar
       (c/CupertinoTabBar
        .currentIndex page
-       .onTap (fn [i] (reset! page-num i))
+       .onTap (fn [i]
+                (condp =  i
+                  0 (tweet-service/get-tweets ctx navigator nil)
+                  nil)
+                (reset! page-num i))
        .backgroundColor theme/background-color
        .items [(m/BottomNavigationBarItem
                 .icon

@@ -17,6 +17,6 @@
     .subtitle (m/Row .crossAxisAlignment (.start m/CrossAxisAlignment)
                      .children
                      [(m/Text (str "@" (get userinfo "screen_name"))
-                              :style (m/TextStyle .fontSize 16))
+                              .style (m/TextStyle .fontSize 16))
                       (m/Text (get userinfo "bio")
-                              :style (m/TextStyle .color theme/white-color))]))))
+                              .style (m/TextStyle .color theme/white-color))]))))
