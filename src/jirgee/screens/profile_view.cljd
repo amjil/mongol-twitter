@@ -2,14 +2,15 @@
   (:require
    ["package:flutter/material.dart" :as m]
    [cljd.flutter.alpha2 :as f]
-   [jirgee.widgets.user-profile :as user-profile]))
+   [jirgee.widgets.user-profile :as user-profile]
+   [jirgee.states.global :as gs]))
 
-(defn view [userinfo]
-  (let [tweets []]
+(defn ^m/Widget screen [ctx]
+  (let [userinfo (:user-info @gs/state)]
     (f/widget
      (m/Scaffold
       .appBar  nil)
      .body
      (m/SafeArea
       .child
-      (user-profile/view userinfo tweets)))))
+      (user-profile/view userinfo)))))

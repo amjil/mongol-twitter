@@ -35,4 +35,5 @@
         (mgl/MongolText "Log Out" .style (m/TextStyle .fontSize 22))
         .onTap (fn []
                  (user-service/delete-token)
+                 (user-service/delete-info)
                  nil))])))))

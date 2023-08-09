@@ -21,29 +21,33 @@
              has-more? (if (empty? limit)
                          (>= (count x) 20)
                          (>= (count x) limit))]
+         (dart:core/print (str "xxxx = " x))
          (swap! gs/state assoc :tweets {:has-more? has-more?
                                         :list (concat (get-in @gs/state [:tweets :list])
                                                       x)}))))
     true))
 
 
-(defn query-tweets-stream [ctx navigator info]
-  (stream
-   (map (fn [result]
-          (dart:core/print "query success >>>>")
-          :ok-token))
-   (map (fn [[er st]]
-          (utils/show-toast ctx "error when query_tweets")
-          ;; (.pop navigator)
-          :error-token))
-   :as-values
-   (.asStream (get-tweets ctx navigator info))))
+;; (defn query-tweets-stream [ctx navigator info]
+;;   (stream
+;;    (map (fn [result]
+;;           (dart:core/print "query success >>>>")
+;;           :ok-token))
+;;    (map (fn [[er st]]
+;;           (utils/show-toast ctx "error when query_tweets")
+;;           ;; (.pop navigator)
+;;           :error-token))
+;;    :as-values
+;;    (.asStream (get-tweets ctx navigator info))))
 
 (defn create-tweet [ctx navigator info]
   (let [result (await
                 (http/post (Uri/http utils/base-url "/api/tweets" info)
                            .headers {"Content-Type" "application/json; charset=UTF-8"
-                                     "Authorization" (str "Token " (get @gs/state :user-token))}))]
+                                     "Authorization" (str "Token " (get @gs/state :user-token))}
+                           .body
+                           (convert/jsonEncode
+                            info)))]
     (response/response-message
      ctx
      result

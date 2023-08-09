@@ -24,8 +24,8 @@
                  (.pushNamed navigator "/tweet_reply" .arguments tweet)
                  nil))
        (m/Row
-        .children 
-        [(m/Column 
+        .children
+        [(m/Column
           .crossAxisAlignment m.CrossAxisAlignment/start
           .children
           [(m/Container

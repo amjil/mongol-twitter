@@ -6,13 +6,16 @@
    [cljd.flutter.alpha2 :as f]
    [jirgee.widgets.follow-count :as follow-count]
    [jirgee.widgets.tweet-card :as tweet-card]
-   [jirgee.common.theme :as theme]))
+   [jirgee.common.theme :as theme]
+   [jirgee.states.global :as gs]))
 
-(defn view [user tweets]
+(defn view [user]
   (f/widget
-   (m/NestedScrollView
-    .scrollDirection m.Axis/horizontal
-    .body
+   :watch [{{tweets :list
+             has-more :has-more?} :my-tweets} gs/state]
+  ;;  (m/NestedScrollView
+  ;;   .scrollDirection m.Axis/horizontal
+  ;;   .body
     (m/Row
      .children
      [(m/Column
@@ -43,8 +46,12 @@
          "Followers")])
       (m/SizedBox .width 2)
       (m/VerticalDivider .color theme/white-color)
-      (.builder m/ListView
-                .itemCount (count tweets)
-                .itemBuilder (fn [_ i]
-                               (let [tweet (nth tweets i)]
-                                 (tweet-card/card tweet))))]))))
+      (if (empty? tweets)
+        (m/SizedBox)
+        (.builder m/ListView
+                  .itemCount (count tweets)
+                  .itemBuilder (fn [_ i]
+                                 (let [tweet (nth tweets i)]
+                                   (tweet-card/card tweet)))))])
+                                  ;;  )
+                                   ))

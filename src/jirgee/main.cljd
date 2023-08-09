@@ -2,6 +2,7 @@
   (:require
    ["package:flutter/material.dart" :as m]
    ["package:mongol/mongol.dart" :as mgl]
+   ["dart:convert" :as convert]
    [cljd.flutter.alpha2 :as f]
    [jirgee.states.global :as gs]
    [jirgee.services.shared-preferences :as sp]
@@ -9,13 +10,17 @@
    [jirgee.screens.home :as home]
    [jirgee.screens.login :as login]
    [jirgee.screens.signup :as signup]
-   ))
+   [jirgee.screens.profile-view :as profile]
+   [jirgee.screens.new-tweet :as new-tweet]))
 
 (defn main []
   (m.WidgetsFlutterBinding/ensureInitialized)
-  (let [token (await (sp/get-value {:type :string :key "user-token"}))]
+  (let [token (await (sp/get-value {:type :string :key "user-token"}))
+        userinfo (await (sp/get-value {:type :string :key "user-info"}))]
     (when (not-empty token)
       (swap! gs/state assoc :user-token token))
+    (when (not-empty userinfo)
+      (swap! gs/state assoc :user-info (convert/jsonDecode userinfo)))
     (m/runApp
      (m/MaterialApp
       .title "Welcome to Flutter"
@@ -24,5 +29,8 @@
       .initialRoute "/"
       .routes       {"/" home/home-screen
                      "/login" login/login-screen
-                     "/signup" signup/signup-screen}
+                     "/signup" signup/signup-screen
+                     "/create_tweet" new-tweet/screen 
+                     "/user_profile" profile/screen 
+                     }
       .debugShowCheckedModeBanner false))))

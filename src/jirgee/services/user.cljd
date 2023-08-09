@@ -2,7 +2,8 @@
   (:require
    [jirgee.services.shared-preferences :as sp]
    [jirgee.states.global :as gs]
-   [jirgee.common.utils :as utils]))
+   [jirgee.common.utils :as utils]
+   ["dart:convert" :as convert]))
 
 (defn get-token [ctx]
   (stream
@@ -16,7 +17,6 @@
    (.asStream (sp/get-value {:type :string :key "user-token"}))))
 
 (defn save-token [token]
-  (dart:core/print (str "token = " token))
   (sp/set-value {:type :string :key "user-token"
                  :value token})
   (swap! gs/state assoc :user-token token))
@@ -24,3 +24,18 @@
 (defn delete-token []
   (sp/remove-value "user-token")
   (swap! gs/state assoc :user-token nil))
+
+(defn save-info [info]
+  (sp/set-value {:type :string :key "user-info"
+                 :value (convert/jsonEncode info)})
+  (swap! gs/state assoc :user-info info))
+
+(defn delete-info []
+  (sp/remove-value "user-info")
+  (swap! gs/state assoc :user-info nil))
+
+(defn get-token-and-info []
+  (let [token (sp/get-value {:type :string :key "user-token"})
+        info (sp/get-value {:type :string :key "user-info"})]
+    (swap! gs/state assoc :user-token token)
+    (swap! gs/state assoc :user-info token)))

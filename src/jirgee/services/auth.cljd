@@ -23,6 +23,7 @@
      result
      (fn [x]
        (user-service/save-token (get x "token"))
+       (user-service/save-info (get x "info"))
        (.popUntil navigator (widgets.ModalRoute/withName "/"))))))
 
 (defn signup [ctx ^widgets/NavigatorState navigator info]
