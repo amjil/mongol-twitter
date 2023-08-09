@@ -52,7 +52,7 @@
      {:post {:summary "sign in."
              :parameters {:body {:email string?
                                  :password string?}}
-             :responses {200 {:body {:token string?}}}
+             :responses {200 {:body any?}}
              :handler (fn [{{:keys [body]} :parameters headers :headers addr :remote-addr}]
                         {:status 200 :body
                          (auth/login (:db-conn _opts) (:token-secret _opts) body)})}}]

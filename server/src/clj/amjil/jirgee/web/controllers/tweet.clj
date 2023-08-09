@@ -17,7 +17,7 @@
 (defn query-tweet
   [query-fn uinfo params]
   (let [limit (or (:limit params) 20)
-        offset (or (:offset params) 1)]
+        offset (or (:offset params) 0)]
     (query-fn :query-followed-tweets {:limit limit :offset offset
                                       :user-id (UUID/fromString (:id uinfo))})))
 

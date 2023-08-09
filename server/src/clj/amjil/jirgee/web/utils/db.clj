@@ -24,10 +24,17 @@
                       {:builder-fn rs/as-unqualified-lower-maps}
                       ex))))
 
-(defn find-one-by-keys [conn t w]
-  (first
-   (sql/find-by-keys conn t w
-                     {:builder-fn rs/as-unqualified-lower-maps})))
+(defn find-one-by-keys
+  ([conn t w]
+   (first
+    (sql/find-by-keys conn t w
+                      {:builder-fn rs/as-unqualified-lower-maps})))
+  ([conn t w ex]
+   (first
+    (sql/find-by-keys conn t w
+                      (merge
+                       {:builder-fn rs/as-unqualified-lower-maps}
+                       ex)))))
 
 (defn insert! 
   ([conn t info]

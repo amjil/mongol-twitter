@@ -1,7 +1,8 @@
 (ns amjil.jirgee.web.controllers.auth
   (:require
    [ring.util.http-response :as http-response]
-
+   [clojure.tools.logging :as log]
+   [cheshire.core :as cheshire]
    [amjil.jirgee.web.utils.db :as db]
    [amjil.jirgee.web.utils.check :as check]
    [amjil.jirgee.web.utils.token :as token]
@@ -15,7 +16,14 @@
     (check/check-must-exist entity "User must exists!")
     (check/check-locked entity "User locked!")
     (check/check-password entity params "User Password Do Not Match!")
-    {:token (token/jwt-token secret (:id entity))}))
+    (let [info (db/find-one-by-keys
+                conn
+                :user_info
+                ["id = ?::uuid" (:id entity)]
+                {:columns [:profile_image_url :sex
+                           :followings_count :profile_banner_url :screen_name :bio :birth_date :location :followers_count]})]
+      {:token (token/jwt-token secret (:id entity))
+       :info info})))
 
 (declare check-before-signup)
 
