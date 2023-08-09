@@ -2,7 +2,6 @@
   (:require
    ["package:flutter/material.dart" :as m]
    ["package:flutter/cupertino.dart" :as c]
-   ["package:mongol/mongol.dart" :as mgl]
    ["package:flutter_svg/svg.dart" :as svg]
    [jirgee.services.tweet :as tweet-service]
    [jirgee.screens.signup :as sign-screen]

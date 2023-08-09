@@ -1,9 +1,8 @@
 (ns jirgee.main
   (:require
    ["package:flutter/material.dart" :as m]
-   ["package:mongol/mongol.dart" :as mgl]
+   ["package:timeago/timeago.dart" :as timeago]
    ["dart:convert" :as convert]
-   [cljd.flutter.alpha2 :as f]
    [jirgee.states.global :as gs]
    [jirgee.services.shared-preferences :as sp]
    [jirgee.common.theme :as theme]
@@ -15,6 +14,7 @@
 
 (defn main []
   (m.WidgetsFlutterBinding/ensureInitialized)
+  (timeago/setLocaleMessages "mn_my" (timeago/MnMyMessages))
   (let [token (await (sp/get-value {:type :string :key "user-token"}))
         userinfo (await (sp/get-value {:type :string :key "user-info"}))]
     (when (not-empty token)
@@ -30,7 +30,6 @@
       .routes       {"/" home/home-screen
                      "/login" login/login-screen
                      "/signup" signup/signup-screen
-                     "/create_tweet" new-tweet/screen 
-                     "/user_profile" profile/screen 
-                     }
+                     "/create_tweet" new-tweet/screen
+                     "/user_profile" profile/screen}
       .debugShowCheckedModeBanner false))))

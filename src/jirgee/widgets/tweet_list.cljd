@@ -7,11 +7,13 @@
 
 (defn view []
   (f/widget
-   :watch [{tweets :tweets} gs/state]
-   (.builder m/ListView
-             .scrollDirection m.Axis/horizontal
-             .itemCount (count tweets)
-             .itemBuilder (fn [ctx i]
-                            (let [tweet (nth tweets i)]
-                              (tweet-card/card tweet))))))
+   :watch [{{tweets :list} :tweets} gs/state]
+   (if (empty? tweets)
+     (m/SizedBox)
+     (.builder m/ListView
+               .scrollDirection m.Axis/horizontal
+               .itemCount (count tweets)
+               .itemBuilder (fn [ctx i]
+                              (let [tweet (nth tweets i)]
+                                (tweet-card/card tweet)))))))
 

@@ -18,13 +18,16 @@
      result
      (fn [x]
        (let [limit (:limit info)
+             offset (:offset info)
              has-more? (if (empty? limit)
                          (>= (count x) 20)
                          (>= (count x) limit))]
-         (dart:core/print (str "xxxx = " x))
          (swap! gs/state assoc :tweets {:has-more? has-more?
-                                        :list (concat (get-in @gs/state [:tweets :list])
-                                                      x)}))))
+                                        :list 
+                                        (if (or (empty? offset) (zero? offset))
+                                          x
+                                          (concat (get-in @gs/state [:tweets :list])
+                                                  x))}))))
     true))
 
 

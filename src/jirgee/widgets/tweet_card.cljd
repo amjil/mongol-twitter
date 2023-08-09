@@ -18,7 +18,6 @@
       (m/SizedBox)
       (f/widget
        :get [m/Navigator]
-       :watch []
        (m/GestureDetector
         .onTap (fn []
                  (.pushNamed navigator "/tweet_reply" .arguments tweet)
@@ -34,7 +33,10 @@
                     .onTap (fn []
                              (.pushNamed navigator "/user_profile" .arguments {"id" (get tweet "user_id")})
                              nil)
-                    .child (m/CircleAvatar .backgroundImage (m/NetworkImage (get tweet "profile_image_url"))
+                    .child (m/CircleAvatar .backgroundImage
+                                           (if (empty? (get tweet "profile_image_url"))
+                                             (m/AssetImage "assets/images/pexels-landon-parenteau-6946663.jpg")
+                                             (m/NetworkImage (get tweet "profile_image_url")))
                                            .radius 35)))
            (m/Expanded
             .child
@@ -57,12 +59,15 @@
               (m/Column
                .children
                [(m/Container .margin (.only m/EdgeInsets .right 5)
-                             .child (m/Text (get tweet "screen_name")
-                                            .style
-                                            (m/TextStyle .fontWeight m.FontWeight/bold
-                                                         .fontSize 19)))
-                (mgl/MongolText (timeago/format (get tweet "created_at") .locale "mn_my")
-                                .style (m/TextStyle .color theme/grey-color .fontSize 17))])
+                             .child (mgl/MongolText (get tweet "screen_name")
+                                                    .style
+                                                    (m/TextStyle .fontWeight m.FontWeight/bold
+                                                                 .fontSize 19)))
+                (m/SizedBox .height 10)
+                (m/Container .margin (.only m/EdgeInsets .right 5)
+                             .child
+                             (mgl/MongolText (timeago/format (DateTime/parse (get tweet "created_at")) .locale "mn_my")
+                                             .style (m/TextStyle .color theme/grey-color .fontSize 17)))])
               (if (empty? (get tweet "replied_to"))
                 (m/SizedBox)
                 (mgl/MongolRichText
@@ -74,7 +79,8 @@
                                                (m/TextStyle .color theme/blue-color
                                                             .fontSize 16))])))
               (hashtag/hashtag-text (get tweet "content"))
-              (if-not (empty? (get tweet "media_links"))
+              (if (empty? (get tweet "media_links"))
+                (m/SizedBox)
                 (c-img/view (get tweet "media_links")))
               ;; (if-not (empty? (get tweet "link"))
                 ;;  AnyLinkPreview)
@@ -86,23 +92,25 @@
                 .children
                 [(icon-button/button
                   "assets/svgs/views.svg"
-                  (str (+ (get tweet "comments_count")
-                          (get tweet "reshare_count")
-                          (get tweet "likes_count")))
+                  (str (+ (or (get tweet "comments_count") 0)
+                          (or (get tweet "reshare_count") 0)
+                          (or (get tweet "likes_count") 0)))
                   (fn [] nil))
                  (icon-button/button
                   "assets/svgs/comment.svg"
-                  (str (get tweet "comments_count"))
+                  (str (or (get tweet "comments_count") 0))
                   (fn [] nil))
                  (icon-button/button
                   "assets/svgs/retweet.svg"
-                  (str (get tweet "reshare_count"))
+                  (str (or (get tweet "reshare_count") 0))
                   (fn [] nil))
                  (like-button/LikeButton
                   .size 25
                   .onTap ^:async (fn [is-liked]
-                                   nil)
-                  .isLiked (get tweet "currentuser_like")
+                                   (if (true? is-liked)
+                                     false
+                                     true))
+                  .isLiked (or (get tweet "currentuser_like") false)
                   .likeBuilder (fn [is-liked]
                                  (if is-liked
                                    (.asset svg/SvgPicture
@@ -113,7 +121,9 @@
                                            "assets/svgs/like_outlined.svg"
                                            .color
                                            theme/grey-color)))
-                  .likeCount (get tweet "likes_count")
+                  .likeCountPadding (.only m/EdgeInsets .top 3)
+                  .countPostion like-button.CountPostion/bottom
+                  .likeCount (or (get tweet "likes_count") 0)
                   .countBuilder (fn [likes-count is-liked text]
                                   (m/Padding .padding (.only m/EdgeInsets .top 2)
                                              .child (mgl/MongolText text
