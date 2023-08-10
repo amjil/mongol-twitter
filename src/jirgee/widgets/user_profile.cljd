@@ -24,10 +24,12 @@
                          (m/NetworkImage (get user "profile_image_url")))
                        .radius 35)
        (m/SizedBox .height 10)
-       (mgl/MongolText
-        (get user "screen_name")
-        .style
-        (m/TextStyle .fontSize 25 .fontWeight (.bold m/FontWeight)))
+       (if (empty? (get user "screen_name"))
+         (m/SizedBox)
+         (mgl/MongolText
+          (get user "screen_name")
+          .style
+          (m/TextStyle .fontSize 25 .fontWeight (.bold m/FontWeight))))
       ;;  (when (true? (get user "is_blue"))
       ;;    (m/Padding
       ;;     .padding (.only m/EdgeInsets .left 3)
@@ -37,19 +39,22 @@
      (mgl/MongolText
       (str "@" (get user "screen_name"))
       .style (m/TextStyle .fontSize 17 .color theme/grey-color))
-     (mgl/MongolText
-      (get user "bio")
-      .style (m/TextStyle .fontSize 17))
+     (if (empty? (get user "bio"))
+       (m/SizedBox)
+       (mgl/MongolText
+        (get user "bio")
+        .style (m/TextStyle .fontSize 17)))
      (m/SizedBox .width 10)
      (m/Column
       .children
       [(follow-count/widget
-        (or (get user "followings_count") 0)
+        (str "1 " (or (get user "followings_count") 0))
         "Following")
        (m/SizedBox .height 15)
        (follow-count/widget
-        (or (get user "followers_count") 0)
+        (str "1 " (or (get user "followers_count") 0))
         "Followers")])
+
      (m/SizedBox .width 2)
      (m/VerticalDivider .color theme/white-color)
      (if (empty? tweets)

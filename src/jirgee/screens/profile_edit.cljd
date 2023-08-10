@@ -8,11 +8,12 @@
    [jirgee.common.theme :as theme]
    [jirgee.common.utils :as utils]))
 
-(defn view [info]
+(defn ^m/Widget screen [ctx]
   (let [file (atom nil)]
     (f/widget
      :managed [name-controller (m/TextEditingController)
                bio-controller (m/TextEditingController)]
+     :watch [{info :user-info} gs/state]
      (m/Scaffold
       .appBar (m/AppBar
                .title (m/Text "Edit Profile")
@@ -20,6 +21,8 @@
                .actions [(m/TextButton .onPressed (fn [] (dart:core/print "Edit Profile Save Button"))
                                        .child (m/Text "Text"))])
       .body
+      (m/SafeArea
+       .child
       (m/Column
        .children
        [(m/SizedBox
@@ -44,18 +47,22 @@
             .child (m/GestureDetector
                     .onTap (fn [] (dart:core/print "Select Profile Imageg"))
                     .child (if (nil? @file)
-                             (m/CircleAvatar .backgroundImage (m/NetworkImage
-                                                               (get info "profile_banner_url"))
-                                             .radius 40)
+                             (m/CircleAvatar
+                              .backgroundImage (if (empty? (get info "profile_banner_url"))
+                                                 (m/AssetImage "assets/images/pexels-landon-parenteau-6946663.jpg")
+                                                 (m/NetworkImage (get info "profile_banner_url")))
+                              .radius 40)
                              (m/CircleAvatar .backgroundImage (m/FileImage @file)
                                              .radius 40))))]))
-        (m/Row
-         .children
-         [(mgl/MongolTextField
-           .controller name-controller
-           .decoration (m/InputDecoration .hintText "Name" .contentPadding (.all m/EdgeInsets 18)))
-          (m/SizedBox .width 20)
-          (mgl/MongolTextField
-           .controller bio-controller
-           .decoration (m/InputDecoration .hintText "Bio" .contentPadding (.all m/EdgeInsets 18))
-           .maxLines 4)])])))))
+        (m/Expanded
+         .child
+         (m/Row
+          .children
+          [(mgl/MongolTextField
+            .controller name-controller
+            .decoration (m/InputDecoration .hintText "Name" .contentPadding (.all m/EdgeInsets 18)))
+           (m/SizedBox .width 20)
+           (mgl/MongolTextField
+            .controller bio-controller
+            .decoration (m/InputDecoration .hintText "Bio" .contentPadding (.all m/EdgeInsets 18))
+            .maxLines 4)]))]))))))

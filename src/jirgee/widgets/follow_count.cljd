@@ -7,12 +7,18 @@
 (defn widget [c t]
   (m/Column 
    .children 
-   [(mgl/MongolText 
-     (str c)
-     .style (m/TextStyle .color theme/white-color 
-                         .fontSize 18
-                         .fontWeight (.bold m/FontWeight)))
-   (m/SizedBox .height 3)
-    (mgl/MongolText
-     t
-     .style (m/TextStyle .color theme/grey-color .fontSize 18))]))
+   [(m/RotatedBox
+     .quarterTurns 1
+     .child
+     (m/Text
+      (str c)
+      .style (m/TextStyle .color theme/white-color
+                          .fontSize 18
+                          .fontWeight (.bold m/FontWeight))))
+    (m/SizedBox .height 3)
+    (m/RotatedBox
+     .quarterTurns 1
+     .child
+     (m/Text
+      t
+      .style (m/TextStyle .color theme/grey-color .fontSize 18)))]))

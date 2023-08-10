@@ -3,7 +3,8 @@
    ["package:flutter/material.dart" :as m]
    [cljd.flutter.alpha2 :as f]
    [jirgee.widgets.user-profile :as user-profile]
-   [jirgee.states.global :as gs]))
+   [jirgee.states.global :as gs]
+   [jirgee.common.theme :as theme]))
 
 (defn ^m/Widget screen [ctx]
   (let [userinfo (:user-info @gs/state)]
@@ -11,11 +12,25 @@
      ;; watching [:user :id] if it not empty 
      ;; Show The Other User Profile
      ;; Other Than Show The Current User Profile
+     :get [m/Navigator]
      :watch [{{id :id
                user :info} :user
               userinfo :user-info} gs/state]
      (m/Scaffold
-      .appBar  nil)
+      .appBar (m/AppBar
+               .leading (m/IconButton
+                         .onPressed #(.pop navigator)
+                         .icon (m/Icon m.Icons/close .size 30))
+               .actions (if (empty? id)
+                          nil
+                          [(m/IconButton
+                            .onPressed (fn []
+                                         (.pushNamed navigator "/edit_profile")
+                                         nil)
+                            .icon
+                            (m/Icon (.edit_outlined m/Icons)
+                                    .size 25
+                                    .color theme/grey-color))])))
      .body
      (m/SafeArea
       .child
