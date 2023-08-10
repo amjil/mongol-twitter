@@ -18,7 +18,13 @@
     .children
     [(m/Column
       .children
-      [(mgl/MongolText
+      [(m/CircleAvatar .backgroundImage
+                       (if (empty? (get user "profile_image_url"))
+                         (m/AssetImage "assets/images/pexels-landon-parenteau-6946663.jpg")
+                         (m/NetworkImage (get user "profile_image_url")))
+                       .radius 35)
+       (m/SizedBox .height 10)
+       (mgl/MongolText
         (get user "screen_name")
         .style
         (m/TextStyle .fontSize 25 .fontWeight (.bold m/FontWeight)))
@@ -27,6 +33,7 @@
       ;;     .padding (.only m/EdgeInsets .left 3)
       ;;     .child (.asset svg/SvgPicture "assets/svgs/verified.svg")))
        ])
+     (m/SizedBox .width 16)
      (mgl/MongolText
       (str "@" (get user "screen_name"))
       .style (m/TextStyle .fontSize 17 .color theme/grey-color))
