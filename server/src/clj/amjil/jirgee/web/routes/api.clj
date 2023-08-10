@@ -160,7 +160,7 @@
                               uinfo            :identity}]
                           {:status 200 :body
                            (tweet/retweet (:db-conn _opts) uinfo id body)})}}]
-   ["/tweets/:id/reply"
+   ["/tweets/:id/replies"
     {:swagger {:tags ["tweets"]}
      :post {:summary    "reply tweet."
             :parameters {:path {:id string?}
@@ -171,7 +171,18 @@
                                body     :body} :parameters
                               uinfo            :identity}]
                           {:status 200 :body
-                           (tweet/reply (:db-conn _opts) uinfo id body)})}}]
+                           (tweet/reply (:db-conn _opts) uinfo id body)})}
+     :get {:summary    "get tweet replies."
+           :parameters {:path {:id string?}
+                        :query [:map
+                                [:limit {:optional true} int?]
+                                [:offset {:optional true} int?]]}
+           :responses  {200 {:body any?}}
+           :handler    (fn [{{{id :id} :path
+                              params :query} :parameters
+                             uinfo            :identity}]
+                         {:status 200 :body
+                          (tweet/get-replies (:query-fn _opts) uinfo id params)})}}]
    ["/tweets/:id/media_links"
     {:swagger {:tags ["tweets"]}
      :post {:summary    "tweet media_links."

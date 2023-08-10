@@ -69,6 +69,13 @@
     (db/insert! conn :replies {:tweet_id (UUID/fromString id)
                                :reply_id (:id result)})))
 
+(defn get-replies 
+  [query-fn uinfo id params]
+  (let [limit (or (:limit params) 20)
+        offset (or (:offset params) 0)]
+     (query-fn :query-tweet-replies {:limit limit :offset offset
+                                     :tweet-id (UUID/fromString id)})))
+
 (defn tweet-links
   [conn uinfo id info]
   (let [entity (db/find-one-by-keys conn :tweets ["user_id = ?" (UUID/fromString (:id uinfo))])

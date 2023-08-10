@@ -24,3 +24,27 @@ where 1 = 1
 order by a.created_at desc
 limit :limit
 offset :offset
+
+-- :name query-tweet-replies :? :*
+-- :doc query tweet replies
+select 
+    a.id,
+    a.content,
+    a.favorites_count,
+    a.replies_count,
+    a.user_id,
+    c.screen_name,
+    c.profile_image_url,
+    c.sex,
+    d.media_links,
+    d.link,
+    a.created_at
+from tweets a 
+  left join user_info c on a.user_id = c.id
+  left join tweet_entities d on a.id = d.tweet_id 
+  left join replies e on e.reply_id = a.id
+where 1 = 1
+  and e.tweet_id = :tweet-id
+order by a.created_at desc
+limit :limit
+offset :offset
