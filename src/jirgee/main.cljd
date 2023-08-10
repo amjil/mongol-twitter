@@ -10,7 +10,8 @@
    [jirgee.screens.login :as login]
    [jirgee.screens.signup :as signup]
    [jirgee.screens.profile-view :as profile]
-   [jirgee.screens.new-tweet :as new-tweet]))
+   [jirgee.screens.new-tweet :as new-tweet]
+   [jirgee.screens.reply-tweet :as reply-tweet]))
 
 (defn main []
   (m.WidgetsFlutterBinding/ensureInitialized)
@@ -31,5 +32,6 @@
                      "/login" login/login-screen
                      "/signup" signup/signup-screen
                      "/create_tweet" new-tweet/screen
+                     "/reply_tweet" reply-tweet/screen
                      "/user_profile" profile/screen}
       .debugShowCheckedModeBanner false))))

@@ -9,6 +9,7 @@
    [jirgee.widgets.hashtag-text :as hashtag]
    [jirgee.widgets.carousel-image :as c-img]
    [jirgee.widgets.tweet-icon-button :as icon-button]
+   [jirgee.services.tweet :as tweet-service]
    [jirgee.common.theme :as theme]
    [jirgee.states.global :as gs]))
 
@@ -20,7 +21,11 @@
        :get [m/Navigator]
        (m/GestureDetector
         .onTap (fn []
-                 (.pushNamed navigator "/tweet_reply" .arguments tweet)
+                 (let [t (:tweet @gs/state)]
+                   (when (or (empty? t) (not= (get t "id") (get tweet "id")))
+                     (swap! gs/state assoc :tweet tweet)
+                    ;;  ()
+                     (.pushNamed navigator "/reply_tweet")))
                  nil))
        (m/Row
         .children

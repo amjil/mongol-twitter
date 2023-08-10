@@ -67,3 +67,26 @@
      result
      (fn [_]
        (get-tweets ctx navigator nil)))))
+
+;;
+(defn ^:async get-replies [ctx navigator id info]
+  (let [result (await
+                (http/get (Uri/http utils/base-url (str "/api/tweets/" id "/replies") info)
+                          .headers {"Content-Type" "application/json; charset=UTF-8"
+                                    "Authorization" (str "Token " (get @gs/state :user-token))}))]
+    (response/response-message
+     ctx
+     result
+     (fn [x]
+       (let [limit (:limit info)
+             offset (:offset info)
+             has-more? (if (empty? limit)
+                         (>= (count x) 20)
+                         (>= (count x) limit))]
+         (swap! gs/state assoc :tweets {:has-more? has-more?
+                                        :list
+                                        (if (or (empty? offset) (zero? offset))
+                                          x
+                                          (concat (get-in @gs/state [:tweets :list])
+                                                  x))}))))
+    true))

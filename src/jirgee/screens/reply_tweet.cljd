@@ -2,15 +2,17 @@
   (:require
    ["package:flutter/material.dart" :as m]
    [cljd.flutter.alpha2 :as f]
-   [jirgee.widgets.tweet-card :as tweet-card]))
+   [jirgee.widgets.tweet-card :as tweet-card]
+   [jirgee.states.global :as gs]))
 
-(defn reply [tweet replies]
-  (f/widget 
+(defn ^m/Widget screen [ctx]
+  (f/widget
    :get [m/Navigator]
+   :watch [{tweet :tweet
+            replies :replies} gs/state]
    (m/Scaffold
     .appBar (m/AppBar
              .title (m/Text "Tweet"))
-
     .body
     (m/Row
      .children
@@ -18,7 +20,8 @@
       (m/Expanded
        .child
        (.builder m/ListView
-                 .itemCount (.length replies)
+                 .scrollDirection m.Axis/horizontal
+                 .itemCount (count replies)
                  .itemBuilder (fn [_ index]
                                 (let [tweet (nth replies index)]
                                   (tweet-card/card tweet)))))]))))
