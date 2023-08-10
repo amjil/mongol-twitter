@@ -11,20 +11,22 @@
    [jirgee.widgets.tweet-icon-button :as icon-button]
    [jirgee.services.tweet :as tweet-service]
    [jirgee.common.theme :as theme]
-   [jirgee.states.global :as gs]))
+   [jirgee.states.global :as gs]
+   [jirgee.services.user :as user-service]))
 
 (defn card [tweet]
   (let [userinfo (get @gs/state :user-info)]
     (if (empty? userinfo)
       (m/SizedBox)
       (f/widget
+       :context ctx
        :get [m/Navigator]
        (m/GestureDetector
         .onTap (fn []
                  (let [t (:tweet @gs/state)]
-                   (when (or (empty? t) (not= (get t "id") (get tweet "id")))
+                   (when (or (empty? t) (not= (get t "id") (get tweet "id"))
+                             (not= "/reply_tweet" (-> m/ModalRoute (.of ctx) .-settings .-name)))
                      (swap! gs/state assoc :tweet tweet)
-                    ;;  ()
                      (.pushNamed navigator "/reply_tweet")))
                  nil))
        (m/Row
@@ -36,7 +38,9 @@
             .margin (.all m/EdgeInsets 10)
             .child (m/GestureDetector
                     .onTap (fn []
-                             (.pushNamed navigator "/user_profile" .arguments {"id" (get tweet "user_id")})
+                             (swap! gs/state assoc-in [:user :id] (get tweet "user_id"))
+                             (user-service/user-profile ctx navigator {"user_id" (get tweet "user_id")})
+                             (.pushNamed navigator "/user_profile")
                              nil)
                     .child (m/CircleAvatar .backgroundImage
                                            (if (empty? (get tweet "profile_image_url"))

@@ -31,13 +31,17 @@
       {})))
 
 (defn user-info 
-  [conn uinfo]
-  (let [entity (db/find-one-by-keys conn :users ["id = ?::uuid" (:id uinfo)])]
+  [conn params]
+  (log/warn "user params = " params)
+  (let [entity (db/find-one-by-keys conn :users ["id = ?::uuid" (:user_id params)])]
 
     ;; check the entity 
     (check/check-must-exist entity "Maybe Token had outdated!")
 
-    (let [info (db/find-one-by-keys conn :user_info ["id = ?::uuid" (:id uinfo)])]
+    (let [info (db/find-one-by-keys conn
+                                    :user_info ["id = ?::uuid" (:user_id params)]
+                                    {:columns [:profile_image_url :sex
+                                               :followings_count :profile_banner_url :screen_name :bio :birth_date :location :followers_count]})]
       info)))
 
 (defn update-info 

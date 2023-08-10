@@ -8,9 +8,18 @@
 (defn ^m/Widget screen [ctx]
   (let [userinfo (:user-info @gs/state)]
     (f/widget
+     ;; watching [:user :id] if it not empty 
+     ;; Show The Other User Profile
+     ;; Other Than Show The Current User Profile
+     :watch [{{id :id
+               user :info} :user
+              userinfo :user-info} gs/state]
      (m/Scaffold
       .appBar  nil)
      .body
      (m/SafeArea
       .child
-      (user-profile/view userinfo)))))
+      (user-profile/view
+       (if (empty? id)
+         userinfo
+         user))))))

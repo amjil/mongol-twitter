@@ -69,10 +69,11 @@
     ["/user_info"
      {:get {:summary "get user info."
             :middleware [[middleware/wrap-restricted]]
+            :parameters {:query {:user_id string?}}
             :responses {200 {:body any?}}
-            :handler (fn [{uinfo :identity}]
+            :handler (fn [{{:keys [query]} :parameters}]
                        {:status 200 :body
-                        (profile/user-info (:db-conn _opts) uinfo)})}}]
+                        (profile/user-info (:db-conn _opts) query)})}}]
     ["/update_password"
      {:post {:summary "update password."
              :middleware [[middleware/wrap-restricted]]

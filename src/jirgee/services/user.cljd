@@ -3,6 +3,8 @@
    [jirgee.services.shared-preferences :as sp]
    [jirgee.states.global :as gs]
    [jirgee.common.utils :as utils]
+   [jirgee.common.response :as response]
+   ["package:http/http.dart" :as http]
    ["dart:convert" :as convert]))
 
 (defn get-token [ctx]
@@ -39,3 +41,15 @@
         info (sp/get-value {:type :string :key "user-info"})]
     (swap! gs/state assoc :user-token token)
     (swap! gs/state assoc :user-info token)))
+
+(defn ^:async user-profile [ctx navigator info]
+  (let [result (await
+                (http/get (Uri/http utils/base-url "/api/profile/user_info" info)
+                          .headers {"Content-Type" "application/json; charset=UTF-8"
+                                    "Authorization" (str "Token " (get @gs/state :user-token))}))]
+    (response/response-message
+     ctx
+     result
+     (fn [x]
+       (swap! gs/state assoc-in [:user :info] x)))
+    true))
