@@ -22,13 +22,16 @@
         .title
         (mgl/MongolText "My Profile" .style (m/TextStyle .fontSize 22))
         .onTap (fn []
+                 (.pop navigator)
                  (.pushNamed navigator "/user_profile")
                  nil))
        (mgl/MongolListTile
         .leading (m/Icon (.payment m/Icons) .size 30)
         .title
         (mgl/MongolText "Twitter Blue" .style (m/TextStyle .fontSize 22))
-        .onTap (fn [] nil))
+        .onTap (fn []
+                 (.pop navigator)
+                 nil))
        (mgl/MongolListTile
         .leading (m/Icon (.logout m/Icons) .size 30)
         .title
@@ -36,4 +39,5 @@
         .onTap (fn []
                  (user-service/delete-token)
                  (user-service/delete-info)
+                 (.pushNamed navigator "/login")
                  nil))])))))

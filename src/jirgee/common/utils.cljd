@@ -18,32 +18,30 @@
    .position styled-toast.StyledToastPosition/center))
 
 (defn show-indicator [ctx]
-  ;; (let [is-displayed? (:indicator-displayed @gs/state)]
-  ;;   (when (or (nil? is-displayed?) (false? is-displayed?))
-      ;; (swap! gs/state assoc :indicator-displayed true)
-      (m/showDialog
-       .context ctx
-       .barrierDismissible false
-       .builder (f/build
-                 (f/widget
-                  ;; :context ctx
-                  ;; :get [m/Navigator]
-                  ;; :let [indicator-state (do
-                  ;;                         (swap! gs/state assoc :indicator-displayed true)
-                  ;;                         true)]
-                  ;; :bg-watcher ([{displayed? :indicator-displayed} gs/state]
-                  ;;              (when (false? displayed?)
-                  ;;                (.pop navigator)))
-                  (m/WillPopScope
-                   .onWillPop ^:async (fn [] false)
-                   .child (m/SimpleDialog
-                           .children [(m/Center
-                                       .child (m/Column
-                                               .mainAxisSize m.MainAxisSize/min
-                                               .children [(m/Padding .padding (.only m/EdgeInsets .left 16 .top 16 .right 16)
-                                                                     .child (m/CircularProgressIndicator))
-                                                          (m/Padding .padding (.all m/EdgeInsets 16)
-                                                                     .child (m/Text "Loading..."))]))]))))))
+  (m/showDialog
+   .context ctx
+   .barrierDismissible false
+   .builder (f/build
+             (f/widget
+              :context ctx
+              :get [m/Navigator]
+              :bg-watcher ([{displayed? :indicator-displayed} gs/state]
+                           (let [indicator-lock (:indicator-lock @gs/state)]
+                             ;;  (dart:core/print (str "IN THE SHOU INDICATOR displayed? = " displayed? " lock= " indicator-lock))
+                             (when (and (false? displayed?) (true? indicator-lock))
+                              ;;  (dart:core/print "INDICATOR CLOSE, ONLY ONE TIME!")
+                               (swap! gs/state assoc :indicator-lock false)
+                               (.pop navigator))))
+              (m/WillPopScope
+               .onWillPop ^:async (fn [] false)
+               .child (m/SimpleDialog
+                       .children [(m/Center
+                                   .child (m/Column
+                                           .mainAxisSize m.MainAxisSize/min
+                                           .children [(m/Padding .padding (.only m/EdgeInsets .left 16 .top 16 .right 16)
+                                                                 .child (m/CircularProgressIndicator))
+                                                      (m/Padding .padding (.all m/EdgeInsets 16)
+                                                                 .child (m/Text "Loading..."))]))]))))))
   
 (defn pick-images []
   (let [picker (ip/ImagePicker)

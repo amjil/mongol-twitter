@@ -6,6 +6,7 @@
    [jirgee.common.utils :as utils]))
 
 (defn response-message [ctx ^http/Response response success-fn]
+  (swap! gs/state assoc :indicator-lock true)
   (let [response-body (convert/jsonDecode (.-body response))]
     (swap! gs/state assoc :indicator-displayed false)
     (if (not= 200 (.-statusCode response))

@@ -22,8 +22,9 @@
              has-more? (if (empty? limit)
                          (>= (count x) 20)
                          (>= (count x) limit))]
+         (dart:core/print (str "get-tweets = " x))
          (swap! gs/state assoc :tweets {:has-more? has-more?
-                                        :list 
+                                        :list
                                         (if (or (empty? offset) (zero? offset))
                                           x
                                           (concat (get-in @gs/state [:tweets :list])
