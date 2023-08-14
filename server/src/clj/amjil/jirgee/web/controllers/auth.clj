@@ -21,7 +21,8 @@
                 :user_info
                 ["id = ?::uuid" (:id entity)]
                 {:columns [:profile_image_url :sex
-                           :followings_count :profile_banner_url :screen_name :bio :birth_date :location :followers_count]})]
+                           :followings_count :profile_banner_url :screen_name :bio :birth_date :location :followers_count
+                           :id]})]
       {:token (token/jwt-token secret (:id entity))
        :info info})))
 

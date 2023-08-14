@@ -41,7 +41,9 @@
     (let [info (db/find-one-by-keys conn
                                     :user_info ["id = ?::uuid" (:user_id params)]
                                     {:columns [:profile_image_url :sex
-                                               :followings_count :profile_banner_url :screen_name :bio :birth_date :location :followers_count]})]
+                                               :followings_count :profile_banner_url 
+                                               :screen_name :bio :birth_date :location 
+                                               :followers_count :id]})]
       info)))
 
 (defn update-info 
