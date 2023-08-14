@@ -22,7 +22,6 @@
              has-more? (if (empty? limit)
                          (>= (count x) 20)
                          (>= (count x) limit))]
-         (dart:core/print (str "get-tweets = " x))
          (swap! gs/state assoc :tweets {:has-more? has-more?
                                         :list
                                         (if (or (empty? offset) (zero? offset))
@@ -44,7 +43,7 @@
 ;;    :as-values
 ;;    (.asStream (get-tweets ctx navigator info))))
 
-(defn create-tweet [ctx navigator info]
+(defn create-tweet [ctx ^widgets/NavigatorState navigator info]
   (let [result (await
                 (http/post (Uri/http utils/base-url "/api/tweets" info)
                            .headers {"Content-Type" "application/json; charset=UTF-8"
@@ -56,21 +55,24 @@
      ctx
      result
      (fn [_]
-       (get-tweets ctx navigator nil)))))
+       (get-tweets ctx navigator nil)
+       (.popUntil navigator (widgets.ModalRoute/withName "/"))))))
 
-(defn delete-tweet [ctx navigator id]
+(defn delete-tweet [ctx ^widgets/NavigatorState navigator id]
   (let [result (await
-                (http/delete (Uri/http utils/base-url "/api/tweets/" id)
+                (http/delete (Uri/http utils/base-url (str "/api/tweets/" id))
                              .headers {"Content-Type" "application/json; charset=UTF-8"
                                        "Authorization" (str "Token " (get @gs/state :user-token))}))]
     (response/response-message
      ctx
      result
      (fn [_]
-       (get-tweets ctx navigator nil)))))
+       (get-tweets ctx navigator nil)
+       (.popUntil navigator (widgets.ModalRoute/withName "/"))))
+    true))
 
 ;;
-(defn ^:async get-replies [ctx navigator id info]
+(defn ^:async get-replies [ctx ^widgets/NavigatorState navigator id info]
   (let [result (await
                 (http/get (Uri/http utils/base-url (str "/api/tweets/" id "/replies") info)
                           .headers {"Content-Type" "application/json; charset=UTF-8"

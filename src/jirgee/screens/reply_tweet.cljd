@@ -3,16 +3,34 @@
    ["package:flutter/material.dart" :as m]
    [cljd.flutter.alpha2 :as f]
    [jirgee.widgets.tweet-card :as tweet-card]
-   [jirgee.states.global :as gs]))
+   [jirgee.states.global :as gs]
+   [jirgee.common.theme :as theme]
+   [jirgee.common.utils :as utils]
+   [jirgee.services.tweet :as tweet-service]))
 
 (defn ^m/Widget screen [ctx]
   (f/widget
+   :context context
    :get [m/Navigator]
    :watch [{tweet :tweet
-            replies :replies} gs/state]
+            replies :replies
+            uinfo :user-info} gs/state]
    (m/Scaffold
     .appBar (m/AppBar
-             .title (m/Text "Tweet"))
+             .title (m/Text "Tweet")
+             .actions (if (= (get tweet "user_id") (get uinfo "id"))
+                        [(m/IconButton
+                          .onPressed (fn []
+                                       (dart:core/print (str "xxxxxxxxx= "))
+                                       (utils/show-confirm-dialog
+                                        ctx "THIS IS A TEST"
+                                        #(tweet-service/delete-tweet context navigator (get tweet "id")))
+                                       nil)
+                          .icon
+                          (m/Icon (.delete_outlined m/Icons)
+                                  .size 25
+                                  .color theme/grey-color))]
+                        nil))
     .body
     (m/Row
      .children

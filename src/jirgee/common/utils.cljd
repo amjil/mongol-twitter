@@ -42,6 +42,25 @@
                                                                  .child (m/CircularProgressIndicator))
                                                       (m/Padding .padding (.all m/EdgeInsets 16)
                                                                  .child (m/Text "Loading..."))]))]))))))
+
+(defn show-confirm-dialog [ctx msg callback]
+  (m/showDialog
+   .context ctx
+   .builder (f/build
+             (f/widget
+              :context ctx
+              :get [m/Navigator]
+              (m/WillPopScope
+               .onWillPop ^:async (fn [] false)
+               .child
+               (mgl/MongolAlertDialog
+                .content (mgl/MongolText msg)
+                .actions [(mgl/MongolTextButton .child (mgl/MongolText "No")
+                                                .onPressed (fn [] (.pop navigator)))
+                          (mgl/MongolTextButton .child (mgl/MongolText "Yes")
+                                                .onPressed (fn []
+                                                             (callback)
+                                                             (.pop navigator)))]))))))
   
 (defn pick-images []
   (let [picker (ip/ImagePicker)
