@@ -25,3 +25,20 @@
    {:follower_id (UUID/fromString (:id uinfo))
     :followee_id (UUID/fromString (:id params))})
   {})
+
+(defn explore 
+  [conn uinfo params]
+  (let [limit (or (:limit params) 20)
+        offset (or (:offset params) 0)]
+    (db/find-by-keys conn
+                     :user_info
+                     (if (empty? (:search params))
+                       ["1=1 and id <> ?::uuid" (:id uinfo)]
+                       {:screen_name (:search params)})
+                     {:columns [:profile_image_url :sex
+                                :followings_count :profile_banner_url
+                                :screen_name :bio :birth_date :location
+                                :followers_count :id
+                                :created_at]
+                      :order-by [[:created_at :desc]]
+                      :offset offset :fetch limit})))

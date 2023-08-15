@@ -101,7 +101,17 @@
     ;;          :middleware [[middleware/wrap-restricted]]}
     ;;   }]
     ]
-
+   ["/explore"
+    {:swagger {:tags ["explore"]}
+     :get {:summary "explore users"
+           :middleware [[middleware/wrap-restricted]]
+           :parameters {:query [:map
+                                [:limit {:optional true} int?]
+                                [:offset {:optional true} int?]]}
+           :responses {200 {:body any?}}
+           :handler (fn [{{:keys [query]} :parameters uinfo :identity}]
+                      {:status 200 :body
+                       (user/explore (:db-conn _opts) uinfo query)})}}]
    ["/tweets"
     {:swagger {:tags ["tweets"]}
      :post {:summary "new tweet."
@@ -120,8 +130,7 @@
            :responses {200 {:body any?}}
            :handler (fn [{{:keys [query]} :parameters uinfo :identity}]
                       {:status 200 :body
-                       (tweet/query-tweet (:query-fn _opts) uinfo query)})}
-     }]
+                       (tweet/query-tweet (:query-fn _opts) uinfo query)})}}]
    ["/tweets/:id"
     {:swagger {:tags ["tweets"]}
      :delete {:summary    "remove tweet."
