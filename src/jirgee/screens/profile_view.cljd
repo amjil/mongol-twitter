@@ -21,8 +21,7 @@
                .leading (m/IconButton
                          .onPressed #(.pop navigator)
                          .icon (m/Icon m.Icons/close .size 30))
-               .actions (if (empty? id)
-                          nil
+               .actions (if (or (empty? id) (= id (get userinfo "id")))
                           [(m/IconButton
                             .onPressed (fn []
                                          (.pushNamed navigator "/edit_profile")
@@ -30,7 +29,8 @@
                             .icon
                             (m/Icon (.edit_outlined m/Icons)
                                     .size 25
-                                    .color theme/grey-color))])))
+                                    .color theme/grey-color))]
+                          nil)))
      .body
      (m/SafeArea
       .child

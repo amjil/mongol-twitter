@@ -42,6 +42,7 @@
     (swap! gs/state assoc :user-token token)
     (swap! gs/state assoc :user-info token)))
 
+;;;;;;;;;;
 (defn ^:async user-profile [ctx navigator info]
   (let [result (await
                 (http/get (Uri/http utils/base-url "/api/profile/user_info" info)
@@ -53,3 +54,25 @@
      (fn [x]
        (swap! gs/state assoc-in [:user :info] x)))
     true))
+
+(defn ^:async get-users [ctx navigator info]
+  (let [result (await
+                (http/get (Uri/http utils/base-url "/api/explore" info)
+                          .headers {"Content-Type" "application/json; charset=UTF-8"
+                                    "Authorization" (str "Token " (get @gs/state :user-token))}))]
+    (response/response-message
+     ctx
+     result
+     (fn [x]
+       (let [limit (:limit info)
+             offset (:offset info)
+             has-more? (if (empty? limit)
+                         (>= (count x) 20)
+                         (>= (count x) limit))]
+         (swap! gs/state assoc :users {:has-more? has-more?
+                                       :list
+                                       (if (or (empty? offset) (zero? offset))
+                                         x
+                                         (concat (get-in @gs/state [:users :list])
+                                                 x))}))))
+    nil))

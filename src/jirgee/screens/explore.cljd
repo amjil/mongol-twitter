@@ -13,7 +13,7 @@
                 .borderRadius (.circular m/BorderRadius 50)
                 .borderSide (m/BorderSide .color theme/search-bar-color))]
     (f/widget
-     :watch [{users :users} gs/state]
+     :watch [{{users :list} :users} gs/state]
      :managed [search-controller (m/TextEditingController)]
      (m/Scaffold
       .appBar nil)

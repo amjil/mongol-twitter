@@ -4,6 +4,7 @@
    ["package:flutter/cupertino.dart" :as c]
    ["package:flutter_svg/svg.dart" :as svg]
    [jirgee.services.tweet :as tweet-service]
+   [jirgee.services.user :as user-service]
    [jirgee.screens.signup :as sign-screen]
    [jirgee.states.global :as gs]
    [jirgee.common.theme :as theme]
@@ -14,62 +15,65 @@
    [cljd.flutter.alpha2 :as f]))
 
 (defn home []
-  (let [page-num (atom 0)]
-    (f/widget
-     :context ctx
-     :get [m/Navigator]
-     :watch [page page-num]
-     (m/Scaffold
-      .appBar (if (= page 0)
-                (m/AppBar
-                 .title (.asset svg/SvgPicture
-                                "assets/svgs/twitter_logo.svg"
-                                .color theme/blue-color
-                                .height 30)
-                 .centerTitle true)
-                nil)
-      .body
-      (m/IndexedStack
-       .index page
-       .children [(tweet-list/view)
-                  (explore/view)
-                  (notification/view)])
-      .floatingActionButton
-      (m/FloatingActionButton
-       .onPressed (fn []
-                    (.pushNamed navigator "/create_tweet")
-                    nil)
-       .child
-       (m/Icon (.add m/Icons) .color theme/white-color .size 28))
-      .drawer (drawer/view)
-      .bottomNavigationBar
-      (c/CupertinoTabBar
-       .currentIndex page
-       .onTap (fn [i]
-                (condp =  i
-                  0 (tweet-service/get-tweets ctx navigator nil)
+  (f/widget
+   :context ctx
+   :get [m/Navigator]
+   :watch [{page :home-page} gs/state]
+   (m/Scaffold
+    .appBar (if (= page 0)
+              (m/AppBar
+               .title (.asset svg/SvgPicture
+                              "assets/svgs/twitter_logo.svg"
+                              .color theme/blue-color
+                              .height 30)
+               .centerTitle true)
+              nil)
+    .body
+    (m/IndexedStack
+     .index page
+     .children [(tweet-list/view)
+                (explore/view)
+                (notification/view)])
+    .floatingActionButton
+    (m/FloatingActionButton
+     .onPressed (fn []
+                  (.pushNamed navigator "/create_tweet")
                   nil)
-                (reset! page-num i))
-       .backgroundColor theme/background-color
-       .items [(m/BottomNavigationBarItem
-                .icon
-                (.asset svg/SvgPicture
-                        (if (= page 0)
-                          "assets/svgs/home_filled.svg"
-                          "assets/svgs/home_outlined.svg")
-                        .color theme/white-color))
-               (m/BottomNavigationBarItem
-                .icon
+     .child
+     (m/Icon (.add m/Icons) .color theme/white-color .size 28))
+    .drawer (drawer/view)
+    .bottomNavigationBar
+    (c/CupertinoTabBar
+     .currentIndex page
+     .onTap (fn [i]
+              (swap! gs/state assoc :home-page i)
+              (condp =  i
+                0 (tweet-service/get-tweets ctx navigator nil)
+                1 (user-service/get-users ctx navigator nil)
+                nil)
+              nil)
+     .backgroundColor theme/background-color
+     .items [(m/BottomNavigationBarItem
+              .icon
+              (.asset svg/SvgPicture
+                      (if (= page 0)
+                        "assets/svgs/home_filled.svg"
+                        "assets/svgs/home_outlined.svg")
+                      .color theme/white-color))
+             (m/BottomNavigationBarItem
+              .icon
+              (if (= page 1)
+                (m/Icon m.Icons/search .color theme/white-color)
                 (.asset svg/SvgPicture
                         "assets/svgs/search.svg"
-                        .color theme/white-color))
-               (m/BottomNavigationBarItem
-                .icon
-                (.asset svg/SvgPicture
-                        (if (= page 2)
-                          "assets/svgs/notif_filled.svg"
-                          "assets/svgs/notif_outlined.svg")
-                        .color theme/white-color))])))))
+                        .color theme/white-color)))
+             (m/BottomNavigationBarItem
+              .icon
+              (.asset svg/SvgPicture
+                      (if (= page 2)
+                        "assets/svgs/notif_filled.svg"
+                        "assets/svgs/notif_outlined.svg")
+                      .color theme/white-color))]))))
 
 (defn ^m/Widget home-screen [ctx]
   (f/widget

@@ -15,6 +15,7 @@
            :tag-on-edit false
            :indicator-lock false
            :current-layout "mg"
+           :home-page 0
            ;; lock for bg-watcher text-controller
            :edit-watcher/lock 2
            :draft/tabbar-index 0})))
