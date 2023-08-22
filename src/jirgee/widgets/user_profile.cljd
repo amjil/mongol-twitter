@@ -16,7 +16,8 @@
    :context ctx
    :watch [{{tweets :list
              has-more :has-more?} :my-tweets
-            {id :id} :user} gs/state]
+            {id :id} :user
+            uinfo :user-info} gs/state]
    (m/Column
     .crossAxisAlignment m.CrossAxisAlignment/start
     .children
@@ -44,7 +45,8 @@
                       (m/Row
                       ;;  .crossAxisAlignment m.CrossAxisAlignment/end
                        .mainAxisAlignment m.MainAxisAlignment/end
-                       .children [(if (or (empty? id) (= id (get user "id")))
+                       .children [(if (= (get uinfo "id") (get user "id"))
+                                    (m/SizedBox)
                                     (m/IconButton
                                      .onPressed (fn []
                                                   (if (= 1 (get user "following"))
@@ -56,7 +58,7 @@
                                                (.person m/Icons))
                                              .size 25
                                              .color theme/blue-color))
-                                    (m/SizedBox))])))
+                                    )])))
         (m/Positioned
          .bottom 20
          .left 20
