@@ -34,13 +34,6 @@
      .children [(tweet-list/view)
                 (explore/view)
                 (notification/view)])
-    .floatingActionButton
-    (m/FloatingActionButton
-     .onPressed (fn []
-                  (.pushNamed navigator "/create_tweet")
-                  nil)
-     .child
-     (m/Icon (.add m/Icons) .color theme/white-color .size 28))
     .drawer (drawer/view)
     .bottomNavigationBar
     (c/CupertinoTabBar

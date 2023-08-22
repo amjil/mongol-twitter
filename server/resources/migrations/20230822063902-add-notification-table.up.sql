@@ -5,5 +5,6 @@ CREATE TABLE IF NOT EXISTS notifications (
     "types_of" smallint,
     "to_user_id" uuid NOT NULL REFERENCES users ("id") ON DELETE CASCADE,
     "from_user_id" uuid NOT NULL REFERENCES users ("id") ON DELETE CASCADE,
-    "nty_id" uuid DEFAULT NULL
+    "nty_id" uuid DEFAULT NULL,
+    "created_at" timestamp without time zone DEFAULT CURRENT_TIMESTAMP
 );

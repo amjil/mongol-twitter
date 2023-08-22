@@ -3,17 +3,29 @@
    ["package:flutter/material.dart" :as m]
    [cljd.flutter.alpha2 :as f]
    [jirgee.widgets.tweet-card :as tweet-card]
-   [jirgee.states.global :as gs]))
+   [jirgee.states.global :as gs]
+   [jirgee.common.theme :as theme]))
 
 (defn view []
   (f/widget
+   :get [m/Navigator]
    :watch [{{tweets :list} :tweets} gs/state]
    (if (empty? tweets)
      (m/SizedBox)
-     (.builder m/ListView
-               .scrollDirection m.Axis/horizontal
-               .itemCount (count tweets)
-               .itemBuilder (fn [ctx i]
-                              (let [tweet (nth tweets i)]
-                                (tweet-card/card tweet)))))))
+     (m/Scaffold
+      .floatingActionButton
+      (m/FloatingActionButton
+       .onPressed (fn []
+                    (.pushNamed navigator "/create_tweet")
+                    nil)
+       .child
+       (m/Icon (.add m/Icons) .color theme/white-color .size 28))
+      .body
+
+      (.builder m/ListView
+                .scrollDirection m.Axis/horizontal
+                .itemCount (count tweets)
+                .itemBuilder (fn [ctx i]
+                               (let [tweet (nth tweets i)]
+                                 (tweet-card/card tweet))))))))
 
