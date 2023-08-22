@@ -4,7 +4,9 @@
    [amjil.jirgee.web.utils.db :as db]
    [honey.sql :as hsql]
    [buddy.hashers :as hashers]
-   [amjil.jirgee.web.utils.check :as check]))
+   [amjil.jirgee.web.utils.check :as check])
+  (:import
+   [java.util UUID]))
 
 (defn update-password
   [conn uinfo params]
@@ -30,21 +32,13 @@
       (db/execute! conn (hsql/format sqlmap))
       {})))
 
-(defn user-info 
-  [conn params]
+(defn user-info
+  [query-fn uinfo params]
   (log/warn "user params = " params)
-  (let [entity (db/find-one-by-keys conn :users ["id = ?::uuid" (:user_id params)])]
 
-    ;; check the entity 
-    (check/check-must-exist entity "Maybe Token had outdated!")
-
-    (let [info (db/find-one-by-keys conn
-                                    :user_info ["id = ?::uuid" (:user_id params)]
-                                    {:columns [:profile_image_url :sex
-                                               :followings_count :profile_banner_url 
-                                               :screen_name :bio :birth_date :location 
-                                               :followers_count :id]})]
-      info)))
+  (let [info (query-fn :user-profile-with-following {:id (UUID/fromString (:user_id params))
+                                                     :user_id (UUID/fromString (:id uinfo))})]
+    info))
 
 (defn update-info 
   [conn token info]

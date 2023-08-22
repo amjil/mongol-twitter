@@ -80,24 +80,34 @@
 
 (defn ^:async user-follow [ctx navigator info]
   (let [result (await
-                (http/post (Uri/http utils/base-url "/api/users/follow" info)
+                (http/post (Uri/http utils/base-url "/api/users/follow")
                            .headers {"Content-Type" "application/json; charset=UTF-8"
-                                     "Authorization" (str "Token " (get @gs/state :user-token))}))]
+                                     "Authorization" (str "Token " (get @gs/state :user-token))}
+                           .body
+                           (convert/jsonEncode
+                            info)))]
     (response/response-message
      ctx
      result
      (fn [x]
-       (swap! gs/state assoc-in [:user :info "following"] 1)))
+       (let [user (->> (get-in @gs/state [:user :info])
+                       (into {}))]
+         (swap! gs/state assoc-in [:user :info] (assoc user "following" 1)))))
     true))
 
 (defn ^:async user-unfollow [ctx navigator info]
   (let [result (await
-                (http/post (Uri/http utils/base-url "/api/users/unfollow" info)
+                (http/post (Uri/http utils/base-url "/api/users/unfollow")
                            .headers {"Content-Type" "application/json; charset=UTF-8"
-                                     "Authorization" (str "Token " (get @gs/state :user-token))}))]
+                                     "Authorization" (str "Token " (get @gs/state :user-token))}
+                           .body
+                           (convert/jsonEncode
+                            info)))]
     (response/response-message
      ctx
      result
      (fn [x]
-       (swap! gs/state assoc-in [:user :info "following"] 0)))
+       (let [user (->> (get-in @gs/state [:user :info])
+                       (into {}))]
+         (swap! gs/state assoc-in [:user :info] (assoc user "following" 0)))))
     true))

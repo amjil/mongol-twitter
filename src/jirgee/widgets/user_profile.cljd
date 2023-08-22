@@ -47,14 +47,13 @@
                        .children [(if (or (empty? id) (= id (get user "id")))
                                     (m/IconButton
                                      .onPressed (fn []
-                                                  (dart:core/print "aaaa")
-                                                  (if (or (empty? (get user "following")) (zero? (get user "following")))
-                                                    (user-service/user-follow ctx navigator {"id" (get user "id")})
-                                                    (user-service/user-unfollow ctx navigator {"id" (get user "id")})))
+                                                  (if (= 1 (get user "following"))
+                                                    (user-service/user-unfollow ctx navigator {"id" (get user "id")})
+                                                    (user-service/user-follow ctx navigator {"id" (get user "id")})))
                                      .icon
-                                     (m/Icon (if (or (empty? (get user "following")) (zero? (get user "following")))
-                                               (.person m/Icons)
-                                               (.person_off m/Icons))
+                                     (m/Icon (if (= 1 (get user "following"))
+                                               (.person_off m/Icons)
+                                               (.person m/Icons))
                                              .size 25
                                              .color theme/blue-color))
                                     (m/SizedBox))])))

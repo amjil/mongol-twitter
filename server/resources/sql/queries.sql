@@ -48,3 +48,22 @@ where 1 = 1
 order by a.created_at desc
 limit :limit
 offset :offset
+
+-- :name user-profile-with-following :? :1
+-- :doc user profile with following
+select 
+  a.profile_image_url, 
+  a.sex, 
+  a.followings_count, 
+  a.profile_banner_url,
+  a.screen_name, 
+  a.bio, 
+  a.birth_date, 
+  a.location,
+  a.followers_count, 
+  a.id,
+  case when b.follower_id is null then 0
+    else 1 end as following
+from user_info a 
+  left join followers b on a.id = b.followee_id and b.follower_id = :user_id
+where a.id = :id

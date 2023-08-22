@@ -71,9 +71,9 @@
             :middleware [[middleware/wrap-restricted]]
             :parameters {:query {:user_id string?}}
             :responses {200 {:body any?}}
-            :handler (fn [{{:keys [query]} :parameters}]
+            :handler (fn [{{:keys [query]} :parameters uinfo :identity}]
                        {:status 200 :body
-                        (profile/user-info (:db-conn _opts) query)})}}]
+                        (profile/user-info (:query-fn _opts) uinfo query)})}}]
     ["/update_password"
      {:post {:summary "update password."
              :middleware [[middleware/wrap-restricted]]
