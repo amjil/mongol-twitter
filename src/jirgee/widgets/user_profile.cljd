@@ -7,12 +7,16 @@
    [jirgee.widgets.follow-count :as follow-count]
    [jirgee.widgets.tweet-card :as tweet-card]
    [jirgee.common.theme :as theme]
-   [jirgee.states.global :as gs]))
+   [jirgee.states.global :as gs]
+   [jirgee.services.user :as user-service]))
 
 (defn view [user]
   (f/widget
+   :get [m/Navigator]
+   :context ctx
    :watch [{{tweets :list
-             has-more :has-more?} :my-tweets} gs/state]
+             has-more :has-more?} :my-tweets
+            {id :id} :user} gs/state]
    (m/Column
     .crossAxisAlignment m.CrossAxisAlignment/start
     .children
@@ -40,15 +44,20 @@
                       (m/Row
                       ;;  .crossAxisAlignment m.CrossAxisAlignment/end
                        .mainAxisAlignment m.MainAxisAlignment/end
-                       .children [(m/IconButton
-                                   .onPressed (fn [] nil)
-                                   .icon
-                                   (m/Icon (if (or (empty? (get user "following")) (zero? (get user "following")))
-                                             (.person_off m/Icons)
-                                             (.person m/Icons))
-                                           .size 25
-                                           .color theme/blue-color))]))
-         )
+                       .children [(if (or (empty? id) (= id (get user "id")))
+                                    (m/IconButton
+                                     .onPressed (fn []
+                                                  (dart:core/print "aaaa")
+                                                  (if (or (empty? (get user "following")) (zero? (get user "following")))
+                                                    (user-service/user-follow ctx navigator {"id" (get user "id")})
+                                                    (user-service/user-unfollow ctx navigator {"id" (get user "id")})))
+                                     .icon
+                                     (m/Icon (if (or (empty? (get user "following")) (zero? (get user "following")))
+                                               (.person m/Icons)
+                                               (.person_off m/Icons))
+                                             .size 25
+                                             .color theme/blue-color))
+                                    (m/SizedBox))])))
         (m/Positioned
          .bottom 20
          .left 20
@@ -59,7 +68,7 @@
                                             (m/AssetImage "assets/images/pexels-landon-parenteau-6946663.jpg")
                                             (m/NetworkImage (get user "profile_banner_url")))
                          .radius 40)))]))
-     
+
      (m/SizedBox .height 16)
      (m/Row
       .crossAxisAlignment m.CrossAxisAlignment/start
