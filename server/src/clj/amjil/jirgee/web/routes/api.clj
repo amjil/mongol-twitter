@@ -230,7 +230,7 @@
     {:get (fn [_]
             (throw (ex-info "fail" {:type :system.exception/not-found})))}]
    ["/ws"
-    ws/handler]])
+    #(ws/handler (:token-secret _opts) %)]])
 
 (derive :reitit.routes/api :reitit/routes)
 

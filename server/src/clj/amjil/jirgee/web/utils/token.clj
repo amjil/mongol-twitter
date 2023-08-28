@@ -2,7 +2,7 @@
   (:require
    [buddy.core.codecs :as codecs]
    [buddy.core.hash :as hash]
-   [buddy.sign.jwt :as jwt :refer [encrypt]]
+   [buddy.sign.jwt :as jwt :refer [encrypt decrypt]]
    [java-time :as time]
    [clojure.string :as str]))
 
@@ -21,3 +21,6 @@
     (encrypt claims (hash/sha256 secret)
              {:alg :a256kw
               :enc :a128gcm})))
+
+(defn decrypt-token [secret token]
+  (decrypt token (hash/sha256 secret)))
