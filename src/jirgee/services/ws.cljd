@@ -1,0 +1,17 @@
+(ns jirgee.services.ws
+  (:require
+   ["package:web_socket_client/web_socket_client.dart" :as websocket]))
+
+(def conn (atom nil))
+
+(defn connect
+  []
+  (let [uri (Uri/parse "ws://localhost:3002/api/ws/123456")
+        socket (websocket/WebSocket uri)]
+    (reset! conn socket)
+    (.listen (.-connection socket) (fn [state] (dart:core/print (str "state = " state))))
+    (.listen (.-messages socket) (fn [msg] (dart:core/print (str "message = " msg))))))
+
+(defn close []
+  (when-not (nil? @conn)
+    (.close @conn)))
