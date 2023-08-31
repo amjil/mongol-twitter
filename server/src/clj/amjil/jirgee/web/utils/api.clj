@@ -1,4 +1,4 @@
-(ns amjil.jirgee.server.ws
+(ns amjil.jirgee.web.utils.api
   (:require
    [amjil.jirgee.web.controllers.ws :as server.ws]))
 
@@ -11,8 +11,3 @@
  "ping"
  (fn [_ _ _]
    (constantly {:type :ping :result "pong" :success true})))
-
-;; (register-endpoint!
-;;  "notifications.latest"
-;;  (fn [message userinfo _]
-;;    {}))
