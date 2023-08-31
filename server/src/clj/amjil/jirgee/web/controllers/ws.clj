@@ -33,29 +33,10 @@
         (swap! channels dissoc (:id user-info)))
       (println "WS closeed!"))}})
 
-(defn handle-request [userinfo {type :type message :mesage} channel]
-  (case type
-    "event" (-> (handle-event message userinfo channel)
-                (cheshire/generate-string)
-                (send-response channel))
-
-    "request" (-> (handle-message message userinfo channel)
-                  (cheshire/generate-string)
-                  (send-response channel))
-
-    (log/debug "Unhandled message: " message)))
-
-(defmulti handle-event
-  (fn [{:keys [name]} _ _]
-    name))
-
-(defmethod handle-event
-  "ping"
-  [_ _ _]
-  {:type :event
-   :success true
-   :data {:name :ping 
-          :result "pong"}})
+(defn handle-request [userinfo message channel]
+  (-> (handle-message message userinfo channel)
+      (cheshire/generate-string)
+      (send-response channel)))
 
 (defmulti handle-message
   (fn [{:keys [name]} _ _]
