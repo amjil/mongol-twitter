@@ -1,17 +1,32 @@
 (ns jirgee.services.ws
   (:require
-   ["package:web_socket_client/web_socket_client.dart" :as websocket]))
+   ["dart:convert" :as convert]
+   ["package:web_socket_client/web_socket_client.dart" :as websocket]
+   [jirgee.states.global :as gs]
+   [jirgee.common.utils :as utils]))
 
 (def conn (atom nil))
 
+(def server-url "ws://localhost:3002/api/ws/")
+
 (defn connect
   []
-  (let [uri (Uri/parse "ws://localhost:3002/api/ws/123456")
+  (let [uri (Uri/parse (str server-url (:user-token @gs/state)))
         socket (websocket/WebSocket uri)]
     (reset! conn socket)
     (.listen (.-connection socket) (fn [state] (dart:core/print (str "state = " state))))
-    (.listen (.-messages socket) (fn [msg] (dart:core/print (str "message = " msg))))))
+    (.listen (.-messages socket) (fn [msg] (dart:core/print (str "message = " msg))))
+    (.send socket (convert/jsonEncode
+                   {"type" "bind_info"
+                    "data" {}}))))
 
 (defn close []
   (when-not (nil? @conn)
     (.close @conn)))
+
+(defn send-msg [ctx type msg]
+  (if (nil? @conn)
+    (utils/show-toast ctx "The Network is disconnected!")
+    (.send @conn (convert/jsonEncode
+                  {"type" type
+                   "data" msg}))))

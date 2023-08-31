@@ -23,4 +23,6 @@
               :enc :a128gcm})))
 
 (defn decrypt-token [secret token]
-  (decrypt token (hash/sha256 secret)))
+  (decrypt token (hash/sha256 secret)
+           {:alg :a256kw
+            :enc :a128gcm}))
