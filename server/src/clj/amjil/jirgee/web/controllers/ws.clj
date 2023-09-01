@@ -7,39 +7,38 @@
    [clojure.tools.logging :as log]))
 
 (declare handle-message
-         handle-event
          handle-request
          send-response)
 
 ;; ^:private
 (def channels (atom {}))
 
-(defn handler [secret {{token :token} :path-params}]
+(defn handler [opts {{token :token} :path-params}]
   {:undertow/websocket
    {:on-open
     (fn [{:keys [channel]}]
-      (let [user-info (token/decrypt-token secret token)]
+      (let [user-info (token/decrypt-token (:token-secret opts) token)]
         (swap! channels assoc (:id user-info) channel))
       (println "WS open!"))
 
     :on-message
     (fn [{:keys [channel data]}]
-      (let [user-info (token/decrypt-token secret token)]
-        (handle-request user-info data channel)))
+      (let [user-info (token/decrypt-token (:token-secret opts) token)]
+        (handle-request (assoc opts :channel channel) user-info data)))
 
     :on-close-message
     (fn [{:keys [_ _]}]
-      (let [user-info (token/decrypt-token secret token)]
+      (let [user-info (token/decrypt-token (:token-secret opts) token)]
         (swap! channels dissoc (:id user-info)))
       (println "WS closeed!"))}})
 
-(defn handle-request [userinfo message channel]
-  (-> (handle-message message userinfo channel)
+(defn handle-request [opts userinfo message]
+  (-> (handle-message opts userinfo message)
       (cheshire/generate-string)
-      (send-response channel)))
+      (send-response (:channel opts))))
 
 (defmulti handle-message
-  (fn [{:keys [name]} _ _]
+  (fn [_ _ {:keys [name]}]
     name))
 
 (defn send-response 

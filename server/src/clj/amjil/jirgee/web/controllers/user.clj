@@ -3,7 +3,8 @@
    [ring.util.http-response :as http-response]
 
    [amjil.jirgee.web.utils.db :as db]
-   [amjil.jirgee.web.utils.check :as check])
+   [amjil.jirgee.web.utils.check :as check]
+   [amjil.jirgee.web.utils.notification :as ntf])
   (:import
    [java.util UUID]))
 
@@ -15,6 +16,7 @@
    :followers
    {:followee_id (UUID/fromString (:id params))
     :follower_id (UUID/fromString (:id uinfo))})
+  (ntf/send-notification (:id params) "Some One Has Following You")
   {})
 
 (defn unfollow
