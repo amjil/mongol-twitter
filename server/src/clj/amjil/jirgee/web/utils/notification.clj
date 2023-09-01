@@ -32,3 +32,10 @@
       (wss/send-response
        {:type :notification :data data}
        channel))))
+
+(defn has-newer-tweets
+  [uid]
+  (when-let [channel (get @wss/channels uid)]
+    (wss/send-response
+     {:type :has-newer-tweets}
+     channel)))

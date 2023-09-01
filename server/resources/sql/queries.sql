@@ -67,3 +67,27 @@ select
 from user_info a 
   left join followers b on a.id = b.followee_id and b.follower_id = :user_id
 where a.id = :id
+
+
+-- :name query-latest-ntfs :? :*
+-- :doc query latest ntfs
+select 
+  a.id,
+  a.from_user_id
+  a.content,
+  a.types_of,
+  a.ntf_id,
+  a.created_at,
+  b.screen_name
+from notifications a 
+  left join user_info b on a.from_user_id = b.id
+where a.to_user_id = :user-id
+  and a.created_at > :last-time
+limit :limit
+offset :offset
+
+-- :name delete-old-ntfs :? :*
+-- :doc delete old ntfs
+delete from notifications 
+where to_user_id = :user-id 
+  and created_at <= :last-time
