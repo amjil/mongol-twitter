@@ -12,11 +12,18 @@
 (defn follow
   [conn uinfo params]
   (db/insert!
-   conn 
+   conn
    :followers
    {:followee_id (UUID/fromString (:id params))
     :follower_id (UUID/fromString (:id uinfo))})
-  (ntf/send-notification (:id params) "Some One Has Following You")
+
+  (future
+    (let [info {:from (:id uinfo)
+                :to (:id params)
+                :context "%s is following you!"
+                :types_of 1}
+          result (ntf/create-notification conn info)]
+      (ntf/send-notification conn (:id result) info)))
   {})
 
 (defn unfollow

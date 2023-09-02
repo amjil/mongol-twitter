@@ -13,7 +13,9 @@
          (merge info
                 {:to_user_id (UUID/fromString (:to info))
                  :from_user_id (UUID/fromString (:from info))
-                 :nty_id (UUID/fromString (:id info))
+                 :nty_id (if (nil? (:id info))
+                           nil
+                           (UUID/fromString (:id info)))
                  :content (:content info)
                  ;; 1 following notification
                  ;; 2 tweet reply notification
