@@ -4,7 +4,8 @@
 
    [amjil.jirgee.web.utils.db :as db]
    [amjil.jirgee.web.utils.check :as check]
-   [amjil.jirgee.web.utils.notification :as ntf])
+   [amjil.jirgee.web.utils.notification :as ntf]
+   [clojure.tools.logging :as log])
   (:import
    [java.util UUID]))
 
@@ -17,13 +18,16 @@
    {:followee_id (UUID/fromString (:id params))
     :follower_id (UUID/fromString (:id uinfo))})
 
-  (future
-    (let [info {:from (:id uinfo)
-                :to (:id params)
-                :context "%s is following you!"
-                :types_of 1}
-          result (ntf/create-notification conn info)]
-      (ntf/send-notification conn (:id result) info)))
+  ;; (future
+  (let [info {:from (:id uinfo)
+              :to (:id params)
+              :content "someone has following you!"
+              :types_of 1}
+        result (ntf/create-notification conn info)]
+    (ntf/send-notification conn result info))
+
+  (log/warn "aaaaaaa notifications")
+  ;; )
   {})
 
 (defn unfollow
