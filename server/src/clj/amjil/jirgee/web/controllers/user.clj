@@ -12,22 +12,25 @@
 
 (defn follow
   [conn uinfo params]
-  (db/insert!
-   conn
-   :followers
-   {:followee_id (UUID/fromString (:id params))
-    :follower_id (UUID/fromString (:id uinfo))})
+  (let [result (db/find-one-by-keys conn :followers
+                                    ["followee_id = ? and follower_id = ?"
+                                     (UUID/fromString (:id params))
+                                     (UUID/fromString (:id uinfo))])]
+    (when (nil? result)
+      (db/insert!
+       conn
+       :followers
+       {:followee_id (UUID/fromString (:id params))
+        :follower_id (UUID/fromString (:id uinfo))})
 
-  ;; (future
-  (let [info {:from (:id uinfo)
-              :to (:id params)
-              :content "someone has following you!"
-              :types_of 1}
-        result (ntf/create-notification conn info)]
-    (ntf/send-notification conn result info))
-
-  (log/warn "aaaaaaa notifications")
-  ;; )
+      ;; (future
+      (let [info {:from (:id uinfo)
+                  :to (:id params)
+                  :content "someone has following you!"
+                  :types_of 1}
+            result (ntf/create-notification conn info)]
+        (ntf/send-notification conn result info))))
+      ;; )
   {})
 
 (defn unfollow
