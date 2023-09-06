@@ -1,0 +1,37 @@
+(ns jirgee.services.ntf
+  (:require 
+   ["package:flutter_local_notifications/flutter_local_notifications.dart" :as fln]))
+
+(def plugin (fln/FlutterLocalNotificationsPlugin))
+
+(defn init []
+  (let [init-settings-android (fln/AndroidInitializationSettings "ic_launcher")
+        init-settings-darwin (fln/DarwinInitializationSettings
+                              .onDidReceiveLocalNotification
+                              (fn [_ _ _ _]
+                                (dart:core/print "onDidReceiveLocalNotification")))
+        init-settings (fln/InitializationSettings .android init-settings-android
+                                                  .iOS init-settings-darwin)]
+    (.initialize plugin
+                 init-settings
+                 .onDidReceiveNotificationResponse
+                 (fn [^fln/NotificationResponse response]
+                   (dart:core/print "onDidReceiveNotificationResponse")))))
+
+
+
+(defn show [{id :id title :title body :body tag :tag}
+            {channel-id :id channel-name :name channel-desc :desc}]
+  (.show plugin id title body
+         (fln/NotificationDetails
+          .android
+          (fln/AndroidNotificationDetails
+           channel-id channel-name
+           .channelDescription channel-desc
+           .importance fln.Importance/high
+           .priority fln.Priority/high))
+         .payload tag))
+
+;;
+;; (ntf/show {:id 0 :title "Hi" :body "Hi, I'm here!" :tag "item x"}
+;;           {:id "privmsg" :name "Private messages" :desc "Private messages sent directly to you"})

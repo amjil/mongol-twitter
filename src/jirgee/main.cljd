@@ -6,6 +6,7 @@
    [jirgee.states.global :as gs]
    [jirgee.services.shared-preferences :as sp]
    [jirgee.services.ws :as ws]
+   [jirgee.services.ntf :as ntf]
    [jirgee.common.theme :as theme]
    [jirgee.screens.home :as home]
    [jirgee.screens.login :as login]
@@ -18,6 +19,7 @@
 (defn main []
   (m.WidgetsFlutterBinding/ensureInitialized)
   (timeago/setLocaleMessages "mn_my" (timeago/MnMyMessages))
+  (ntf/init)
   (let [token (await (sp/get-value {:type :string :key "user-token"}))
         userinfo (await (sp/get-value {:type :string :key "user-info"}))]
     (when (not-empty token)
