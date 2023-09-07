@@ -8,7 +8,7 @@
    (merge keyboard-options/keyboard-state
           {:tag-viewable false
            :show-keyboard false
-           :show-stacked-keyboard false
+           :show-system-keyboard false
            :show-drawer-search false
            :show-sub-drawer-search false
            :show-search-diaglog false

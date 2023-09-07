@@ -3,6 +3,8 @@
    ["package:flutter/material.dart" :as m]
    ["package:timeago/timeago.dart" :as timeago]
    ["dart:convert" :as convert]
+   [cljd.flutter.alpha2 :as f]
+   [virtual-keyboard.options :as keyboard-options]
    [jirgee.states.global :as gs]
    [jirgee.services.shared-preferences :as sp]
    [jirgee.services.ws :as ws]
@@ -28,16 +30,21 @@
     (when (not-empty userinfo)
       (swap! gs/state assoc :user-info (convert/jsonDecode userinfo)))
     (m/runApp
-     (m/MaterialApp
-      .title "Welcome to Flutter"
-      .theme theme/default-light-theme
-      .darkTheme theme/default-dark-theme
-      .initialRoute "/"
-      .routes       {"/" home/home-screen
-                     "/login" login/login-screen
-                     "/signup" signup/signup-screen
-                     "/create_tweet" new-tweet/screen
-                     "/reply_tweet" reply-tweet/screen
-                     "/user_profile" profile/screen
-                     "/edit_profile" edit-profile/screen}
-      .debugShowCheckedModeBanner false))))
+     (f/widget
+      :context ctx
+      :let [width  (-> m/MediaQuery (.of ctx) .-size .-width)
+            info (merge keyboard-options/keyboard-option {} {:width width})]
+      :bind {:info info :state gs/state}
+      (m/MaterialApp
+       .title "Welcome to Flutter"
+       .theme theme/default-light-theme
+       .darkTheme theme/default-dark-theme
+       .initialRoute "/"
+       .routes       {"/" home/home-screen
+                      "/login" login/login-screen
+                      "/signup" signup/signup-screen
+                      "/create_tweet" new-tweet/screen
+                      "/reply_tweet" reply-tweet/screen
+                      "/user_profile" profile/screen
+                      "/edit_profile" edit-profile/screen}
+       .debugShowCheckedModeBanner false)))))
