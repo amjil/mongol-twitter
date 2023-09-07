@@ -67,7 +67,7 @@
                 (mgl/MongolTextField
                  .controller text-controller
                  .style (m/TextStyle .fontSize 22)
-                 .onTap #(tweet-state/focus-on-new)
+                 .onTap #(tweet-state/focus-on-new text-controller)
                  .decoration (m/InputDecoration
                               .hintText "What's happening?"
                               .hintStyle (m/TextStyle
