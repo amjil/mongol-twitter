@@ -19,7 +19,6 @@
                    (dart:core/print "onDidReceiveNotificationResponse")))))
 
 
-
 (defn show [{id :id title :title body :body tag :tag}
             {channel-id :id channel-name :name channel-desc :desc}]
   (.show plugin id title body

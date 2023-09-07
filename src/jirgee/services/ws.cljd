@@ -3,6 +3,8 @@
    ["dart:convert" :as convert]
    ["package:web_socket_client/web_socket_client.dart" :as websocket]
    [jirgee.states.global :as gs]
+   [jirgee.services.ntf :as ntf]
+   [jirgee.services.shared-preferences :as perf]
    [jirgee.common.utils :as utils]))
 
 (def conn (atom nil))
@@ -41,6 +43,11 @@
   (let [data (convert/jsonDecode msg)]
     (case (get data "type")
       "notification"
-      (dart:core/print (str "notification msg = " (get data "data")))
+      ;; (dart:core/print (str "notification msg = " (get data "data")))
+      (let [data (get data "data")
+            id (or (await (perf/get-value {:type :int :key "ntf-id"})) 1)]
+        (perf/set-value {:type :int :key "ntf-id" :value (inc id)})
+        (ntf/show {:id id :title (get data "content") :body "" :tag "item x"}
+                  {:id "privmsg" :name "Private messages" :desc "Private messages sent directly to you"}))
 
       (dart:core/print (str "No handle case")))))
