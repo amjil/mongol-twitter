@@ -33,7 +33,9 @@
      (f/widget
       :context ctx
       :let [width  (-> m/MediaQuery (.of ctx) .-size .-width)
-            info (merge keyboard-options/keyboard-option {} {:width width})]
+            info (merge keyboard-options/keyboard-option 
+                        {:key-cap-border-radius 6}
+                        {:width width})]
       :bind {:info info :state gs/state}
       (m/MaterialApp
        .title "Welcome to Flutter"

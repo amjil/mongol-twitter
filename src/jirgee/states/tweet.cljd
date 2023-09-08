@@ -1,6 +1,9 @@
 (ns jirgee.states.tweet
   (:require [jirgee.states.global :as gs]))
 
-(defn focus-on-new [controller]
+(defn focus-on-edit [controller]
   (swap! gs/state assoc :show-keyboard true)
   (swap! gs/state assoc :text-controller controller))
+
+(defn unfocus-on-edit []
+  (swap! gs/state assoc :show-keyboard false))

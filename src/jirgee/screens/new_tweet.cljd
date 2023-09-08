@@ -31,7 +31,9 @@
    (m/Scaffold
     .appBar (m/AppBar
              .leading (m/IconButton
-                       .onPressed #(.pop navigator)
+                       .onPressed (fn []
+                                    (.pop navigator)
+                                    (tweet-state/unfocus-on-edit))
                        .icon (m/Icon m.Icons/close .size 30))
              .actions [(custom-button/button
                         "Tweet"
@@ -67,7 +69,7 @@
                 (mgl/MongolTextField
                  .controller text-controller
                  .style (m/TextStyle .fontSize 22)
-                 .onTap #(tweet-state/focus-on-new text-controller)
+                 .onTap #(tweet-state/focus-on-edit text-controller)
                  .decoration (m/InputDecoration
                               .hintText "What's happening?"
                               .hintStyle (m/TextStyle
