@@ -2,8 +2,12 @@
   (:require [jirgee.states.global :as gs]))
 
 (defn focus-on-edit [controller]
+  (when-not (empty? (:candidates-list @gs/state))
+    (swap! gs/state assoc :candidates-list []))
   (swap! gs/state assoc :show-keyboard true)
   (swap! gs/state assoc :text-controller controller))
 
 (defn unfocus-on-edit []
-  (swap! gs/state assoc :show-keyboard false))
+  (swap! gs/state assoc :show-keyboard false)
+  (when-not (empty? (:candidates-list @gs/state))
+    (swap! gs/state assoc :candidates-list [])))

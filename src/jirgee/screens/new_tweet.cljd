@@ -45,7 +45,7 @@
                           "Tweet"
                           #(tweet-service/create-tweet ctx navigator {"content" (.-text text-controller)}))])
       .body
-      (if false;(or (true? is-loading) (nil? userinfo))
+      (if (or (true? is-loading) (nil? userinfo))
         (m/SizedBox)
         (m/SafeArea
          .child
