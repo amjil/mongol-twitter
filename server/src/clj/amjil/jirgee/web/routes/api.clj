@@ -5,6 +5,7 @@
    [amjil.jirgee.web.controllers.profile :as profile]
    [amjil.jirgee.web.controllers.tweet :as tweet]
    [amjil.jirgee.web.controllers.user :as user]
+   [amjil.jirgee.web.controllers.ntf :as ntf]
    [amjil.jirgee.web.controllers.ws :as ws]
    [amjil.jirgee.web.middleware.exception :as exception]
    [amjil.jirgee.web.middleware.formats :as formats]
@@ -209,7 +210,7 @@
     {:swagger {:tags ["users"]}
      :post {:summary    "user follow."
             :parameters {:body [:map
-                                [:id string?]]}
+                                [:last_id string?]]}
             :responses  {200 {:body any?}}
             :handler    (fn [{{body     :body} :parameters
                               uinfo            :identity}]
@@ -225,6 +226,16 @@
                               uinfo            :identity}]
                           {:status 200 :body
                            (user/unfollow (:db-conn _opts) uinfo body)})}}]
+   ["/notifications/newer"
+    {:swagger {:tags ["notifications"]}
+     :get {:summary    "query newer notifications"
+           :parameters {:query [:map
+                                [:last_time string?]]}
+           :responses  {200 {:body any?}}
+           :handler    (fn [{{params     :query} :parameters
+                             uinfo            :identity}]
+                         {:status 200 :body
+                          (ntf/newer-ntfs (:query-fn _opts) uinfo params)})}}]
 
    ["/fail"
     {:get (fn [_]

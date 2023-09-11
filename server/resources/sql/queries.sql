@@ -81,13 +81,11 @@ select
   b.screen_name
 from notifications a 
   left join user_info b on a.from_user_id = b.id
-where a.to_user_id = :user-id
-  and a.created_at > :last-time
-limit :limit
-offset :offset
+where a.to_user_id = :user_id
+  and a.created_at > :last_time
 
 -- :name delete-old-ntfs :? :*
 -- :doc delete old ntfs
 delete from notifications 
-where to_user_id = :user-id 
-  and created_at <= :last-time
+where to_user_id = :user_id 
+  and created_at <= :last_time
