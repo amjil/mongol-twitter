@@ -1,6 +1,14 @@
 (ns jirgee.services.ntf
-  (:require 
-   ["package:flutter_local_notifications/flutter_local_notifications.dart" :as fln]))
+  (:require
+   ["package:sqflite/sqflite.dart" :as sqf]
+   ["package:flutter_local_notifications/flutter_local_notifications.dart" :as fln]
+   ["package:http/http.dart" :as http]
+   ["dart:convert" :as convert]
+   [jirgee.services.shared-preferences :as perf]
+   [jirgee.services.sqlite :as sql]
+   [jirgee.states.global :as gs]
+   [jirgee.common.utils :as utils]
+   [jirgee.common.response :as response]))
 
 (def plugin (fln/FlutterLocalNotificationsPlugin))
 
@@ -34,3 +42,42 @@
 ;;
 ;; (ntf/show {:id 0 :title "Hi" :body "Hi, I'm here!" :tag "item x"}
 ;;           {:id "privmsg" :name "Private messages" :desc "Private messages sent directly to you"})
+
+(defn query-ntfs [offset]
+  (let [^sqf/Database db (await (sql/initialize-db))]
+    (await
+     (.rawQuery db "SELECT * 
+                    FROM ntfs 
+                    ORDER BY created_at desc
+                    limit 20
+                    offset ?;"
+                [offset]))))
+
+(defn delete-all-ntfs []
+  (let [^sqf/Database db (await (sql/initialize-db))]
+    (await
+     (.rawDelete db "delete from ntfs where 1 = 1;"))))
+
+(defn insert-ntfs [data]
+  (let [^sqf/Database db (await (sql/initialize-db))]
+    (await (.insert db "ntfs" data))
+    ;; (await (.rawInsert db "insert into ntfs (id, content, types_of, to_user_id, from_user_id, nty_id, created_at)
+    ;;                        values (?, ?, ?, ?, ?, ?, ?);"
+    ;;                    [(get data "id") (get data "content") (get data "types_of") 
+    ;;                     (get data "to_user_id") (get data "from_user_id") 
+    ;;                     (get data "nty_id") (get data "created_at")]))
+    ))
+
+;; query from server
+(defn query-newer-ntfs [ctx]
+  (let [^sqf/Database db (await (sql/initialize-db))
+        id (or (await (perf/get-value {:type :int :key "ntf-id"})) 1)
+        result (await
+                (http/get (Uri/http utils/base-url "/api/notifications/newer" {"last_id" id})
+                          .headers {"Content-Type" "application/json; charset=UTF-8"
+                                    "Authorization" (str "Token " (get @gs/state :user-token))}))]
+    (response/response-message
+     ctx
+     result
+     (fn [x]
+       (map #(insert-ntfs %) x)))))

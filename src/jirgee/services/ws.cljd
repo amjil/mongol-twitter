@@ -46,7 +46,7 @@
       ;; (dart:core/print (str "notification msg = " (get data "data")))
       (let [data (get data "data")
             id (or (await (perf/get-value {:type :int :key "ntf-id"})) 1)]
-        (perf/set-value {:type :int :key "ntf-id" :value (inc id)})
+        (perf/set-value {:type :int :key "ntf-id" :value id})
         (ntf/show {:id id :title (get data "content") :body "" :tag "item x"}
                   {:id "privmsg" :name "Private messages" :desc "Private messages sent directly to you"}))
 

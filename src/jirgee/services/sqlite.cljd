@@ -1,17 +1,26 @@
 (ns jirgee.services.sqlite
   (:require
    ["package:sqflite/sqflite.dart" :as sql]
-   ["package:path/path.dart" :as path]))
+   ["package:path/path.dart" :as path]
+   [jirgee.services.shared-preferences :as perf]))
 
-(declare add-column-if-not-exists)
+(declare add-column-if-not-exists
+         init-database)
 
 (defn initialize-db []
   (let [dbpath (path/join (await (sql/getDatabasesPath))
                           "database.db")]
     (sql/openDatabase dbpath
                       .onCreate (fn [^sql/Database db version]
-                                  )
+                                  (init-database db))
                       .version 1)))
+
+(defn init-database [db]
+  (let [result (await (perf/get-value {:type :int :key "db-version"}))]
+    (cond
+      (nil? result)
+      (.execute db "CREATE TABLE IF NOT EXISTS ntfs(id uuid, content text, types_of SMALLINT, to_user_id uuid, from_user_id uuid, nty_id uuid, created_at TIMESTAMP)")
+      :else (dart:core/print "init-database :else"))))
 
 (defn add-column-if-not-exists [^sql/Database db table column new-column-sql]
   (let [sql (str "SELECT COUNT (*) AS CNTREC 
