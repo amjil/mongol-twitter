@@ -24,7 +24,8 @@
   (f/widget
    :context ctx
    :get [m/Navigator :info]
-   :let [images (atom [])]
+   :let [images (atom [])
+         current-item (atom 0)]
    :watch [{userinfo :user-info
             {is-loading :is-loading} :tweets
             show-keyboard :show-keyboard
@@ -94,19 +95,31 @@
                   (carousel-slider/CarouselSlider
                    .items (-> imgs
                               (.map (fn [^io/File file]
-                                      (m/Container .width 400
+                                      (m/GestureDetector
+                                       .onLongPress (fn []
+                                                      (utils/show-confirm-dialog
+                                                       ctx
+                                                       "Delete?"
+                                                       (fn []
+                                                         (reset! images
+                                                                 (filter (fn [^io/File f]
+                                                                           (not= (.uri f) (.uri file))) @images)))))
+                                       .child
+                                       (m/Container .width 400
                                             ;;  (-> m/MediaQuery
                                             ;;             (.of ctx)
                                             ;;             .size
                                             ;;             .width
                                             ;;              (/ 1.8)
                                             ;;             )
-                                                   .margin (.symmetric m/EdgeInsets .vertical 5)
-                                                   .child (.file m/Image file))))
+                                                    .margin (.symmetric m/EdgeInsets .vertical 5)
+                                                    .child (.file m/Image file)))))
                               (.toList))
                    .options (carousel-slider/CarouselOptions
+                             .onPageChanged (fn [i _]
+                                              (reset! current-item i))
                              .height 400
-                             .enableInfiniteScroll false)))
+                             .enableInfiniteScroll true)))
                  (m/SizedBox))])))
            (m/Container
             .padding (.only m/EdgeInsets .bottom 10)
@@ -121,7 +134,7 @@
                .padding (.copyWith (.all m/EdgeInsets 8) .left 15 .right 15)
                .child (m/GestureDetector
                        .onTap (fn []
-                                (reset! images (await (utils/pick-images))))
+                                (swap! images concat (await (utils/pick-images))))
                        .child (.asset svg/SvgPicture "assets/svgs/gallery.svg")))
               (m/Padding
                .padding (.copyWith (.all m/EdgeInsets 8) .left 15 .right 15)
