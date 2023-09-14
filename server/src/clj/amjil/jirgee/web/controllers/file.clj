@@ -6,14 +6,16 @@
    [amjil.jirgee.web.utils.db :as db]
    
    [java-time :as time]
-   [ring.util.http-response :refer [content-type header ok file-response]]))
+   [ring.util.http-response :refer [content-type header ok file-response]])
+  (:import
+   [java.util UUID]))
 
 
 (defn add-file [conn params uinfo]
   (let [file (get params "file")
         path     "public/img"
         time-now (str/split (time/format "yyyy-MM" (time/local-date)) #"-")
-        uuid     (str (str/replace (java.util.UUID/randomUUID) #"-" "") "." (-> file :filename (str/split #"\.") last))
+        uuid     (str (str/replace (UUID/randomUUID) #"-" "") "." (-> file :filename (str/split #"\.") last))
         file-url (apply str (interpose "/" (concat ["/api/file" (str (:id uinfo))] time-now [uuid])))
         filename (apply str (interpose "/" (concat [path (str (:id uinfo))] time-now [uuid])))]
 
@@ -26,8 +28,9 @@
             result (db/insert! conn :attach_file params)]
         (ok (select-keys result [:id :url :filename])))))
 
-(defn remove-file [conn id]
-  (let [result (db/get-by-id conn :attach_file id)]
+(defn remove-file [conn id uinfo]
+  (let [result (db/find-one-by-keys conn :attach_file {:user_id (UUID/fromString (:id uinfo))
+                                                       :id id})]
     (when-not (empty? result)
       (let [path     "public/img/"
             filename (->> (subs (:url result) 10)

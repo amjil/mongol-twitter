@@ -260,6 +260,13 @@
             :handler    (fn [{params :multipart-params
                               token  :identity}]
                           (file/add-file (:db-conn _opts) params token))}}]
+   ["/file/delete/:id"
+    {:get {:summary    "put a file"
+           :swagger    {:tags ["files"]}
+           :parameters {:path {:id int?}}
+           :handler    (fn [{{{id :id} :path} :parameters
+                             token  :identity}]
+                         (file/remove-file (:db-conn _opts) id token))}}]
 
    ["/fail"
     {:get (fn [_]
