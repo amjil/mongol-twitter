@@ -257,12 +257,9 @@
     {:post {:summary    "put a file"
             :swagger    {:tags ["files"]}
             :parameters {:multipart {:file multipart/temp-file-part}}
-            :responses  {200 {:body {:success       boolean?
-                                     :msg           string?
-                                     (ds/opt :data) any?}}}
-            :handler    (fn [{{{:keys [file]} :multipart} :parameters
-                              token                       :identity}]
-                          (file/add-file (:db-conn _opts) file token))}}]
+            :handler    (fn [{params :multipart-params
+                              token  :identity}]
+                          (file/add-file (:db-conn _opts) params token))}}]
 
    ["/fail"
     {:get (fn [_]
