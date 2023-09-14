@@ -22,11 +22,11 @@
     (io/make-parents filename)
     (io/copy (:tempfile file) (io/file filename))
 
-      (let [params {:filename (:filename file)
-                    :url      file-url
-                    :user_id (:id uinfo)}
-            result (db/insert! conn :attach_file params)]
-        (ok (select-keys result [:id :url :filename])))))
+    (let [params {:filename (:filename file)
+                  :url      file-url
+                  :user_id (UUID/fromString (:id uinfo))}
+          result (db/insert! conn :attach_file params)]
+      (ok (select-keys result [:id :url :filename])))))
 
 (defn remove-file [conn id uinfo]
   (let [result (db/find-one-by-keys conn :attach_file {:user_id (UUID/fromString (:id uinfo))
