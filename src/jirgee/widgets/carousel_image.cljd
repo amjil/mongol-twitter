@@ -7,38 +7,39 @@
    [jirgee.common.theme :as theme]))
 
 (defn view [^#/(List String) links]
+;; (defn view [links]
   (f/widget
    :let [current (atom 0)]
-   (m/Stack
-    .alignment m.Alignment/center
-    .children
-    [(m/Column
-      .children
-      [(carousel-slider/CarouselSlider
-        .items (-> links
-                   (.map (fn [^String link]
-                           (m/Container
-                            .decoration (m/BoxDecoration .borderRadius (.circular m/BorderRadius 25))
-                            .margin (.all m/EdgeInsets 10)
-                            .child (.network m/Image link .fit m.BoxFit/contain))))
-                   (.toList))
-        .options (carousel-slider/CarouselOptions
-                  .viewportFraction 1
-                  .enableInfiniteScroll false
-                  .onPageChanged (fn [i reason]
-                                   (reset! current i))))
-       (m/Row
-        .mainAxisAlignment m.MainAxisAlignment/center
-        .children
-        [(map-indexed (fn [idx _] 
-                        (m/Container
-                         .width 12
-                         .height 12
-                         .margin (.symmetric m/EdgeInsets .horizontal 4)
-                         .decoration (m/BoxDecoration
-                                      .shape (.circle m/BoxShape)
-                                      .color (-> m/Colors
-                                                 .white
-                                                 (.withOpacity
-                                                  (if (= @current idx) 0.9 0.4))))))
-                      links)])])])))
+   (m/Container
+    .width 480
+    .child
+    (m/Column
+     .children
+     [(carousel-slider/CarouselSlider
+       .items (-> links
+                  (.map (fn [^String link]
+                          (m/Container
+                           .decoration (m/BoxDecoration .borderRadius (.circular m/BorderRadius 25))
+                           .margin (.all m/EdgeInsets 10)
+                           .child (.network m/Image link .fit m.BoxFit/contain))))
+                  (.toList))
+       .options (carousel-slider/CarouselOptions
+                 .viewportFraction 1
+                 .enableInfiniteScroll false
+                 .onPageChanged (fn [i reason]
+                                  (reset! current i))))
+      (m/Row
+       .mainAxisAlignment m.MainAxisAlignment/center
+       .children
+       (map-indexed (fn [idx _]
+                      (m/Container
+                       .width 12
+                       .height 12
+                       .margin (.symmetric m/EdgeInsets .horizontal 4)
+                       .decoration (m/BoxDecoration
+                                    .shape (.circle m/BoxShape)
+                                    .color (-> m/Colors
+                                               .white
+                                               (.withOpacity
+                                                (if (= @current idx) 0.9 0.4))))))
+                    links))]))))

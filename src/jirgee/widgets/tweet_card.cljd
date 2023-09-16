@@ -88,9 +88,10 @@
                                                (m/TextStyle .color theme/blue-color
                                                             .fontSize 16))])))
               (hashtag/hashtag-text (get tweet "content"))
-              ;; (if (empty? (get tweet "media_links"))
-              ;;   (m/SizedBox)
-              ;;   (c-img/view (get tweet "media_links")))
+              (if (empty? (get tweet "media_links"))
+                (m/SizedBox)
+                (let [^#/(List String) links (get tweet "media_links")]
+                  (c-img/view links)))
               ;; (if-not (empty? (get tweet "link"))
                 ;;  AnyLinkPreview)
               (m/Container
