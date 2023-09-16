@@ -7,12 +7,13 @@
   (:import 
    [java.util UUID]))
 
-(defn new-tweet 
+(defn new-tweet
   [conn uinfo params]
-  (db/insert! conn 
-              :tweets 
-              (assoc params :user_id (UUID/fromString (:id uinfo))))
-  {})
+  (let [result (db/insert! conn
+                           :tweets
+                           (assoc params :user_id (UUID/fromString (:id uinfo)))
+                           {:return-keys true})]
+    (select-keys result [:id])))
 
 (defn query-tweet
   [query-fn uinfo params]
@@ -78,15 +79,23 @@
 
 (defn tweet-links
   [conn uinfo id info]
-  (let [entity (db/find-one-by-keys conn :tweets ["user_id = ?" (UUID/fromString (:id uinfo))])
+  (let [entity (db/find-one-by-keys conn :tweets ["user_id = ? and id = ?" 
+                                                  (UUID/fromString (:id uinfo))
+                                                  (UUID/fromString id)])
         info "Not authorized to operate"]
     (when (not= (UUID/fromString (:id uinfo)) (:user_id entity))
       (throw (ex-info info {:type :system.exception/unauthorized
                             :message info}))))
-  (db/insert! 
-   conn 
-   :tweet_entities
-   {:tweet_id (UUID/fromString id)
-    :media_links
-    (into-array String (:links info))})
+  
+  (let [entity (db/find-one-by-keys conn :tweet_entities ["user_id = ? and id = ?"
+                                                          (UUID/fromString (:id uinfo))
+                                                          (UUID/fromString id)])]
+    (when (empty? entity)
+      (db/insert!
+       conn
+       :tweet_entities
+       {:tweet_id (UUID/fromString id)
+        :media_links
+        (into-array String (:links info))})))
+  
   {})
