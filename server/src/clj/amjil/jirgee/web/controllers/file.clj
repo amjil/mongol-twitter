@@ -10,10 +10,8 @@
   (:import
    [java.util UUID]))
 
-
-(defn add-file [conn params uinfo]
-  (let [file (get params "file")
-        path     "public/img"
+(defn save-temp-file [conn file uinfo]
+  (let [path     "public/img"
         time-now (str/split (time/format "yyyy-MM" (time/local-date)) #"-")
         uuid     (str (str/replace (UUID/randomUUID) #"-" "") "." (-> file :filename (str/split #"\.") last))
         file-url (apply str (interpose "/" (concat ["/api/file" (str (:id uinfo))] time-now [uuid])))
@@ -26,7 +24,11 @@
                   :url      file-url
                   :user_id (UUID/fromString (:id uinfo))}
           result (db/insert! conn :attach_file params)]
-      (ok (select-keys result [:id :url :filename])))))
+      (select-keys result [:id :url :filename]))))
+
+(defn add-file [conn params uinfo]
+  (ok (map #(save-temp-file conn % uinfo)
+           (get params "files"))))
 
 (defn remove-file [conn id uinfo]
   (let [result (db/find-one-by-keys conn :attach_file {:user_id (UUID/fromString (:id uinfo))

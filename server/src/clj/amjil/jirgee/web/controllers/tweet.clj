@@ -87,9 +87,7 @@
       (throw (ex-info info {:type :system.exception/unauthorized
                             :message info}))))
   
-  (let [entity (db/find-one-by-keys conn :tweet_entities ["user_id = ? and id = ?"
-                                                          (UUID/fromString (:id uinfo))
-                                                          (UUID/fromString id)])]
+  (let [entity (db/find-one-by-keys conn :tweet_entities ["tweet_id = ?" (UUID/fromString id)])]
     (when (empty? entity)
       (db/insert!
        conn

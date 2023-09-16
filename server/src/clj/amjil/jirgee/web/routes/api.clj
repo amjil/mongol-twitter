@@ -13,6 +13,7 @@
    [amjil.jirgee.web.middleware.core :as middleware]
    [ring.util.http-response :refer [file-response]]
    [spec-tools.data-spec :as ds]
+   [clojure.spec.alpha :as s]
    [integrant.core :as ig]
    [reitit.coercion.malli :as malli]
    [reitit.ring.coercion :as coercion]
@@ -256,7 +257,7 @@
    ["/file/upload"
     {:post {:summary    "put a file"
             :swagger    {:tags ["files"]}
-            :parameters {:multipart {:file multipart/temp-file-part}}
+            :parameters {:multipart {:files (s/coll-of multipart/temp-file-part)}}
             :handler    (fn [{params :multipart-params
                               token  :identity}]
                           (file/add-file (:db-conn _opts) params token))}}]
