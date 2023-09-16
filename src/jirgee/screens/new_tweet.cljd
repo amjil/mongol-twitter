@@ -18,6 +18,7 @@
    [jirgee.widgets.rounded-small-button :as custom-button]
    [jirgee.widgets.keyboard :as key-widgets]
    [jirgee.services.tweet :as tweet-service]
+   [jirgee.services.file :as file-service]
    [jirgee.states.tweet :as tweet-state]))
 
 (defn create-tweet []
@@ -44,7 +45,16 @@
                          .icon (m/Icon m.Icons/close .size 30))
                .actions [(custom-button/button
                           "Tweet"
-                          #(tweet-service/create-tweet ctx navigator {"content" (.-text text-controller)}))])
+                          (fn []
+                            (when-not (empty? imgs)
+                              (await (file-service/upload-file imgs)))
+                            (tweet-service/create-tweet
+                             ctx navigator
+                             (merge
+                              (if (empty? (get @gs/state :temp-file-links))
+                                {"links" nil}
+                                {"links" (get @gs/state :temp-file-links)})
+                              {"content" (.-text text-controller)}))))])
       .body
       (if (or (true? is-loading) (nil? userinfo))
         (m/SizedBox)

@@ -45,12 +45,28 @@
 
 (defn create-tweet [ctx ^widgets/NavigatorState navigator info]
   (let [result (await
-                (http/post (Uri/http utils/base-url "/api/tweets" info)
+                (http/post (Uri/http utils/base-url "/api/tweets" (dissoc info "links"))
                            .headers {"Content-Type" "application/json; charset=UTF-8"
                                      "Authorization" (str "Token " (get @gs/state :user-token))}
                            .body
                            (convert/jsonEncode
-                            info)))]
+                            info)))
+        response-body (convert/jsonDecode (.-body result))
+        id (get response-body "id")]
+
+    (when-not (empty? (get info "links"))
+      (let [result (await
+                    (http/post (Uri/http utils/base-url (str "/api/tweets/" id "/media_links"))
+                               .headers {"Content-Type" "application/json; charset=UTF-8"
+                                         "Authorization" (str "Token " (get @gs/state :user-token))}
+                               .body
+                               (convert/jsonEncode
+                                {"links" (->> (get info "links")
+                                              (map #(str utils/base-url (get % "url"))))})))
+            response-body (convert/jsonDecode (.-body result))]
+        (when-not (= 200 (.-statusCode result))
+          (utils/show-toast ctx "error when save media links!"))))
+
     (response/response-message
      ctx
      result
@@ -93,3 +109,17 @@
                                           (concat (get-in @gs/state [:tweets :list])
                                                   x))}))))
     true))
+
+(defn save-media-links [ctx id links]
+  (let [result (await
+                (http/post (Uri/http utils/base-url (str "/api/tweets/" id "/media_links"))
+                           .headers {"Content-Type" "application/json; charset=UTF-8"
+                                     "Authorization" (str "Token " (get @gs/state :user-token))}
+                           .body
+                           (convert/jsonEncode
+                            {"links" links})))]
+    (response/response-message
+     ctx
+     result
+     (fn [x]
+       (dart:core/print x)))))
