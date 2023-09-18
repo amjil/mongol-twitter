@@ -118,9 +118,9 @@
                   .size 25
                   .onTap ^:async (fn [is-liked]
                                    (if (true? is-liked)
-                                     false
-                                     true))
-                  .isLiked (or (get tweet "currentuser_like") false)
+                                     (await (tweet-service/unfavorite-tweet ctx navigator (get tweet "id")))
+                                     (await (tweet-service/favorite-tweet ctx navigator (get tweet "id")))))
+                  .isLiked (or (get tweet "i_favorites") false)
                   .likeBuilder (fn [is-liked]
                                  (if is-liked
                                    (.asset svg/SvgPicture
@@ -133,7 +133,7 @@
                                            theme/grey-color)))
                   .likeCountPadding (.only m/EdgeInsets .top 3)
                   .countPostion like-button.CountPostion/bottom
-                  .likeCount (or (get tweet "likes_count") 0)
+                  .likeCount (or (get tweet "favorites_count") 0)
                   .countBuilder (fn [likes-count is-liked text]
                                   (m/Padding .padding (.only m/EdgeInsets .top 2)
                                              .child (mgl/MongolText text

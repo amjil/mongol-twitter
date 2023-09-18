@@ -12,6 +12,9 @@ select
     c.sex,
     d.media_links,
     d.link,
+    case when g.tweet_id is null 
+      then false
+      else true end as i_favorites,
     a.created_at
 from tweets a 
   left join followers b on a.user_id = b.followee_id 
@@ -19,8 +22,9 @@ from tweets a
   left join tweet_entities d on a.id = d.tweet_id 
   left join replies e on e.reply_id = a.id
   left join tweets f on f.id = e.tweet_id
+  left join favorites g on g.tweet_id = a.id and g.user_id = :user_id
 where 1 = 1
-  and (follower_id = :user-id or a.user_id = :user-id)
+  and (follower_id = :user_id or a.user_id = :user_id)
 order by a.created_at desc
 limit :limit
 offset :offset

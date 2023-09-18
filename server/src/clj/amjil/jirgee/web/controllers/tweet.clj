@@ -3,6 +3,7 @@
    [clojure.tools.logging :as log]
    [amjil.jirgee.web.utils.db :as db]
    [honey.sql :as hsql]
+   [next.jdbc :as jdbc]
    [amjil.jirgee.web.utils.check :as check])
   (:import 
    [java.util UUID]))
@@ -20,7 +21,7 @@
   (let [limit (or (:limit params) 20)
         offset (or (:offset params) 0)]
     (query-fn :query-followed-tweets {:limit limit :offset offset
-                                      :user-id (UUID/fromString (:id uinfo))})))
+                                      :user_id (UUID/fromString (:id uinfo))})))
 
 (defn delete-tweet
   [conn uinfo id]
@@ -31,22 +32,38 @@
     :user_id (UUID/fromString (:id uinfo))})
   {})
 
-(defn favorite-tweet 
+(defn favorite-tweet
   [conn uinfo id]
-  (db/insert!
-   conn
-   :favorites
-   {:user_id (UUID/fromString (:id uinfo))
-    :tweet_id (UUID/fromString id)})
+  (let [entity (db/find-one-by-keys conn :favorites ["tweet_id = ? and user_id = ?"
+                                                     (UUID/fromString id)
+                                                     (UUID/fromString (:id uinfo))])]
+    (when (empty? entity)
+      (db/insert!
+       conn
+       :favorites
+       {:user_id (UUID/fromString (:id uinfo))
+        :tweet_id (UUID/fromString id)})
+      (jdbc/execute-one!
+       conn
+       ["update tweets set favorites_count = favorites_count + 1 where id = ?"
+        (UUID/fromString id)])))
   {})
 
-(defn unfavorite-tweet 
+(defn unfavorite-tweet
   [conn uinfo id]
-  (db/delete!
-   conn
-   :favorites
-   {:user_id (UUID/fromString (:id uinfo))
-    :tweet_id (UUID/fromString id)})
+  (let [entity (db/find-one-by-keys conn :favorites ["tweet_id = ? and user_id = ?"
+                                                     (UUID/fromString id)
+                                                     (UUID/fromString (:id uinfo))])]
+    (when-not (empty? entity)
+      (db/delete!
+       conn
+       :favorites
+       {:user_id (UUID/fromString (:id uinfo))
+        :tweet_id (UUID/fromString id)})
+      (jdbc/execute-one!
+       conn
+       ["update tweets set favorites_count = favorites_count - 1 where id = ?" 
+        (UUID/fromString id)])))
   {})
 
 (defn retweet

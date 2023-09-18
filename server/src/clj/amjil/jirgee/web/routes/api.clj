@@ -156,13 +156,13 @@
                            (tweet/favorite-tweet (:db-conn _opts) uinfo id)})}}]
    ["/tweets/:id/unfavorite"
     {:swagger {:tags ["tweets"]}
-     :delete {:summary    "unfavorite tweet."
-              :parameters {:path {:id string?}}
-              :responses  {200 {:body any?}}
-              :handler    (fn [{{{id :id} :path} :parameters
-                                uinfo            :identity}]
-                            {:status 200 :body
-                             (tweet/unfavorite-tweet (:db-conn _opts) uinfo id)})}}]
+     :post {:summary    "unfavorite tweet."
+            :parameters {:path {:id string?}}
+            :responses  {200 {:body any?}}
+            :handler    (fn [{{{id :id} :path} :parameters
+                              uinfo            :identity}]
+                          {:status 200 :body
+                           (tweet/unfavorite-tweet (:db-conn _opts) uinfo id)})}}]
    ["/tweets/:id/retweet"
     {:swagger {:tags ["tweets"]}
      :post {:summary    "retweet tweet."

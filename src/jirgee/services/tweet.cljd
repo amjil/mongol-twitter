@@ -123,3 +123,24 @@
      result
      (fn [x]
        (dart:core/print x)))))
+
+(defn ^:async favorite-tweet [ctx ^widgets/NavigatorState navigator id]
+  (let [result (await
+                (http/post (Uri/http utils/base-url (str "/api/tweets/" id "/favorite"))
+                           .headers {"Content-Type" "application/json; charset=UTF-8"
+                                     "Authorization" (str "Token " (get @gs/state :user-token))}))]
+    (let [response-body (convert/jsonDecode (.-body result))]
+      (when (not= 200 (.-statusCode result))
+        (utils/show-toast ctx (get-in response-body ["data" "message"]))))
+    true))
+
+(defn ^:async unfavorite-tweet [ctx ^widgets/NavigatorState navigator id]
+  (let [result (await
+                (http/post (Uri/http utils/base-url (str "/api/tweets/" id "/unfavorite"))
+                           .headers {"Content-Type" "application/json; charset=UTF-8"
+                                     "Authorization" (str "Token " (get @gs/state :user-token))}))]
+    (let [response-body (convert/jsonDecode (.-body result))]
+      (when (not= 200 (.-statusCode result))
+        (utils/show-toast ctx (get-in response-body ["data" "message"]))))
+
+    false))
