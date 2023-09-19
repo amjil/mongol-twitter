@@ -8,6 +8,14 @@ select
     a.replies_count,
     a.user_id,
     c.screen_name,
+    case when h.tweet_id is not null
+      then COALESCE((
+            select json_agg(json_build_object('content', m.content, 'id', m.id, 'screen_name', n.screen_name))
+            from tweets m 
+            left join user_info n on m.user_id = n.id
+            where m.id = h.tweet_id
+          ), '[]'::json) vals 
+      else null end as retweeted,
     c.profile_image_url,
     c.sex,
     d.media_links,
@@ -17,14 +25,18 @@ select
       else true end as i_favorites,
     a.created_at
 from tweets a 
-  left join followers b on a.user_id = b.followee_id 
   left join user_info c on a.user_id = c.id
   left join tweet_entities d on a.id = d.tweet_id 
-  left join replies e on e.reply_id = a.id
-  left join tweets f on f.id = e.tweet_id
   left join favorites g on g.tweet_id = a.id and g.user_id = :user_id
+  left join retweets h on h.retweet_id = a.id
 where 1 = 1
-  and (follower_id = :user_id or a.user_id = :user_id)
+  and (a.user_id = ANY(
+    (
+      select array(select followee_id
+                   from followers 
+                   where follower_id = :user_id)
+    )::uuid[]
+  ) or a.user_id = :user_id)
 order by a.created_at desc
 limit :limit
 offset :offset

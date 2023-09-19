@@ -113,7 +113,7 @@
                                                        (fn []
                                                          (reset! images
                                                                  (filter (fn [^io/File f]
-                                                                           (not= (.uri f) (.uri file))) @images)))))
+                                                                           (not= (.-uri f) (.-uri file))) @images)))))
                                        .child
                                        (m/Container .width 400
                                             ;;  (-> m/MediaQuery

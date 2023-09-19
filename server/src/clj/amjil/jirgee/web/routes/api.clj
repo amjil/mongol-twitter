@@ -214,7 +214,7 @@
     {:swagger {:tags ["users"]}
      :post {:summary    "user follow."
             :parameters {:body [:map
-                                [:last_id string?]]}
+                                [:id string?]]}
             :responses  {200 {:body any?}}
             :handler    (fn [{{body     :body} :parameters
                               uinfo            :identity}]
