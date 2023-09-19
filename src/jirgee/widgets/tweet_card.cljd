@@ -52,7 +52,7 @@
             (m/Row
              .crossAxisAlignment m.CrossAxisAlignment/start
              .children
-             [(if (empty? (get tweet "retweeted_by"))
+             [(if (empty? (get tweet "retweeted"))
                 (m/SizedBox)
                 (m/Column
                  .children
@@ -61,22 +61,30 @@
                           .color theme/grey-color
                           .height 20)
                   (m/SizedBox .height 2)
-                  (mgl/MongolText (str (get tweet "retweeted_by") " retweeted")
+                  (mgl/MongolText (str (get tweet "screen_name") " retweeted")
                                   .style (m/TextStyle .color theme/grey-color
                                                       .fontSize 16
                                                       .fontWeight m.FontWeight/w500))]))
-              (m/Column
-               .children
-               [(m/Container .margin (.only m/EdgeInsets .right 5)
-                             .child (mgl/MongolText (get tweet "screen_name")
-                                                    .style
-                                                    (m/TextStyle .fontWeight m.FontWeight/bold
-                                                                 .fontSize 19)))
-                (m/SizedBox .height 10)
-                (m/Container .margin (.only m/EdgeInsets .right 5)
-                             .child
-                             (mgl/MongolText (timeago/format (DateTime/parse (get tweet "created_at")) .locale "mn_my")
-                                             .style (m/TextStyle .color theme/grey-color .fontSize 17)))])
+              
+                (m/Column
+                 .children
+                 [(m/Container .margin (.only m/EdgeInsets .right 5)
+                               .child (mgl/MongolText (if (empty? (get tweet "retweeted"))
+                                                        (get tweet "screen_name")
+                                                        (-> (get tweet "retweeted")
+                                                            last (get "screen_name")))
+                                                      .style
+                                                      (m/TextStyle .fontWeight m.FontWeight/bold
+                                                                   .fontSize 19)))
+                  (m/SizedBox .height 10)
+                  (m/Container .margin (.only m/EdgeInsets .right 5)
+                               .child
+                               (mgl/MongolText (timeago/format (DateTime/parse (if (empty? (get tweet "retweeted"))
+                                                                                 (get tweet "created_at")
+                                                                                 (-> (get tweet "retweeted")
+                                                                                     last (get "created_at")))) .locale "mn_my")
+                                               .style (m/TextStyle .color theme/grey-color .fontSize 17)))])
+              
               (if (empty? (get tweet "replied_to"))
                 (m/SizedBox)
                 (mgl/MongolRichText
@@ -88,7 +96,11 @@
                                                (m/TextStyle .color theme/blue-color
                                                             .fontSize 16))])))
               (if (empty? (get tweet "content"))
-                (m/SizedBox)
+                (if (empty? (get tweet "retweeted"))
+                  (m/SizedBox)
+                  (hashtag/hashtag-text (-> (get tweet "retweeted")
+                                            last
+                                            (get "content"))))
                 (hashtag/hashtag-text (get tweet "content")))
               (if (empty? (get tweet "media_links"))
                 (m/SizedBox)
@@ -115,7 +127,7 @@
                  (icon-button/button
                   "assets/svgs/retweet.svg"
                   (str (or (get tweet "reshare_count") 0))
-                  (fn [] 
+                  (fn []
                     (tweet-service/retweet ctx navigator (get tweet "id"))))
                  (like-button/LikeButton
                   .size 25

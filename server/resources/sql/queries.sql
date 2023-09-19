@@ -10,7 +10,10 @@ select
     c.screen_name,
     case when h.tweet_id is not null
       then COALESCE((
-            select json_agg(json_build_object('content', m.content, 'id', m.id, 'screen_name', n.screen_name))
+            select json_agg(json_build_object('content', m.content,
+                                              'id', m.id, 
+                                              'screen_name', n.screen_name,
+                                              'created_at', m.created_at))
             from tweets m 
             left join user_info n on m.user_id = n.id
             where m.id = h.tweet_id
