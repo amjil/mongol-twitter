@@ -67,20 +67,23 @@
   {})
 
 (defn retweet
-  [conn uinfo id info]
+  [conn uinfo id]
+  (log/warn "uinfo = " uinfo)
   (let [entity (jdbc/execute! conn ["select * from retweets 
                                      where tweet_id = ? and user_id = ?"
                                     (UUID/fromString id)
-                                    (UUID/fromString (:id info))])]
+                                    (UUID/fromString (:id uinfo))])]
     (when (empty? entity)
       (let [result (db/insert! conn
                                :tweets
                                {:user_id (UUID/fromString (:id uinfo))
-                                :content (:content info)}
+                                ;; :content (:content info)}
+                                :content nil}
                                {:return-keys true})]
         (db/insert! conn :retweets {:tweet_id (UUID/fromString id)
-                                    :retweet_id (:id result)}))))
-  
+                                    :retweet_id (:id result)
+                                    :user_id (UUID/fromString (:id uinfo))}))))
+
   {})
 
 (defn reply 

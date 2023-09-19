@@ -87,7 +87,9 @@
                                                .style
                                                (m/TextStyle .color theme/blue-color
                                                             .fontSize 16))])))
-              (hashtag/hashtag-text (get tweet "content"))
+              (if (empty? (get tweet "content"))
+                (m/SizedBox)
+                (hashtag/hashtag-text (get tweet "content")))
               (if (empty? (get tweet "media_links"))
                 (m/SizedBox)
                 (let [^#/(List String) links (get tweet "media_links")]
@@ -113,7 +115,8 @@
                  (icon-button/button
                   "assets/svgs/retweet.svg"
                   (str (or (get tweet "reshare_count") 0))
-                  (fn [] nil))
+                  (fn [] 
+                    (tweet-service/retweet ctx navigator (get tweet "id"))))
                  (like-button/LikeButton
                   .size 25
                   .onTap ^:async (fn [is-liked]

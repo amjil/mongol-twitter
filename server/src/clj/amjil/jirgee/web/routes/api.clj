@@ -167,14 +167,15 @@
     {:swagger {:tags ["tweets"]}
      :post {:summary    "retweet tweet."
             :parameters {:path {:id string?}
-                         :body [:map
-                                [:content string?]]}
+                        ;;  :body [:map
+                        ;;         [:content string?]]
+                         }
             :responses  {200 {:body any?}}
             :handler    (fn [{{{id :id} :path
                                body     :body} :parameters
                               uinfo            :identity}]
                           {:status 200 :body
-                           (tweet/retweet (:db-conn _opts) uinfo id body)})}}]
+                           (tweet/retweet (:db-conn _opts) uinfo id)})}}]
    ["/tweets/:id/replies"
     {:swagger {:tags ["tweets"]}
      :post {:summary    "reply tweet."
