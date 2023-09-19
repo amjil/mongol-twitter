@@ -23,12 +23,16 @@ select
     case when g.tweet_id is null 
       then false
       else true end as i_favorites,
+    case when i.retweet_id is null 
+      then false
+      else true end as i_retweets,
     a.created_at
 from tweets a 
   left join user_info c on a.user_id = c.id
   left join tweet_entities d on a.id = d.tweet_id 
   left join favorites g on g.tweet_id = a.id and g.user_id = :user_id
   left join retweets h on h.retweet_id = a.id
+  left join retweets i on i.tweet_id = a.id and i.user_id = :user_id
 where 1 = 1
   and (a.user_id = ANY(
     (
