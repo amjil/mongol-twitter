@@ -14,7 +14,7 @@ select
             from tweets m 
             left join user_info n on m.user_id = n.id
             where m.id = h.tweet_id
-          ), '[]'::json) vals 
+          ), '[]'::json)
       else null end as retweeted,
     c.profile_image_url,
     c.sex,
