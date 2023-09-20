@@ -56,6 +56,7 @@ dependencies:
     path: ../timeago.dart/packages/timeago
   flutter_local_notifications: ^15.1.0+1
   workmanager: ^0.5.1
+  custom_refresh_indicator: ^2.2.1
 
 dev_dependencies:
   flutter_test:

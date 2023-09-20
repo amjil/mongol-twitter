@@ -1,10 +1,12 @@
 (ns jirgee.widgets.tweet-list
   (:require
    ["package:flutter/material.dart" :as m]
+   ["dart:async" :as a]
    [cljd.flutter.alpha2 :as f]
    [jirgee.widgets.tweet-card :as tweet-card]
    [jirgee.states.global :as gs]
-   [jirgee.common.theme :as theme]))
+   [jirgee.common.theme :as theme]
+   [jirgee.widgets.refresh :as refresh]))
 
 (defn view []
   (f/widget
@@ -21,11 +23,13 @@
        .child
        (m/Icon (.add m/Icons) .color theme/white-color .size 28))
       .body
-
-      (.builder m/ListView
-                .scrollDirection m.Axis/horizontal
-                .itemCount (count tweets)
-                .itemBuilder (fn [ctx i]
-                               (let [tweet (nth tweets i)]
-                                 (tweet-card/card tweet))))))))
+      (refresh/refreshable-list
+       (.builder m/ListView
+                 .scrollDirection m.Axis/horizontal
+                 .itemCount (count tweets)
+                 .itemBuilder (fn [ctx i]
+                                (let [tweet (nth tweets i)]
+                                  (tweet-card/card tweet))))
+       #(a.Future/delayed (Duration .seconds 2)))
+      ))))
 
