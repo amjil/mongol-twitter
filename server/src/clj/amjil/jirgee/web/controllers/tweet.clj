@@ -25,12 +25,6 @@
 
 (defn delete-tweet
   [conn uinfo id]
-  (db/delete! 
-   conn
-   :tweets 
-   {:id (UUID/fromString id)
-    :user_id (UUID/fromString (:id uinfo))})
-  
   (let [entity (db/find-one-by-keys conn :retweets ["user_id = ? and retweet_id = ?"
                                                     (UUID/fromString (:id uinfo))
                                                     (UUID/fromString id)])]
@@ -38,7 +32,12 @@
       (jdbc/execute-one!
        conn
        ["update tweets set reshare_count = reshare_count - 1 where id = ?"
-        (UUID/fromString id)])))
+        (:tweet_id entity)])))
+  (db/delete!
+   conn
+   :tweets
+   {:id (UUID/fromString id)
+    :user_id (UUID/fromString (:id uinfo))})
   {})
 
 (defn favorite-tweet
