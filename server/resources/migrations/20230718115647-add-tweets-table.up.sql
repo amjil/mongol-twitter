@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS tweets (
     "content" varchar(280) CHECK (char_length("content") <= 280),
     "favorites_count" int DEFAULT 0,
     "replies_count" int DEFAULT 0,
+    "reshare" int DEFAULT 0,
     "created_at" timestamp without time zone DEFAULT CURRENT_TIMESTAMP
 );
 --;;

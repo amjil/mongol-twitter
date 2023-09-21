@@ -6,6 +6,7 @@ select
     a.content,
     a.favorites_count,
     a.replies_count,
+    a.reshare_count,
     a.user_id,
     c.screen_name,
     case when h.tweet_id is not null

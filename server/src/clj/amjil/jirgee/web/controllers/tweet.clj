@@ -30,6 +30,15 @@
    :tweets 
    {:id (UUID/fromString id)
     :user_id (UUID/fromString (:id uinfo))})
+  
+  (let [entity (db/find-one-by-keys conn :retweets ["user_id = ? and retweet_id = ?"
+                                                    (UUID/fromString (:id uinfo))
+                                                    (UUID/fromString id)])]
+    (when-not (empty? entity)
+      (jdbc/execute-one!
+       conn
+       ["update tweets set reshare_count = reshare_count - 1 where id = ?"
+        (UUID/fromString id)])))
   {})
 
 (defn favorite-tweet
@@ -82,7 +91,11 @@
                                {:return-keys true})]
         (db/insert! conn :retweets {:tweet_id (UUID/fromString id)
                                     :retweet_id (:id result)
-                                    :user_id (UUID/fromString (:id uinfo))}))))
+                                    :user_id (UUID/fromString (:id uinfo))})
+        (jdbc/execute-one!
+         conn
+         ["update tweets set reshare_count = reshare_count + 1 where id = ?"
+          (UUID/fromString id)]))))
 
   {})
 
