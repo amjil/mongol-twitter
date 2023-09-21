@@ -12,72 +12,71 @@
 
 (defn refreshable-list [child on-refresh]
   (let [render-complate (atom false)
-        stop (atom true)]
-    
-  (f/widget
-   :managed [controller (refresh/IndicatorController .refreshEnabled true)]
-   (refresh/CustomRefreshIndicator
-    .leadingScrollIndicatorVisible false
-    .trailingScrollIndicatorVisible false
-    .triggerMode (.anywhere refresh/IndicatorTriggerMode)
-    .trigger refresh.IndicatorTrigger/bothEdges
-    .controller controller
-    .onStateChanged (fn [c]
-                      (if (.didChange c .to (.-idle refresh/IndicatorState))
-                        (reset! stop true)
-                        (reset! stop false))
-                      (cond
-                        (.didChange c .to (.-finalizing refresh/IndicatorState))
-                        (reset! render-complate true)
+        stop-refreshing (atom true)]
+    (f/widget
+     :managed [controller (refresh/IndicatorController .refreshEnabled true)]
+     (refresh/CustomRefreshIndicator
+      .leadingScrollIndicatorVisible false
+      .trailingScrollIndicatorVisible false
+      ;; .triggerMode (.anywhere refresh/IndicatorTriggerMode)
+      ;; .trigger refresh.IndicatorTrigger/bothEdges
+      .controller controller
+      .onStateChanged (fn [c]
+                        (if (.didChange c .to (.-idle refresh/IndicatorState))
+                          (reset! stop-refreshing true)
+                          (reset! stop-refreshing false))
+                        (cond
+                          (.didChange c .to (.-finalizing refresh/IndicatorState))
+                          (reset! render-complate true)
 
-                        (.didChange c .to (.-idle refresh/IndicatorState))
-                        (reset! render-complate false)))
-    .builder
-    (fn [_ child _]
-      (m/Stack
-       .children
-       [(m/AnimatedBuilder
-         .builder
-         (fn [context _]
-           (if (true? @stop)
-             (m/Container)
-             (m/Container
-              .alignment m.Alignment/center
-              .width (* 150 (.-value controller))
-              .child
-              (m/OverflowBox
-               .maxHeight 30
-               .minHeight 30
-               .maxWidth 30
-               .minWidth 30
-               .alignment m.Alignment/center
-               .child
-               (m/AnimatedContainer
-                .duration (Duration .milliseconds 150)
+                          (.didChange c .to (.-idle refresh/IndicatorState))
+                          (reset! render-complate false)))
+      .builder
+      (fn [_ child _]
+        (m/Stack
+         .children
+         [(m/AnimatedBuilder
+           .builder
+           (fn [context _]
+             (if (true? @stop-refreshing)
+               (m/Container)
+               (m/Container
                 .alignment m.Alignment/center
-                .child (if (true? @render-complate)
-                         (m/Icon (.-check m/Icons) .color (.-white m/Colors))
-                         (m/SizedBox .height 30
-                                     .width 30
-                                     .child
-                                     (m/CircularProgressIndicator
-                                      .strokeWidth 2
-                                      .valueColor (m/AlwaysStoppedAnimation m.Colors/white)
-                                      .value (if (or (.-isDragging controller) (.-isArmed controller))
-                                               (.clamp (.-value controller) 0.0 1.0)
-                                               nil))))
-                .decoration (m/BoxDecoration
-                             .color (if (true? @render-complate)
-                                      m.Colors/greenAccent
-                                      m.Colors/black)
-                             .shape m.BoxShape/circle))))))
-         .animation controller)
-        (m/AnimatedBuilder
-         .builder (fn [context _]
-                    (m.Transform/translate
-                     .offset (m/Offset (* 150 (.-value controller)) 0.0)
-                     .child child))
-         .animation controller)]))
-    .onRefresh
-    on-refresh
-    .child child))))
+                .width (* 150 (.-value controller))
+                .child
+                (m/OverflowBox
+                 .maxHeight 30
+                 .minHeight 30
+                 .maxWidth 30
+                 .minWidth 30
+                 .alignment m.Alignment/center
+                 .child
+                 (m/AnimatedContainer
+                  .duration (Duration .milliseconds 150)
+                  .alignment m.Alignment/center
+                  .child (if (true? @render-complate)
+                           (m/Icon (.-check m/Icons) .color (.-white m/Colors))
+                           (m/SizedBox .height 30
+                                       .width 30
+                                       .child
+                                       (m/CircularProgressIndicator
+                                        .strokeWidth 2
+                                        .valueColor (m/AlwaysStoppedAnimation m.Colors/white)
+                                        .value (if (or (.-isDragging controller) (.-isArmed controller))
+                                                 (.clamp (.-value controller) 0.0 1.0)
+                                                 nil))))
+                  .decoration (m/BoxDecoration
+                               .color (if (true? @render-complate)
+                                        m.Colors/greenAccent
+                                        m.Colors/black)
+                               .shape m.BoxShape/circle))))))
+           .animation controller)
+          (m/AnimatedBuilder
+           .builder (fn [context _]
+                      (m.Transform/translate
+                       .offset (m/Offset (* 150 (.-value controller)) 0.0)
+                       .child child))
+           .animation controller)]))
+      .onRefresh
+      on-refresh
+      .child child))))
