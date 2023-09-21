@@ -119,16 +119,21 @@
                   (str (+ (or (get tweet "comments_count") 0)
                           (or (get tweet "reshare_count") 0)
                           (or (get tweet "likes_count") 0)))
-                  (fn [] nil))
+                  (fn [] nil)
+                  theme/grey-color)
                  (icon-button/button
                   "assets/svgs/comment.svg"
                   (str (or (get tweet "comments_count") 0))
-                  (fn [] nil))
+                  (fn [] nil)
+                  theme/grey-color)
                  (icon-button/button
                   "assets/svgs/retweet.svg"
                   (str (or (get tweet "reshare_count") 0))
                   (fn []
-                    (tweet-service/retweet ctx navigator (get tweet "id"))))
+                    (tweet-service/retweet ctx navigator (get tweet "id")))
+                  (if (true? (get tweet "i_retweets"))
+                    theme/red-color
+                    theme/grey-color))
                  (like-button/LikeButton
                   .size 25
                   .onTap ^:async (fn [is-liked]

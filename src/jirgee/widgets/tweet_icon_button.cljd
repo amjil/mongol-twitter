@@ -5,12 +5,12 @@
    ["package:flutter_svg/svg.dart" :as svg]
    [jirgee.common.theme :as theme]))
 
-(defn button [path-name text ontap] 
+(defn button [path-name text ontap color] 
   (m/GestureDetector
    .onTap ontap
    .child (m/Column
            .children
-           [(.asset svg/SvgPicture path-name .color theme/grey-color)
+           [(.asset svg/SvgPicture path-name .color color)
             (m/Container
              .margin (.all m/EdgeInsets 6)
              .child (mgl/MongolText text .style (m/TextStyle .fontSize 16)))])))
