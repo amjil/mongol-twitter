@@ -7,7 +7,8 @@
    [jirgee.widgets.tweet-card :as tweet-card]
    [jirgee.states.global :as gs]
    [jirgee.common.theme :as theme]
-   [jirgee.widgets.refresh :as refresh]))
+   [jirgee.widgets.refresh :as refresh]
+   [jirgee.widgets.floating-input :as floating-input]))
 
 (defn load-more [controller has-more? loading]
   (when (and (< 300 (.-extentAfter (.-position controller)))
@@ -20,47 +21,53 @@
     (f/widget
      :get [m/Navigator]
      :watch [{{tweets :list
-               has-more? :has-more? } :tweets} gs/state]
+               has-more? :has-more?} :tweets
+              floating-input :floating-input} gs/state]
      :managed [controller (let [^m/ScrollController cc (m/ScrollController)]
                             (.addListener cc #(load-more cc has-more? loading))
                             cc)]
-     (if (empty? tweets)
-       (m/SizedBox)
-       (m/Scaffold
-        .floatingActionButton
-        (m/FloatingActionButton
-         .onPressed (fn []
-                      (.pushNamed navigator "/create_tweet")
-                      nil)
-         .child
-         (m/Icon (.add m/Icons) .color theme/white-color .size 28))
-        .body
-        (refresh/refreshable-list
-         (m/SingleChildScrollView
-          .scrollDirection m.Axis/horizontal
-          .child
-          (m/Row
-           .children
-           [(.builder m/ListView
-                      .shrinkWrap true
-                      .controller controller
-                      .scrollDirection m.Axis/horizontal
-                      .itemCount (count tweets)
-                      .itemBuilder (fn [ctx i]
-                                     (let [tweet (nth tweets i)]
-                                       (tweet-card/card tweet))))
-            (if (true? @loading)
-              (m/Padding .padding
-                         (.only m/EdgeInsets .top 10 .bottom 40)
-                         .child
-                         (m/Center .child (m/CircularProgressIndicator)))
-              (m/SizedBox))
-            (if (true? has-more?)
-              (m/SizedBox)
-              (m/Container .padding
-                           (.only m/EdgeInsets .top 30 .bottom 40)
-                           .color m.Colors/amber
+     (m/Stack
+      .children
+      [(if (empty? tweets)
+         (m/SizedBox)
+         (m/Scaffold
+          .floatingActionButton
+          (m/FloatingActionButton
+           .onPressed (fn []
+                        (.pushNamed navigator "/create_tweet")
+                        nil)
+           .child
+           (m/Icon (.add m/Icons) .color theme/white-color .size 28))
+          .body
+          (refresh/refreshable-list
+           (m/SingleChildScrollView
+            .scrollDirection m.Axis/horizontal
+            .child
+            (m/Row
+             .children
+             [(.builder m/ListView
+                        .shrinkWrap true
+                        .controller controller
+                        .scrollDirection m.Axis/horizontal
+                        .itemCount (count tweets)
+                        .itemBuilder (fn [ctx i]
+                                       (let [tweet (nth tweets i)]
+                                         (tweet-card/card tweet))))
+              (if (true? @loading)
+                (m/Padding .padding
+                           (.only m/EdgeInsets .top 10 .bottom 40)
                            .child
-                           (m/Center .child (mgl/MongolText "You have fetched all of the content"))))]))
-         #(a.Future/delayed (Duration .seconds 2))))))))
+                           (m/Center .child (m/CircularProgressIndicator)))
+                (m/SizedBox))
+              (if (true? has-more?)
+                (m/SizedBox)
+                (m/Container .padding
+                             (.only m/EdgeInsets .top 30 .bottom 40)
+                             .color m.Colors/amber
+                             .child
+                             (m/Center .child (mgl/MongolText "You have fetched all of the content"))))]))
+           #(a.Future/delayed (Duration .seconds 2)))))
+       (if (true? floating-input)
+         (floating-input/input-box)
+         (m/SizedBox))]))))
 

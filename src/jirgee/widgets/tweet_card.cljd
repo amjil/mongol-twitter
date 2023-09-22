@@ -124,7 +124,7 @@
                  (icon-button/button
                   "assets/svgs/comment.svg"
                   (str (or (get tweet "comments_count") 0))
-                  (fn [] nil)
+                  (fn [] (swap! gs/state assoc :floating-input true))
                   theme/grey-color)
                  (icon-button/button
                   "assets/svgs/retweet.svg"

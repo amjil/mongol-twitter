@@ -17,5 +17,10 @@
            :current-layout "mg"
            :home-page 0
            ;; lock for bg-watcher text-controller
+           :floating-input false
            :edit-watcher/lock 2
            :draft/tabbar-index 0})))
+
+
+(defn ^:async set-text-controller [controller]
+  (swap! state assoc :text-controller controller))
