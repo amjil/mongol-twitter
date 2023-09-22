@@ -25,13 +25,28 @@
 
 (defn delete-tweet
   [conn uinfo id]
-  (let [entity (db/find-one-by-keys conn :retweets ["user_id = ? and retweet_id = ?"
-                                                    (UUID/fromString (:id uinfo))
-                                                    (UUID/fromString id)])]
+  (let [entity (db/find-one-by-keys
+                conn
+                :retweets
+                ["user_id = ? and retweet_id = ?"
+                 (UUID/fromString (:id uinfo))
+                 (UUID/fromString id)])]
     (when-not (empty? entity)
       (jdbc/execute-one!
        conn
        ["update tweets set reshare_count = reshare_count - 1 where id = ?"
+        (:tweet_id entity)])))
+  
+  (let [entity (db/find-one-by-keys
+                conn
+                :replies
+                ["user_id = ? and reply_id = ?"
+                 (UUID/fromString (:id uinfo))
+                 (UUID/fromString id)])]
+    (when-not (empty? entity)
+      (jdbc/execute-one!
+       conn
+       ["update tweets set replies_count = replies_count - 1 where id = ?"
         (:tweet_id entity)])))
   (db/delete!
    conn
@@ -106,7 +121,13 @@
                             :content (:content info)}
                            {:return-keys true})]
     (db/insert! conn :replies {:tweet_id (UUID/fromString id)
-                               :reply_id (:id result)})))
+                               :reply_id (:id result)
+                               :user_id (UUID/fromString (:id uinfo))})
+    (jdbc/execute-one!
+     conn
+     ["update tweets set replies_count = replies_count + 1 where id = ?"
+      (UUID/fromString id)]))
+  {})
 
 (defn get-replies 
   [query-fn uinfo id params]
