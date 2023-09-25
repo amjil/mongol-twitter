@@ -21,6 +21,7 @@
       (f/widget
        :context ctx
        :get [m/Navigator]
+       :managed [text-controller (m/TextEditingController)]
        (m/GestureDetector
         .onTap (fn []
                  (let [t (:tweet @gs/state)]
@@ -124,7 +125,7 @@
                  (icon-button/button
                   "assets/svgs/comment.svg"
                   (str (or (get tweet "comments_count") 0))
-                  (fn [] (swap! gs/state assoc :floating-input true))
+                  (fn [] (gs/open-floating-input text-controller))
                   theme/grey-color)
                  (icon-button/button
                   "assets/svgs/retweet.svg"

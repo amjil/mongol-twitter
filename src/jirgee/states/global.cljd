@@ -23,4 +23,8 @@
 
 
 (defn ^:async set-text-controller [controller]
-  (swap! state assoc :text-controller controller))
+  (swap! state assoc :keyboard/text-controller controller))
+
+(defn ^:async open-floating-input [controller]
+  (swap! state assoc :floating-input true)
+  (swap! state assoc :keyboard/text-controller controller))

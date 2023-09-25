@@ -17,13 +17,8 @@
   (f/widget
    :context ctx
    :get [:info]
-   :let [w1 (-> m/MediaQuery (.of ctx) .-size .-width)
-         h1 (-> m/MediaQuery (.of ctx) .-size .-height)]
-   :watch [{candidates-list :candidates-list} gs/state]
-   :managed [text-controller (let [cc (m/TextEditingController)]
-                               (dart:core/print "Created TextEditingController & init input")
-                               (gs/set-text-controller cc)
-                               cc)]
+   :let [w (-> m/MediaQuery (.of ctx) .-size .-width)]
+   :watch [{candidates-list :keyboard/candidates-list} gs/state]
    (m/Column
     .crossAxisAlignment m.CrossAxisAlignment/stretch
     .children
@@ -47,10 +42,10 @@
          .color theme/grey-color
          .constraints (m/BoxConstraints
                        .minWidth 100
-                       .maxWidth (/ w1 2))
+                       .maxWidth (/ w 2))
          .child
          (mgl/MongolTextField
-          .controller text-controller
+          .controller (get @gs/state :keyboard/text-controller)
           .style (m/TextStyle .fontSize 22)
           .decoration (m/InputDecoration
                        .border m.InputBorder/none)
@@ -65,7 +60,7 @@
          (menu/menu {:bar {:elavation 10
                            :background-color
                            (-> m/Theme (.of ctx) .-colorScheme .-tertiaryContainer)}
-                     :item {:on-tap (fn [x] (keyboard-action/on-candidates-clicked text-controller x gs/state))}}
+                     :item {:on-tap (fn [x] (keyboard-action/on-candidates-clicked x gs/state))}}
                     candidates-list))]))
      (m/Container
       .color (-> m/Theme (.of ctx) .-colorScheme .-secondaryContainer)

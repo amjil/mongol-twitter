@@ -7,7 +7,6 @@
    [jirgee.common.theme :as theme]))
 
 (defn view [^#/(List String) links]
-;; (defn view [links]
   (f/widget
    :let [current (atom 0)]
    (m/Container
