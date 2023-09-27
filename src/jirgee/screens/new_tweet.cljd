@@ -178,7 +178,7 @@
       (menu/menu {:bar {:elavation 10
                         :background-color
                         (-> m/Theme (.of ctx) .-colorScheme .-tertiaryContainer)}
-                  :item {:on-tap (fn [x] (keyboard-action/on-candidates-clicked x gs/state))}}
+                  :item {:on-tap (fn [x] (keyboard-action/on-candidates-clicked x gs/state info))}}
                  candidates-list))])))
 
 (defn ^m/Widget screen [ctx]

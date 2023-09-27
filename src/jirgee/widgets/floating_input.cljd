@@ -39,7 +39,12 @@
           .onTap (fn []
                    (swap! gs/state assoc :floating-input false))))
         (m/Container
-         .color theme/grey-color
+         .padding (.all m/EdgeInsets 5)
+         .decoration (m/BoxDecoration
+                      .color theme/grey-color
+                      .borderRadius
+                      (.all m/BorderRadius (.circular m/Radius 10))
+                      .border (.all m/Border .width 0.8))
          .constraints (m/BoxConstraints
                        .minWidth 100
                        .maxWidth (/ w 2))
@@ -60,7 +65,7 @@
          (menu/menu {:bar {:elavation 10
                            :background-color
                            (-> m/Theme (.of ctx) .-colorScheme .-tertiaryContainer)}
-                     :item {:on-tap (fn [x] (keyboard-action/on-candidates-clicked x gs/state))}}
+                     :item {:on-tap (fn [x] (keyboard-action/on-candidates-clicked x gs/state info))}}
                     candidates-list))]))
      (m/Container
       .color (-> m/Theme (.of ctx) .-colorScheme .-secondaryContainer)
