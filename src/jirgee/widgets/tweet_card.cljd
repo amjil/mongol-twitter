@@ -12,7 +12,8 @@
    [jirgee.services.tweet :as tweet-service]
    [jirgee.common.theme :as theme]
    [jirgee.states.global :as gs]
-   [jirgee.services.user :as user-service]))
+   [jirgee.services.user :as user-service]
+   [jirgee.states.tweet :as tweet-state]))
 
 (defn card [tweet]
   (let [userinfo (get @gs/state :user-info)]
@@ -125,7 +126,7 @@
                  (icon-button/button
                   "assets/svgs/comment.svg"
                   (str (or (get tweet "comments_count") 0))
-                  (fn [] (gs/open-floating-input text-controller))
+                  (fn [] (tweet-state/click-on-comment-button ctx text-controller tweet))
                   theme/grey-color)
                  (icon-button/button
                   "assets/svgs/retweet.svg"

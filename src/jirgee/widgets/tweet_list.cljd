@@ -8,7 +8,8 @@
    [jirgee.states.global :as gs]
    [jirgee.common.theme :as theme]
    [jirgee.widgets.refresh :as refresh]
-   [jirgee.widgets.floating-input :as floating-input]))
+   [jirgee.widgets.floating-input :as floating-input]
+   [jirgee.states.tweet :as tweet-state]))
 
 (defn load-more [controller has-more? loading]
   (when (and (< 300 (.-extentAfter (.-position controller)))
@@ -34,7 +35,7 @@
           .floatingActionButton
           (m/FloatingActionButton
            .onPressed (fn []
-                        (.pushNamed navigator "/create_tweet")
+                        (tweet-state/to-new-tweet-page navigator)
                         nil)
            .child
            (m/Icon (.add m/Icons) .color theme/white-color .size 28))
