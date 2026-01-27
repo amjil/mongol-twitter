@@ -1,0 +1,58 @@
+(ns jirgee.services.websocket
+  (:require ["package:web_socket_channel/web_socket_channel.dart" :as wsc]
+            ["dart:async" :as async]
+            ["dart:core" :as dc]
+            ["dart:convert" :as convert]
+            [jirgee.state :refer [websocket-channel-atom
+                                  websocket-heartbeat-timer-atom
+                                  websocket-active?-atom
+                                  set-websocket-channel!
+                                  set-websocket-heartbeat-timer!
+                                  set-websocket-active?!]]))
+
+(defn connected? [] @websocket-active?-atom)
+
+(defn- start-heartbeat! []
+  ;; Cancel old timer first
+  (when @websocket-heartbeat-timer-atom (.cancel ^async/Timer @websocket-heartbeat-timer-atom))
+  ;; Send heartbeat every 30 seconds
+  (set-websocket-heartbeat-timer!
+   (async/Timer.periodic
+    (dc/Duration. .seconds 30)
+    (fn [timer]
+      (if @websocket-active?-atom
+        (try
+          (.sink.add @websocket-channel-atom (convert/jsonEncode {"type" "ping"}))
+          (catch Exception e (println "Heartbeat send failed")))
+        (.cancel timer))))))
+
+(defn connect! [{:keys [on-message on-close]}]
+  (try
+    (let [url "ws://your-api.com/chat"
+          c (wsc/WebSocketChannel.connect (Uri/parse url))]
+      (set-websocket-channel! c)
+      (set-websocket-active?! true)
+      (start-heartbeat!) ;; Start heartbeat
+
+      (-> (.-stream c)
+          (.listen
+           (fn [data]
+             (let [msg (convert/jsonDecode data)]
+               (if (= (get msg "type") "pong")
+                 (comment "Received server response, connection healthy")
+                 (on-message msg))))
+           .onDone (fn []
+                     (set-websocket-active?! false)
+                     (when @websocket-heartbeat-timer-atom (.cancel ^async/Timer @websocket-heartbeat-timer-atom))
+                     (on-close))
+           .onError (fn [e]
+                      (set-websocket-active?! false)
+                      (on-close)))))
+    (catch Exception e
+      (set-websocket-active?! false)
+      (on-close))))
+
+(defn disconnect! []
+  (when-let [c @websocket-channel-atom] (.sink.close c))
+  (when-let [t @websocket-heartbeat-timer-atom] (.cancel ^async/Timer t))
+  (set-websocket-active?! false))

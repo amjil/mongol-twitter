@@ -1,0 +1,135 @@
+(ns jirgee.screens.timeline
+  (:require [cljd.flutter :as f]
+            ["package:flutter/material.dart" :as m]
+            ["package:mongol/mongol.dart" :as mgl]
+            [jirgee.services.post :as post-service]
+            [jirgee.services.interaction :as interaction-service]
+            [jirgee.components.post-actions :refer [post-action-bar-vertical]]
+            [jirgee.state :refer [timeline-posts-state-atom
+                                  timeline-loading?-atom]]
+            [pull-to-refresh.refresh :refer [horizontal-refresh]]))
+
+;; --- 1. Post card component: Adapted for horizontal scroll ---
+(defn- post-card [post]
+  (let [post-id (get post "id")
+        user (get post "user" {})
+        nickname (get user "display_name" (get user "username" "ᠬᠡᠷᠡᠭᠯᠡᠭᠴᠢ"))
+        content (get post "content" "")
+        avatar-url (get user "avatar_url")
+        ;; Local state for immediate feedback (Optimistic UI)
+        is-liked-atom (atom (get post "is_liked" false))
+        likes-count-atom (atom (get post "likes_count" 0))
+        reposts-count-atom (atom (get post "reposts_count" 0))
+        comments-count-atom (atom (get post "comments_count" 0))]
+    (f/widget
+     :watch [is-liked is-liked-atom
+             likes-count likes-count-atom
+             reposts-count reposts-count-atom
+             comments-count comments-count-atom]
+     :get {{{:flds [bodyLarge titleMedium]} .-textTheme} m/Theme}
+     (m/Container
+      .width 320.0 ;; Fixed width, extends horizontally in horizontal list
+      .margin (m/EdgeInsets.only .right 16.0 .top 12.0 .bottom 12.0)
+      .decoration (m/BoxDecoration
+                   .color m/Colors.white
+                   .image (m/DecorationImage
+                           .image (m/AssetImage "assets/parchment_bg.png")
+                           .fit m/BoxFit.cover
+                           .opacity 0.05)
+                   .borderRadius (m/BorderRadius.circular 12.0)
+                   .boxShadow [(m/BoxShadow
+                                .color (m/Color 0x0A000000)
+                                .blurRadius 10.0
+                                .offset (m/Offset 4.0 0.0))])
+      .child
+      (m/Padding
+       .padding (m/EdgeInsets.all 16.0)
+       .child
+       (m/Row
+        .crossAxisAlignment m/CrossAxisAlignment.start
+        .children
+        [;; A. Left: Avatar and nickname
+         (m/Column
+          .children
+          [(if (and avatar-url (not-empty avatar-url))
+             (m/CircleAvatar .radius 20.0 .backgroundImage (m/NetworkImage avatar-url))
+             (m/CircleAvatar .radius 20.0 .child (m/Icon m/Icons.person .size 20.0)))
+           (m/SizedBox .height 12.0)
+           (mgl/MongolText nickname
+                           .style (.copyWith titleMedium
+                                             .fontWeight m/FontWeight.bold
+                                             .fontSize 14.0))])
+
+         (m/SizedBox .width 16.0)
+
+         ;; B. Middle: Vertical text content
+         (m/Expanded
+          .child
+          (m/GestureDetector
+           .onTap #(println "Go to detail:" post-id)
+           .child (m/Container
+                   .alignment m/Alignment.topRight
+                   .child (mgl/MongolText content
+                                          .style (.copyWith bodyLarge .height 1.6)
+                                          .overflow m/TextOverflow.fade))))
+
+         (m/SizedBox .width 12.0)
+
+         ;; C. Right: Vertical action bar
+         (post-action-bar-vertical
+          {:likes likes-count
+           :comments comments-count
+           :forwards reposts-count
+           :is-liked is-liked
+           :on-like (fn []
+                      (if @is-liked-atom
+                        (do (interaction-service/unlike-post post-id)
+                            (swap! likes-count-atom dec))
+                        (do (interaction-service/like-post post-id)
+                            (swap! likes-count-atom inc)))
+                      (swap! is-liked-atom not))
+           :on-comment #(println "Open Comment UI")
+           :on-repost #(println "Repost logic")})]))))))
+
+;; --- 2. Main page: Clean horizontal scroll ---
+(defn timeline-screen []
+  (f/widget
+   :watch [posts timeline-posts-state-atom
+           is-loading? timeline-loading?-atom]
+   :get {{{:flds [surface onSurface]} .-colorScheme} m/Theme}
+   :let [load-data! post-service/load-timeline-data!]
+
+    (m/Scaffold
+    .backgroundColor surface
+    .appBar (m/AppBar
+             .backgroundColor surface
+             .elevation 0
+             .actions [(m/IconButton
+                        .icon (m/Icon m/Icons.search .color onSurface)
+                        .onPressed #())
+                       (m/IconButton
+                        .icon (m/Icon m/Icons.account_circle_outlined .color onSurface)
+                        .onPressed #())])
+    .body
+    (m/Container
+     .child
+     (cond
+       (and is-loading? (nil? posts))
+       (m/Center .child (m/CircularProgressIndicator .strokeWidth 2.0))
+
+       (empty? posts)
+       (m/Center .child (m/Column
+                         .mainAxisSize m/MainAxisSize.min
+                         .children [(m/Icon m/Icons.inbox .size 48.0 .color m/Colors.black12)
+                                    (m/SizedBox .height 16.0)
+                                    (mgl/MongolText "ᠬᠣᠭᠣᠰᠤᠨ" .style (m/TextStyle .color m/Colors.black26))]))
+
+       :else
+       ;; Horizontal refresh component adapted for Mongolian reading direction
+       (horizontal-refresh
+        {:on-refresh (fn [] (load-data!))
+         :item-count (count posts)
+         :item-builder (fn [_ idx]
+                         (post-card (nth posts idx)))
+         :background-color surface
+         :reverse false}))))))

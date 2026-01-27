@@ -1,0 +1,143 @@
+(ns jirgee.screens.profile
+  (:require [cljd.flutter :as f]
+            ["package:flutter/material.dart" :as m]
+            ["package:mongol/mongol.dart" :as mgl]
+            [components.app-bar :refer [mongol-side-layout]]
+            [jirgee.services.user :as user-service]
+            [jirgee.state :refer [profile-state-atom
+                                  profile-user-posts-state-atom]]))
+
+(defn- stat-item [label value]
+  (f/widget
+    :get {{{:flds [primary]} .-colorScheme
+           {:flds [titleMedium bodySmall]} .-textTheme} m/Theme}
+    (m/Padding
+      .padding (m/EdgeInsets.symmetric .horizontal 12.0)
+      .child
+      (m/Column
+        .mainAxisSize m/MainAxisSize.min
+        .children
+        [(m/Text (str value) .style (.copyWith titleMedium .fontWeight m/FontWeight.bold .color primary))
+         (m/SizedBox .height 4.0)
+         (mgl/MongolText label .style bodySmall)]))))
+
+(defn profile-screen [{:keys [user-id is-me?]}]
+  (f/widget
+   :context ctx
+   :watch [profile profile-state-atom
+           posts profile-user-posts-state-atom]
+   :get {{{:flds [surface surfaceVariant onSurface primary]} .-colorScheme
+          {:flds [headlineSmall bodyMedium]} .-textTheme} m/Theme}
+
+   (mongol-side-layout
+    {:title (if is-me? "ᠪᠢ" "ᠬᠡᠷᠡᠭᠯᠡᠭᠴᠢ") ;; "Me" or "User"
+     :min-width 70.0
+     :actions [{:icon m/Icons.settings :on-tap #(println "Settings")}]
+     :body
+     (m/Scaffold
+      .backgroundColor surface
+      .body
+      (if (nil? profile)
+        (m/Center .child (m/CircularProgressIndicator))
+        (m/CustomScrollView
+         .slivers
+         [(m/SliverToBoxAdapter
+           .child
+           (m/Padding
+            .padding (m/EdgeInsets.all 24.0)
+            .child
+            (m/Column
+             .children
+             [(m/Row
+               .children
+               [(m/CircleAvatar
+                 .radius 45.0
+                 .backgroundColor surfaceVariant
+                 .backgroundImage (when-let [url (get profile "avatar_url")] (m/NetworkImage url)))
+                (m/SizedBox .width 24.0)
+                (m/Expanded
+                 .child
+                 (m/Row
+                  .mainAxisAlignment m/MainAxisAlignment.spaceAround
+                  .children
+                  [(stat-item "ᠳᠠᠭᠠᠭᠴᠢ" (get profile "followers_count" 0))
+                   (stat-item "ᠳᠠᠭᠠᠪᠤᠷᠢ" (get profile "following_count" 0))
+                   (stat-item "ᠵᠢᠷᠭᠡᠯ" (get profile "posts_count" 0))]))])
+
+              (m/SizedBox .height 20.0)
+
+              (m/Align
+               .alignment m/Alignment.centerLeft
+               .child
+               (m/Column
+                .crossAxisAlignment m/CrossAxisAlignment.start
+                .children
+                [(mgl/MongolText (get profile "nickname" "ᠬᠡᠷᠡᠭᠯᠡᠭᠴᠢ")
+                                 .style (.copyWith headlineSmall .fontWeight m/FontWeight.bold))
+                 (m/SizedBox .height 12.0)
+                 (m/SizedBox
+                  .height 120.0
+                  .child (mgl/MongolText (get profile "bio" "...")
+                                         .style bodyMedium))]))
+
+              (m/SizedBox .height 24.0)
+
+              (m/Row
+               .children
+               [(m/Expanded
+                 .child
+                 (m/FilledButton.tonal
+                  .onPressed #()
+                  .child (m/Text (if is-me? "Edit Profile" "Follow"))))])
+              (m/Divider .height 48.0 .thickness 1.0)])))
+
+          ;; Posts list header
+          (m/SliverToBoxAdapter
+           .child
+           (m/Padding
+            .padding (m/EdgeInsets.only .left 24.0 .bottom 16.0)
+            .child
+            (mgl/MongolText "ᠪᠦᠲᠡᠭᠡᠯ" .style headlineSmall))) ;; "Posts"
+
+          ;; Horizontally scrolling posts gallery
+          (m/SliverFillRemaining
+           .hasScrollBody false
+           .child
+           (m/SizedBox
+            .height 320.0
+            .child
+            (m/ListView.builder
+             .scrollDirection m/Axis.horizontal
+             .padding (m/EdgeInsets.symmetric .horizontal 20.0)
+             .itemCount (count posts)
+             .itemBuilder (fn [_ idx]
+                            (let [post (nth posts idx)]
+                              (m/Container
+                               .width 180.0
+                               .margin (m/EdgeInsets.only .right 16.0 .bottom 24.0)
+                               .decoration (m/BoxDecoration
+                                            .color surfaceVariant
+                                            .borderRadius (m/BorderRadius.circular 16.0)
+                                            .boxShadow [(m/BoxShadow .color (-> (.-black m/Colors) (.withOpacity 0.05))
+                                                                     .blurRadius 8.0 .offset (m/Offset 0 4))]
+                                            .image (when-let [img (get post "image_url")]
+                                                     (m/DecorationImage .image (m/NetworkImage img) .fit m/BoxFit.cover)))
+                               .child (m/Stack
+                                       .children
+                                       [(m/Positioned.fill
+                                         .child (m/Container
+                                                 .decoration (m/BoxDecoration
+                                                              .borderRadius (m/BorderRadius.circular 16.0)
+                                                              .gradient (m/LinearGradient
+                                                                         .begin m/Alignment.topCenter
+                                                                         .end m/Alignment.bottomCenter
+                                                                         .colors [(m/Colors.transparent) (-> (.-black m/Colors) (.withOpacity 0.6))]))))
+                                        (m/Padding
+                                         .padding (m/EdgeInsets.all 12.0)
+                                         .child
+                                         (m/Align
+                                          .alignment m/Alignment.bottomLeft
+                                          .child (mgl/MongolText (get post "content" "")
+                                                                 .style (m/TextStyle .color m/Colors.white .fontSize 14.0)
+                                                                 .maxLines 3
+                                                                 .overflow m/TextOverflow.ellipsis)))])))))))])))})))

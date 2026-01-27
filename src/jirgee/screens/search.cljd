@@ -1,0 +1,211 @@
+(ns jirgee.screens.search
+  (:require [cljd.flutter :as f]
+            ["package:flutter/material.dart" :as m]
+            ["package:mongol/mongol.dart" :as mgl]
+            [components.app-bar :refer [mongol-side-layout]]
+            [components.text-field :as text-field]
+            [jirgee.services.search :as search-service]
+            [jirgee.state :refer [search-query-atom
+                                  search-results-atom
+                                  search-type-atom
+                                  search-loading?-atom
+                                  search-history-atom
+                                  set-search-query!
+                                  set-search-results!
+                                  set-search-type!
+                                  set-search-loading?!
+                                  set-search-history!]]))
+
+(defn- user-item [user]
+  (f/widget
+   :context ctx
+   :get {{{:flds [surfaceVariant onSurface primary]} .-colorScheme
+          {:flds [titleMedium bodySmall]} .-textTheme} m/Theme}
+   :let [username (get user "username" "")
+         display-name (get user "display_name" "")
+         avatar-url (get user "avatar_url")
+         bio (get user "bio" "")]
+   (m/ListTile
+    .leading (m/CircleAvatar
+              .backgroundImage (when avatar-url (m/NetworkImage avatar-url))
+              .child (if-not avatar-url (m/Icon m/Icons.person) (m/SizedBox)))
+    .title (mgl/MongolText (or display-name username) .style titleMedium)
+    .subtitle (mgl/MongolText bio .style (.copyWith bodySmall .maxLines 2))
+    .trailing (m/IconButton
+               .icon (m/Icon m/Icons.arrow_forward_ios .size 16.0)
+               .onPressed #(println "Navigate to user profile")))))
+
+(defn- post-item [post]
+  (f/widget
+   :context ctx
+   :get {{{:flds [surfaceVariant onSurface]} .-colorScheme
+          {:flds [bodyMedium titleSmall]} .-textTheme} m/Theme}
+   :let [content (get post "content" "")
+         user (get post "user" {})
+         username (get user "username" "")
+         avatar-url (get user "avatar_url")]
+   (m/Card
+    .margin (m/EdgeInsets.symmetric .vertical 4.0 .horizontal 12.0)
+    .child
+    (m/Padding
+     .padding (m/EdgeInsets.all 12.0)
+     .child
+     (m/Row
+      .crossAxisAlignment m/CrossAxisAlignment.start
+      .children
+      [(m/CircleAvatar
+        .backgroundImage (when avatar-url (m/NetworkImage avatar-url))
+        .child (if-not avatar-url (m/Icon m/Icons.person) (m/SizedBox)))
+       (m/SizedBox .width 12.0)
+       (m/Expanded
+        .child
+        (m/Column
+         .crossAxisAlignment m/CrossAxisAlignment.start
+         .children
+         [(mgl/MongolText username .style (.copyWith titleSmall .fontWeight m/FontWeight.bold))
+          (m/SizedBox .height 8.0)
+          (mgl/MongolText content .style bodyMedium .maxLines 3)]))])))))
+
+(defn- group-item [group]
+  (f/widget
+   :context ctx
+   :get {{{:flds [surfaceVariant onSurface]} .-colorScheme
+          {:flds [titleMedium bodySmall]} .-textTheme} m/Theme}
+   :let [name (get group "name" "")
+         description (get group "description" "")
+         avatar-url (get group "avatar_url")
+         members-count (get group "members_count" 0)]
+   (m/ListTile
+    .leading (m/CircleAvatar
+              .backgroundImage (when avatar-url (m/NetworkImage avatar-url))
+              .child (if-not avatar-url (m/Icon m/Icons.group) (m/SizedBox)))
+    .title (mgl/MongolText name .style titleMedium)
+    .subtitle (mgl/MongolText (str description " · " members-count " ᠬᠦᠮᠦᠨ") .style bodySmall)
+    .trailing (m/IconButton
+               .icon (m/Icon m/Icons.arrow_forward_ios .size 16.0)
+               .onPressed #(println "Navigate to group")))))
+
+(defn search-screen []
+  (f/widget
+   :context ctx
+   :managed [query-ctrl (m/TextEditingController)]
+   :watch [query search-query-atom
+           results search-results-atom
+           type search-type-atom
+           is-loading? search-loading?-atom
+           history search-history-atom]
+   :get {{{:flds [surface onSurface primary]} .-colorScheme} m/Theme}
+   :let [handle-search! (fn [q]
+                          (search-service/perform-search! {:query q
+                                                           :type type
+                                                           :set-loading! set-search-loading?!
+                                                           :set-results! set-search-results!}))
+         handle-load-history! (fn []
+                               (search-service/load-history! {:set-history! set-search-history!}))]
+   
+   (mongol-side-layout
+    .title "ᠬᠠᠢᠢᠯᠠᠭ"
+    .min-width 70.0
+    .body
+    (m/Scaffold
+     .backgroundColor surface
+     .body
+     (m/Column
+      .children
+      [;; Search box
+       (m/Padding
+        .padding (m/EdgeInsets.all 16.0)
+        .child
+        (m/Row
+         .children
+         [(m/Expanded
+           .child (text-field/mongol-text-field
+                   {:controller query-ctrl
+                    :hint "ᠬᠠᠢᠢᠯᠠᠭ..."
+                    :on-submitted handle-search!}))
+          (m/SizedBox .width 8.0)
+          (m/IconButton
+           .icon (m/Icon m/Icons.search)
+           .onPressed #(handle-search! (.-text query-ctrl)))]))
+       
+       ;; Type selection
+       (m/SingleChildScrollView
+        .scrollDirection m/Axis.horizontal
+        .padding (m/EdgeInsets.symmetric .horizontal 16.0)
+        .child
+        (m/Row
+         .children
+         [(m/FilterChip
+           .label (m/Text "ᠪᠦᠬᠦ")
+           .selected (= type "all")
+           .onSelected #(set-search-type! "all"))
+          (m/SizedBox .width 8.0)
+          (m/FilterChip
+           .label (m/Text "ᠬᠡᠷᠡᠭᠯᠡᠭᠴᠢ")
+           .selected (= type "users")
+           .onSelected #(set-search-type! "users"))
+          (m/SizedBox .width 8.0)
+          (m/FilterChip
+           .label (m/Text "ᠵᠢᠷᠭᠡᠯ")
+           .selected (= type "posts")
+           .onSelected #(set-search-type! "posts"))
+          (m/SizedBox .width 8.0)
+          (m/FilterChip
+           .label (m/Text "ᠬᠦᠮᠦᠨ")
+           .selected (= type "groups")
+           .onSelected #(set-search-type! "groups"))]))
+       
+       ;; Results or history
+       (m/Expanded
+        .child
+        (cond
+          is-loading?
+          (m/Center .child (m/CircularProgressIndicator))
+          
+          (and results (or (seq (get results "users"))
+                          (seq (get results "posts"))
+                          (seq (get results "groups"))))
+          (m/ListView
+           .children
+           (into []
+                 (concat
+                  (when (seq (get results "users"))
+                    (concat
+                     [(m/Padding
+                       .padding (m/EdgeInsets.all 16.0)
+                       .child
+                       (mgl/MongolText "ᠬᠡᠷᠡᠭᠯᠡᠭᠴᠢ" .style (.copyWith (.-titleLarge m/TextTheme) .fontWeight m/FontWeight.bold)))
+                      (m/Divider)]
+                     (map user-item (get results "users"))))
+                  (when (seq (get results "posts"))
+                    (concat
+                     [(m/Padding
+                       .padding (m/EdgeInsets.all 16.0)
+                       .child
+                       (mgl/MongolText "ᠵᠢᠷᠭᠡᠯ" .style (.copyWith (.-titleLarge m/TextTheme) .fontWeight m/FontWeight.bold)))
+                      (m/Divider)]
+                     (map post-item (get results "posts"))))
+                  (when (seq (get results "groups"))
+                    (concat
+                     [(m/Padding
+                       .padding (m/EdgeInsets.all 16.0)
+                       .child
+                       (mgl/MongolText "ᠬᠦᠮᠦᠨ" .style (.copyWith (.-titleLarge m/TextTheme) .fontWeight m/FontWeight.bold)))
+                      (m/Divider)]
+                     (map group-item (get results "groups")))))))
+          
+          (and history (seq history))
+          (m/ListView.builder
+           .itemCount (count history)
+           .itemBuilder (fn [_ idx]
+                         (let [item (nth history idx)
+                               query-text (get item "query")]
+                           (m/ListTile
+                            .leading (m/Icon m/Icons.history)
+                            .title (mgl/MongolText query-text)
+                            .trailing (m/IconButton
+                                      .icon (m/Icon m/Icons.close .size 18.0)
+                                      .onPressed #(search-service/delete-search-history (get item "id")))))))
+          
+          :else
+          (m/Center .child (mgl/MongolText "ᠬᠣᠭᠣᠰᠤᠨ"))))])))))

@@ -1,0 +1,61 @@
+(ns jirgee.services.list
+  (:require [jirgee.services.base :refer [client]]))
+
+;; =============================================================================
+;; List Service
+;; =============================================================================
+
+;; Get list of lists
+(defn get-lists []
+  (-> (.get client "/lists")
+      (.then (fn [resp] (get (.-data resp) "lists" [])))
+      (.catchError (fn [err]
+                     (println "Get lists failed:" err)
+                     []))))
+
+;; Get list details
+(defn get-list [list-id]
+  (-> (.get client (str "/lists/" list-id))
+      (.then (fn [resp] (get (.-data resp) "list")))
+      (.catchError (fn [err]
+                     (println "Get list failed:" err)
+                     nil))))
+
+;; Create list
+(defn create-list [list-params]
+  (-> (.post client "/lists" .data {"list" list-params})
+      (.then (fn [resp] (get (.-data resp) "list")))
+      (.catchError (fn [err] (println "Create list failed:" err)))))
+
+;; Update list
+(defn update-list [list-id list-params]
+  (-> (.put client (str "/lists/" list-id) .data {"list" list-params})
+      (.then (fn [resp] (get (.-data resp) "list")))
+      (.catchError (fn [err] (println "Update list failed:" err)))))
+
+;; Delete list
+(defn delete-list [list-id]
+  (-> (.delete client (str "/lists/" list-id))
+      (.then (fn [resp] (.-data resp)))
+      (.catchError (fn [err] (println "Delete list failed:" err)))))
+
+;; Add list member
+(defn add-list-member [list-id user-id]
+  (-> (.post client (str "/lists/" list-id "/members")
+             .data {"user_id" user-id})
+      (.then (fn [resp] (.-data resp)))
+      (.catchError (fn [err] (println "Add list member failed:" err)))))
+
+;; Remove list member
+(defn remove-list-member [list-id user-id]
+  (-> (.delete client (str "/lists/" list-id "/members/" user-id))
+      (.then (fn [resp] (.-data resp)))
+      (.catchError (fn [err] (println "Remove list member failed:" err)))))
+
+;; Get list timeline
+(defn get-list-timeline [list-id]
+  (-> (.get client (str "/lists/" list-id "/timeline"))
+      (.then (fn [resp] (get (.-data resp) "posts" [])))
+      (.catchError (fn [err]
+                     (println "Get list timeline failed:" err)
+                     []))))

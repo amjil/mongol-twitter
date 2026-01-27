@@ -1,0 +1,79 @@
+(ns jirgee.services.user
+  (:require [jirgee.services.base :refer [client]]
+            [jirgee.services.post :as post-service]
+            [jirgee.state :refer [set-profile-state!
+                                  set-profile-user-posts-state!]]))
+
+;; --- User Information ---
+
+;; Get current logged-in user's own information
+(defn get-me [on-success on-error]
+  (-> (.get client "/users/me")
+      (.then (fn [resp] (on-success (.-data resp))))
+      (.catchError on-error)))
+
+;; Get specified user's information (for viewing other users' profiles)
+(defn get-profile [user-id on-success on-error]
+  (-> (.get client (str "/users/" user-id))
+      (.then (fn [resp] (on-success (.-data resp))))
+      (.catchError on-error)))
+
+;; Update profile (nickname, bio, avatar URL, etc.)
+(defn update-profile [user-params on-success on-error]
+  (-> (.put client "/users/me" .data {"user" user-params})
+      (.then (fn [resp] (on-success (.-data resp))))
+      (.catchError on-error)))
+
+;; --- Social Relationships (Following) ---
+
+;; Follow user
+(defn follow [user-id on-success on-error]
+  (-> (.post client (str "/users/" user-id "/follow"))
+      (.then (fn [resp] (on-success (.-data resp))))
+      (.catchError on-error)))
+
+;; Unfollow
+(defn unfollow [user-id on-success on-error]
+  (-> (.delete client (str "/users/" user-id "/follow"))
+      (.then (fn [resp] (on-success (.-data resp))))
+      (.catchError on-error)))
+
+;; Get following list
+(defn get-following [user-id on-success on-error]
+  (-> (.get client (str "/users/" user-id "/following"))
+      (.then (fn [resp] (on-success (get (.-data resp) "following"))))
+      (.catchError on-error)))
+
+;; Get followers list
+(defn get-followers [user-id on-success on-error]
+  (-> (.get client (str "/users/" user-id "/followers"))
+      (.then (fn [resp] (on-success (get (.-data resp) "followers"))))
+      (.catchError on-error)))
+
+;; --- Blocking & Security ---
+
+;; Block user
+(defn block [user-id on-success on-error]
+  (-> (.post client (str "/blocks/" user-id))
+      (.then (fn [resp] (on-success (.-data resp))))
+      (.catchError on-error)))
+
+;; Get block list
+(defn get-blocks [on-success on-error]
+  (-> (.get client "/blocks")
+      (.then (fn [resp] (on-success (get (.-data resp) "blocks"))))
+      (.catchError on-error)))
+
+;; --- Search ---
+
+;; Search users (supports Mongolian nickname search)
+(defn search [query on-success on-error]
+  (-> (.get client "/search" .queryParameters {"q" query "type" "users"})
+      (.then (fn [resp] (on-success (get (.-data resp) "users"))))
+      (.catchError on-error)))
+
+;; Load profile data (user information and post list)
+(defn load-profile-data! [user-id]
+  (get-profile user-id #(set-profile-state! %) (fn [err] (println "Get profile failed:" err)))
+  (-> (post-service/get-timeline)
+      (.then (fn [data] (set-profile-user-posts-state! data)))))

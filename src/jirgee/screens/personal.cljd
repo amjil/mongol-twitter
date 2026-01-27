@@ -1,0 +1,54 @@
+(ns jirgee.screens.personal
+  (:require [cljd.flutter :as f]
+            ["package:flutter/material.dart" :as m]
+            ["package:mongol/mongol.dart" :as mgl]
+            [jirgee.components.post-card-vertical :refer [post-card-vertical]]))
+
+(defn personal-page [{:keys [user posts]}]
+  (let [ratio-atom (atom 0.0)]
+    (f/widget
+     :get {{{:keys [width]} .-size} m/MediaQuery}
+     :let [max-w 260.0
+           min-w 110.0
+           shrink-dist 180.0]
+     :managed [scroll-ctrl (m/ScrollController.)
+               _ (let [cb #(let [new-r (-> (/ (.-offset scroll-ctrl) shrink-dist) (.clamp 0.0 1.0))]
+                             (when (not= @ratio-atom new-r) (reset! ratio-atom new-r)))]
+                   (.addListener scroll-ctrl cb)
+                   (reify f/IDisposable (dispose [_] (.removeListener scroll-ctrl cb))))]
+     :watch [r ratio-atom]
+     ;; Use lerp to ensure all values change linearly with r
+     :let [current-w (m/lerpDouble max-w min-w r)
+           left-p    (m/lerpDouble 40.0 24.0 r)
+           av-rad    (m/lerpDouble 35.0 24.0 r)]
+
+     (m/Scaffold
+      .backgroundColor m/Colors.white
+      .body
+      (m/Row
+       .children
+       [;; --- Sidebar: add smooth transition ---
+        (m/AnimatedContainer
+         .duration (m/Duration .milliseconds 200) ;; Provide tween animation when r changes abruptly
+         .curve m/Curves.easeOut
+         .width current-w
+         .padding (m/EdgeInsets.only .top 80.0 .left left-p)
+         .child (m/Column
+                 .crossAxisAlignment m/CrossAxisAlignment.start
+                 .children
+                 [(m/CircleAvatar
+                   .radius av-rad
+                   .backgroundImage (m/NetworkImage (:avatar user)))
+                  (m/SizedBox .height 32.0)
+                  ;; Name and stats return...
+                  ]))
+
+        ;; --- Content area: Hero return destination ---
+        (m/Expanded
+         .child (m/ListView.builder
+                 .controller scroll-ctrl
+                 .scrollDirection m/Axis.horizontal
+                 .itemCount (count posts)
+                 .itemBuilder (fn [ctx idx]
+                                ;; Hero here will automatically find the image flying back from detail page
+                                (m/Center (post-card-vertical (nth posts idx))))))])))))

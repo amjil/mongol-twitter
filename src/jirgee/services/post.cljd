@@ -1,0 +1,137 @@
+(ns jirgee.services.post
+  (:require [jirgee.services.base :refer [client database]]
+            [jirgee.state :refer [set-timeline-posts-state!
+                                  set-timeline-loading?!]]
+            ["package:drift/drift.dart" :as d]
+            ["package:mongol_jirgee/database.dart" :as db]
+            ["dart:convert" :as convert]
+            ["dart:core" :as dc]))
+
+;; =============================================================================
+;; 1. Query Logic (Queries)
+;; =============================================================================
+
+;; Get timeline data (read snapshot from local database)
+(defn get-timeline []
+  (let [^db/AppDatabase sqlite @database
+        query (doto (.select sqlite (.-posts sqlite))
+                (.orderBy [(fn [^db/Posts tbl] (d/OrderingTerm. .expression (.-createdAt tbl) .mode d/OrderingMode.desc))]))]
+    (.get query)))
+
+;; Watch timeline stream in real-time (Reactive Stream)
+(defn watch-timeline []
+  (let [^db/AppDatabase sqlite @database
+        query (doto (.select sqlite (.-posts sqlite))
+                (.orderBy [(fn [^db/Posts tbl] (d/OrderingTerm. .expression (.-createdAt tbl) .mode d/OrderingMode.desc))]))]
+    (.watch query)))
+
+;; =============================================================================
+;; 2. Posting Logic (Posting & Offline-first)
+;; =============================================================================
+
+;; Private function: Update local post status
+(defn- update-local-post-status! [local-id server-id synced?]
+  (let [^db/AppDatabase sqlite @database
+        query (doto (.update sqlite (.-posts sqlite))
+                (.where (fn [^db/Posts tbl] (.equals (.-localId tbl) local-id))))
+        companion (db/PostsCompanion.
+                   .id (d/Value server-id)
+                   .isSynced (d/Value synced?))]
+    (.write query companion)))
+
+;; Create new post
+(defn create [{:keys [content image-url]} on-success on-error]
+  (let [^db/AppDatabase sqlite @database
+        now (.toIso8601String (dc/DateTime.now))
+        ;; Build local post entry
+        post-comp (db/PostsCompanion.insert
+                   .nickname (d/Value "ᠬᠡᠷᠡᠭᠯᠡᠭᠴᠢ") ;; TODO: Should get current user nickname from user state/auth service
+                   .content (d/Value content)
+                   .imageUrl (d/Value image-url)
+                   .createdAt (d/Value now)
+                   .isSynced (d/Value false))
+        query (.into sqlite (.-posts sqlite))]
+
+    ;; 1. Insert locally first, trigger UI auto-refresh (Optimistic UI)
+    (-> (.insert query post-comp)
+        (.then (fn [local-id]
+                 (on-success {:local-id local-id :status :pending})
+
+                 ;; 2. Try to push to server
+                 (-> (.post client "/posts"
+                            .data {"content" content "image_url" image-url})
+                     (.then (fn [resp]
+                              ;; 3a. Success: Update sync status
+                              (let [server-id (get (.-data resp) "id")]
+                                (update-local-post-status! local-id server-id true))))
+                     (.catchError (fn [err]
+                                    ;; 3b. Failure: Add to offline queue
+                                    (let [payload (convert/jsonEncode
+                                                   {"content" content
+                                                    "image_url" image-url
+                                                    "local_id" local-id})
+                                          pending-comp (db/PendingActionsCompanion.insert
+                                                        .actionType (d/Value "CREATE_POST")
+                                                        .payload (d/Value payload))
+                                          query (.into sqlite (.-pendingActions sqlite))]
+                                      (-> (.insert query pending-comp)
+                                          (.then (fn [_] (println "Post queued for sync"))))))))))
+        (.catchError on-error))))
+
+;; =============================================================================
+;; 3. Sync Logic (Syncing)
+;; =============================================================================
+
+(defn sync-pending-posts []
+  (let [^db/AppDatabase sqlite @database
+        query (doto (.select sqlite (.-pendingActions sqlite))
+                (.where (fn [^db/PendingActions tbl] (.equals (.-actionType tbl) "CREATE_POST"))))]
+    (-> (.get query)
+        (.then (fn [actions]
+                 (doseq [action actions]
+                   (let [data (convert/jsonDecode (.-payload action))
+                         action-id (.-id action)]
+                     (-> (.post client "/posts"
+                                .data {"content" (get data "content")
+                                       "image_url" (get data "image_url")})
+                         (.then (fn [resp]
+                                  (let [server-id (get (.-data resp) "id")
+                                        local-id (get data "local_id")
+                                        delete-query (doto (.delete sqlite (.-pendingActions sqlite))
+                                                       (.where (fn [^db/PendingActions tbl] (.equals (.-id tbl) action-id))))]
+                                    (update-local-post-status! local-id server-id true)
+                                    (.go delete-query))))
+                         (.catchError (fn [e] (println "Retrying post sync later")))))))))))
+
+;; =============================================================================
+;; 4. Fetch Logic (Fetching)
+;; =============================================================================
+
+(defn fetch-latest-posts [on-complete]
+  (-> (.get client "/posts")
+      (.then (fn [resp]
+               (let [posts (get (.-data resp) "posts")
+                     ^db/AppDatabase sqlite @database]
+                 (.batch sqlite
+                         (fn [batch]
+                           (doseq [p posts]
+                             (.insert batch (.-posts sqlite)
+                                      (db/PostsCompanion.insert
+                                       .id (d/Value (get p "id"))
+                                       .nickname (d/Value (get p "nickname"))
+                                       .content (d/Value (get p "content"))
+                                       .imageUrl (d/Value (get p "image_url"))
+                                       .createdAt (d/Value (get p "created_at"))
+                                       .isSynced (d/Value true))
+                                      .mode d/InsertMode.insertOrReplace))))
+                 (when on-complete (on-complete posts)))))
+      (.catchError (fn [e] (println "Fetch timeline failed:" e)))))
+
+;; Load timeline data
+(defn load-timeline-data! []
+  (set-timeline-loading?! true)
+  (-> (get-timeline)
+      (.then (fn [data] 
+               (set-timeline-posts-state! data)
+               (set-timeline-loading?! false))))
+  nil)

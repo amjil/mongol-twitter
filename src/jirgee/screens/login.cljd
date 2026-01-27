@@ -1,0 +1,116 @@
+(ns jirgee.screens.login
+  (:require [cljd.flutter :as f]
+            ["package:flutter/material.dart" :as m]
+            ["package:mongol/mongol.dart" :as mgl]
+            [virtual-keyboard.keyboard :as keyboard]
+            [jirgee.services.auth :as auth]
+            [jirgee.main-layout :refer [main-layout]]
+            [components.toast :as toast]
+            [components.text-field :refer [text-field]]))
+
+(defn login-screen []
+  (f/widget
+   :context ctx
+   ;; 1. Lifecycle management: Auto dispose controllers
+   :managed [email-ctrl (m/TextEditingController)
+             pass-ctrl (m/TextEditingController)]
+   ;; 2. Nested theme destructuring: Extract colors and fonts at once
+   :get {{{:flds [primary onPrimaryContainer surface]} .-colorScheme
+          {:flds [headlineMedium labelLarge]} .-textTheme} m/Theme}
+
+   (m/Scaffold
+    .backgroundColor surface
+    .body
+    (m/SafeArea
+     .child
+     (m/Column
+      .children
+      [(m/Expanded
+        .child
+        (m/Stack
+         .children
+         [(m/Center
+           .child (m/SingleChildScrollView
+                   .scrollDirection m/Axis.horizontal
+                   .padding (m/EdgeInsets.symmetric .horizontal 40.0)
+                   .child
+                   (m/Row
+                    .mainAxisAlignment m/MainAxisAlignment.center
+                    .crossAxisAlignment m/CrossAxisAlignment.center
+                    .children
+                    [;; --- Title decoration ---
+                     (mgl/MongolText "ᠬᠠᠷᠠᠭᠠᠳᠤ ᠨᠡᠪᠲᠡᠷᠡᠬᠦ" ;; "Welcome to login"
+                                     .style (.copyWith headlineMedium .color primary .fontWeight m/FontWeight.bold))
+
+                     (m/SizedBox .width 60.0)
+
+                     ;; --- Form input area ---
+                     ;; Each text-field should be given a height (vertical length)
+                     (m/SizedBox
+                      .height 300.0
+                      .child
+                      (text-field {:controller email-ctrl
+                                   :hint "ᠢ-ᠮᠧᠢᠯ" ;; Email
+                                   :decoration (m/InputDecoration
+                                                .labelText "ᠢ-ᠮᠧᠢᠯ" ;; Email
+                                                .hintText "Email address"
+                                                .border (m/OutlineInputBorder))}))
+
+                     (m/SizedBox .width 24.0)
+
+                     (m/SizedBox
+                      .height 300.0
+                      .child
+                      (text-field {:controller pass-ctrl
+                                   :hint "ᠨᠢᠭᠤᠴᠠ ᠦᠭᠡ" ;; Password
+                                   :max-lines 1
+                                   :obscure-text true
+                                   :decoration (m/InputDecoration
+                                                .labelText "ᠨᠢᠭᠤᠴᠠ ᠦᠭᠡ" ;; Password
+                                                .hintText "Password"
+                                                .border (m/OutlineInputBorder))}))
+
+                     (m/SizedBox .width 48.0)
+
+                     ;; --- Action buttons area ---
+                     (m/Column
+                      .mainAxisSize m/MainAxisSize.min
+                      .children
+                      [(mgl/MongolElevatedButton
+                        .style (m/ElevatedButton.styleFrom
+                                .backgroundColor primary
+                                .foregroundColor onPrimaryContainer
+                                .padding (m/EdgeInsets.symmetric .vertical 20.0))
+                        .onPressed
+                        (fn []
+                          (let [email (.-text email-ctrl)
+                                pass (.-text pass-ctrl)]
+                            (auth/login {:email email :password pass}
+                                        (fn [_data]
+                                          ;; Navigate to main layout on successful login
+                                          (m/Navigator.pushReplacement
+                                           ctx
+                                           (m/MaterialPageRoute.
+                                            .builder (fn [_] (main-layout))))
+                                          nil)
+                                        (fn [err]
+                                          ;; Error handling
+                                          (let [error-msg (if (and (.-response err) (.-status (.-response err)))
+                                                            (case (.-status (.-response err))
+                                                              401 "ᠨᠢᠭᠤᠴᠠ ᠦᠭᠡ ᠪᠤᠰᠤᠳ ᠪᠤᠷᠤᠭᠤᠯᠠᠭᠰᠠᠨ" ;; "Password is incorrect"
+                                                              404 "ᠬᠡᠷᠡᠭᠯᠡᠭᠴᠢ ᠣᠯᠪᠠᠭᠰᠠᠨ ᠦᠭᠡᠭᠡᠷ ᠪᠤᠰᠤᠳ" ;; "User not found"
+                                                              "ᠨᠡᠪᠲᠡᠷᠡᠬᠦ ᠠᠮᠢᠳᠠᠭᠠᠯᠠᠭᠰᠠᠨ" ;; "Login failed"
+                                                              )
+                                                            "ᠨᠡᠪᠲᠡᠷᠡᠬᠦ ᠠᠮᠢᠳᠠᠭᠠᠯᠠᠭᠰᠠᠨ")] ;; "Login failed"
+                                            (toast/error ctx error-msg))))))
+                        .child (mgl/MongolText "ᠨᠡᠪᠲᠡᠷᠡᠬᠦ" .style labelLarge)) ;; Login button
+
+                       (m/SizedBox .height 20.0)
+
+                       (mgl/MongolTextButton
+                        .onPressed (fn [] (println "Navigate to Register"))
+                        .child (mgl/MongolText "ᠪᠦᠷᠢᠳᠬᠡᠭᠦᠯᠬᠦ" ;; Register button
+                                               .style (.copyWith labelLarge .color primary)))])])))
+          (keyboard/candidates nil)]))
+
+       (keyboard/keyboard {:custom-fns {}})])))))

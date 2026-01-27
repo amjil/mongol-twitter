@@ -1,0 +1,35 @@
+(ns jirgee.services.comment
+  (:require [jirgee.services.base :refer [client]]
+            ["package:dio/dio.dart" :as dio]
+            ["dart:core" :as dc]))
+
+;; =============================================================================
+;; 1. Get Comments List (Fetching)
+;; =============================================================================
+
+(defn fetch-comments
+  "Get comments list for specified post.
+   Supports offset pagination."
+  [{:keys [post-id limit offset pagination-type]
+    :or {limit 20 offset 0 pagination-type "offset"}}]
+  (-> (.get client (str "/posts/" post-id "/comments")
+            :queryParameters {"limit" limit
+                              "offset" offset
+                              "pagination_type" pagination-type})
+      (.then (fn [resp]
+               ;; Directly return map format comment data, parsed by component layer
+               (.-data resp)))
+      (.catchError (fn [err]
+                     (println "Fetch comments failed for post:" post-id " Error: " err)
+                     ;; Return empty structure on error or 404, conforms to API specification
+                     {"comments" [] "meta" {"has_more" false}}))))
+
+;; =============================================================================
+;; 2. Future extension: Post comment (Posting)
+;; =============================================================================
+
+(defn create-comment [post-id content on-success on-error]
+  (-> (.post client (str "/posts/" post-id "/comments")
+             .data {"content" content})
+      (.then (fn [resp] (on-success (.-data resp))))
+      (.catchError (fn [err] (on-error err)))))

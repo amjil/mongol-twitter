@@ -1,0 +1,68 @@
+(ns jirgee.services.hashtag
+  (:require [jirgee.services.base :refer [client]]
+            [jirgee.state :refer [set-hashtag-state!
+                                  set-hashtag-posts-state!
+                                  set-hashtag-loading?!]]))
+
+;; =============================================================================
+;; Hashtag Service
+;; =============================================================================
+
+;; Search hashtags
+(defn search-hashtags [{:keys [query limit offset]
+                       :or {limit 20 offset 0}}]
+  (-> (.get client "/hashtags/search"
+            .queryParameters {"q" query
+                            "limit" limit
+                            "offset" offset})
+      (.then (fn [resp] (.-data resp)))
+      (.catchError (fn [err]
+                     (println "Search hashtags failed:" err)
+                     {"hashtags" [] "meta" {"count" 0}}))))
+
+;; Get trending hashtags
+(defn get-trending [{:keys [limit time-window-hours]
+                    :or {limit 20 time-window-hours 24}}]
+  (-> (.get client "/hashtags/trending"
+            .queryParameters {"limit" limit
+                            "time_window_hours" time-window-hours})
+      (.then (fn [resp] (.-data resp)))
+      (.catchError (fn [err]
+                     (println "Get trending hashtags failed:" err)
+                     {"hashtags" [] "meta" {"count" 0}}))))
+
+;; Get hashtag details
+(defn get-hashtag [name]
+  (-> (.get client (str "/hashtags/" name))
+      (.then (fn [resp] (get (.-data resp) "hashtag")))
+      (.catchError (fn [err]
+                     (println "Get hashtag failed:" err)
+                     nil))))
+
+;; Get hashtag posts list
+(defn get-hashtag-posts [name {:keys [limit offset]
+                              :or {limit 20 offset 0}}]
+  (-> (.get client (str "/hashtags/" name "/posts")
+            .queryParameters {"limit" limit "offset" offset})
+      (.then (fn [resp] (.-data resp)))
+      (.catchError (fn [err]
+                     (println "Get hashtag posts failed:" err)
+                     {"posts" [] "meta" {"count" 0}}))))
+
+;; Load hashtag data (hashtag information and posts list)
+(defn load-hashtag-data! [hashtag-name]
+  (set-hashtag-loading?! true)
+  (-> (get-hashtag hashtag-name)
+      (.then (fn [data]
+               (set-hashtag-state! data)
+               (when data
+                 (-> (get-hashtag-posts hashtag-name {})
+                     (.then (fn [posts-data]
+                              (set-hashtag-posts-state! (get posts-data "posts" []))
+                              (set-hashtag-loading?! false)))
+                     (.catchError (fn [err]
+                                    (println "Load posts failed:" err)
+                                    (set-hashtag-loading?! false)))))))
+      (.catchError (fn [err]
+                     (println "Load hashtag failed:" err)
+                     (set-hashtag-loading?! false)))))

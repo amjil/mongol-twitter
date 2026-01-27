@@ -1,0 +1,75 @@
+(ns jirgee.services.auth
+  (:require [jirgee.services.base :refer [client set-auth-header!]]
+            [jirgee.services.storage :as storage]))
+
+;; --- Authentication Operations ---
+
+;; Login
+(defn login [{:keys [email password]} on-success on-error]
+  (-> (.post client "/auth/login"
+             .data {"email" email "password" password})
+      (.then (fn [resp]
+               (let [data (.-data resp)
+                     token (get data "token")
+                     user (get data "user")]
+                 ;; 1. Inject Token into Dio global config
+                 (set-auth-header! token)
+                 ;; 2. Save Token and user info to SharedPreferences
+                 (storage/save-auth-data! token user)
+                 ;; 3. Execute success callback, return user info
+                 (on-success data))))
+      (.catchError (fn [err]
+                     ;; Possible errors: 401 (wrong password), 404 (user not found)
+                     (on-error err)))))
+
+;; Register (supports passing Mongolian nickname)
+(defn register [user-params on-success on-error]
+  (let [payload {"user" user-params}] ; user-params should include email, password, nickname, bio, etc.
+    (-> (.post client "/auth/register" .data payload)
+        (.then (fn [resp]
+                 (let [data (.-data resp)
+                       token (get data "token")
+                       user (get data "user")]
+                   ;; 1. Inject Token into Dio global config
+                   (set-auth-header! token)
+                   ;; 2. Save Token and user info to SharedPreferences
+                   (storage/save-auth-data! token user)
+                   ;; 3. Execute success callback
+                   (on-success data))))
+        (.catchError on-error))))
+
+;; Logout
+(defn logout [on-success]
+  ;; 1. Clear token from Dio Header
+  (set-auth-header! nil)
+  ;; 2. Clear locally persisted token and user info from SharedPreferences
+  (-> (storage/clear-auth-data!)
+      (.then (fn [_] (on-success true)))
+      (.catchError (fn [err]
+                     (println "Failed to clear auth data:" err)
+                     (on-success true)))))
+
+;; --- Password Management ---
+
+;; Request password reset email
+(defn forgot-password [email on-success on-error]
+  (-> (.post client "/auth/forgot_password" .data {"email" email})
+      (.then (fn [resp] (on-success (.-data resp))))
+      (.catchError on-error)))
+
+;; Change password using reset token
+(defn reset-password [{:keys [token password password-confirmation]} on-success on-error]
+  (-> (.post client "/auth/reset_password"
+             .data {"token" token
+                    "password" password
+                    "password_confirmation" password-confirmation})
+      (.then (fn [resp] (on-success (.-data resp))))
+      (.catchError on-error)))
+
+;; Change password while logged in
+(defn change-password [{:keys [current-password new-password]} on-success on-error]
+  (-> (.post client "/auth/change_password"
+             .data {"current_password" current-password
+                    "new_password" new-password})
+      (.then (fn [resp] (on-success (.-data resp))))
+      (.catchError on-error)))

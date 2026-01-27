@@ -1,0 +1,113 @@
+(ns jirgee.components.post-comments-section
+  (:require [cljd.flutter :as f]
+            ["package:flutter/material.dart" :as m]
+            ["package:mongol/mongol.dart" :as mgl]
+            [jirgee.services.comment :as comment-service]
+            ["dart:math" :as math]))
+
+(defn- comment-item [comment]
+  (let [user (get comment "user")
+        display-name (get user "display_name")
+        avatar-url (get user "avatar_url")
+        content (get comment "content")]
+    (m/Padding
+     .padding (m/EdgeInsets.only .right 40.0 .top 12.0)
+     .child (m/Row
+             .crossAxisAlignment m/CrossAxisAlignment.start
+             .children
+             [(m/Column
+               .children
+               [(m/CircleAvatar .radius 18.0 .backgroundImage (m/NetworkImage avatar-url))
+                (m/SizedBox .height 12.0)
+                (mgl/MongolText display-name
+                                .style (m/TextStyle .fontSize 12.0 .color m/Colors.black38))])
+              (m/SizedBox .width 16.0)
+              (mgl/MongolText content
+                              .style (m/TextStyle .fontSize 16.0 .height 1.6 .color (m/Color 0xFF444444)))]))))
+
+(defn post-comments-section [post-id]
+  ;; 1. Define atom in outer let of f/widget
+  (let [state (atom {:comments [] :offset 0 :has-more true :loading false :triggered false})]
+    (f/widget
+     :get {{{:keys [height]} .-size} m/MediaQuery}
+     :watch [{:keys [comments has-more loading triggered offset]} state]
+
+     :let [load-fn!
+           (fn []
+             (when (and has-more (not loading))
+               (swap! state assoc :loading true :triggered true)
+               (-> (comment-service/fetch-comments {:post-id post-id :offset offset})
+                   (.then (fn [data]
+                            (let [new-comments (get data "comments")
+                                  meta (get data "meta")
+                                  ;; Update based on backend returned has_more
+                                  next-has-more (get meta "has_more")]
+                              (swap! state (fn [curr]
+                                             (-> curr
+                                                 (update :comments into new-comments)
+                                                 (assoc :offset (+ (get curr :offset) (count new-comments)))
+                                                 (assoc :has-more next-has-more)
+                                                 (assoc :loading false))))))))))]
+
+     (if (not triggered)
+       ;; --- Initial state ---
+       (m/GestureDetector
+        .onTap load-fn!
+        .child (m/Container
+                .width 160.0
+                .alignment m/Alignment.center
+                .child (m/Column
+                        .mainAxisSize m/MainAxisSize.min
+                        .children
+                        [(m/Icon m/Icons.chat_bubble_outline .color m/Colors.black26 .size 28.0)
+                         (m/SizedBox .height 12.0)
+                         (mgl/MongolText "ᠰᠡᠳᠬᠢᠭᠳᠡᠯ ᠦᠵᠡᠬᠦ" .style (m/TextStyle .fontSize 14.0 .color m/Colors.black26))])))
+
+       ;; --- Expanded state ---
+       (m/Row
+        .crossAxisAlignment m/CrossAxisAlignment.start
+        .children
+        [(m/SizedBox .width 60.0)
+         (m/Padding
+          .padding (m/EdgeInsets.only .top 12.0)
+          .child
+          (mgl/MongolText "ᠰᠡᠳᠬᠢᠭᠳᠡᠯ"
+                          .style (m/TextStyle .fontSize 14.0 .color m/Colors.black26 .fontWeight m/FontWeight.bold)))
+         (m/SizedBox .width 32.0)
+
+         (m/ConstrainedBox
+          .constraints (m/BoxConstraints .maxHeight (* height 0.65))
+          .child (m/ListView.builder
+                  .scrollDirection m/Axis.horizontal
+                  .shrinkWrap true
+                  .physics (m/ClampingScrollPhysics.)
+                  ;; Even if no more, we add one index to show "end" marker
+                  .itemCount (+ (count comments) 1)
+                  .itemBuilder
+                  (fn [ctx idx]
+                    (if (< idx (count comments))
+                      (comment-item (nth comments idx))
+                      ;; --- List end logic ---
+                      (if has-more
+                        ;; Case A: more available, show sentinel and trigger load
+                        (f/widget
+                         :managed [_ (do (load-fn!) (reify m/Disposable (dispose [_])))]
+                         (m/Container
+                          .width 100.0
+                          .alignment m/Alignment.center
+                          .child (m/SizedBox .width 20.0 .height 20.0
+                                             .child (m/CircularProgressIndicator
+                                                     .strokeWidth 1.5
+                                                     .valueColor (m/AlwaysStoppedAnimation. m/Colors.black12)))))
+                        ;; Case B: all loaded, show an elegant end point
+                        (m/Container
+                         .width 100.0
+                         .alignment m/Alignment.center
+                         .child (m/Column
+                                 .mainAxisSize m/MainAxisSize.min
+                                 .children
+                                 [(m/Container .width 4.0 .height 4.0
+                                               .decoration (m/BoxDecoration .color m/Colors.black12 .shape m/BoxShape.circle))
+                                  (m/SizedBox .height 16.0)
+                                  (mgl/MongolText "ᠪᠡᠷᠡᠪ" ;; Mongolian: end/finish
+                                                  .style (m/TextStyle .fontSize 12.0 .color m/Colors.black12))])))))))])))))

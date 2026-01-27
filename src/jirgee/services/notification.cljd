@@ -1,0 +1,149 @@
+(ns jirgee.services.notification
+  (:require [cljd.flutter :as f]
+            ["package:flutter/material.dart" :as m]
+            ["package:flutter_local_notifications/flutter_local_notifications.dart" :as lnc]
+            ["package:firebase_messaging/firebase_messaging.dart" :as fcm]
+            ["package:flutter_background_service/flutter_background_service.dart" :as fbs]
+            [jirgee.services.websocket :as ws]
+            [jirgee.services.chat :as chat-service]
+            [jirgee.services.base :refer [client]]
+            [jirgee.router :as router]
+            ["dart:io" :as io]
+            ["dart:core" :as dc]
+            ["dart:convert" :as convert]
+            ["dart:async" :as async]
+            ["dart:ui" :as ui]))
+
+;; =============================================================================
+;; 1. Global Configuration & State
+;; =============================================================================
+
+(defonce ^:private local-notifications (lnc/FlutterLocalNotificationsPlugin.))
+
+;; Show local notification (Payload contains business data for tap navigation)
+(defn show-local-notification [title body data]
+  (let [android-details (lnc/AndroidNotificationDetails.
+                         "jirgee_chat" "ᠵᠢᠷᠭᠡ ᠴᠠᠲ" ;; "Jirgee Chat"
+                         .importance lnc/Importance.max
+                         .priority lnc/Priority.high
+                         .showWhen true)
+        details (lnc/NotificationDetails. .android android-details)]
+    (.show local-notifications
+           (hash (str (dc/DateTime.now)))
+           title
+           body
+           details
+           .payload (convert/jsonEncode data))))
+
+;; =============================================================================
+;; 2. Parse Payload and Navigate
+;; =============================================================================
+
+(defn- handle-notification-tap [^lnc/NotificationResponse response]
+  (let [payload-str (.-payload response)]
+    (when (and payload-str (not (empty? payload-str)))
+      (try
+        (let [data (convert/jsonDecode payload-str)
+              type (get data "type")
+              sender-id (get data "sender_id")]
+          (println "🖱️ User tapped notification, executing navigation:" data)
+          (case type
+            "chat" (router/push-to-chat sender-id)
+            (println "Unknown notification type")))
+        (catch Exception e (println "Payload parsing failed:" e))))))
+
+;; =============================================================================
+;; 3. WebSocket Reconnection Logic (Exponential Backoff)
+;; =============================================================================
+
+(declare connect-with-retry!)
+
+(defn- start-reconnect-timer [retry-count]
+  (let [delay (min 60 (Math/pow 2 retry-count))]
+    (async/Timer. (dc/Duration. .seconds (int delay))
+                  #(connect-with-retry! (inc retry-count)))))
+
+(defn- connect-with-retry! [retry-count]
+  (when-not (ws/connected?)
+    (ws/connect!
+     {:on-message (fn [msg]
+                    ;; Only show notification when in background
+                    (chat-service/save-message-to-db! msg)
+                    (show-local-notification (get msg "sender_name")
+                                             (get msg "content")
+                                             (assoc msg "type" "chat")))
+      :on-close (fn [] (start-reconnect-timer retry-count))})))
+
+;; =============================================================================
+;; 4. Android Background Service Entry (Running in a separate Isolate)
+;; =============================================================================
+
+(defn on-bg-start [^fbs/ServiceInstance service]
+  (ui/DartPluginRegistrant.ensureInitialized)
+
+  (when (instance? fbs/AndroidServiceInstance service)
+    (.setAsForegroundService ^fbs/AndroidServiceInstance service)
+
+    ;; Background persistent WS connection
+    (connect-with-retry! 0)
+
+    (.on service "stopService")
+    (.listen (fn [_] (ws/disconnect!) (.stopSelf service)))))
+
+;; =============================================================================
+;; 5. FCM Logic
+;; =============================================================================
+
+(defn- setup-fcm! []
+  (let [messaging (fcm/FirebaseMessaging.instance)]
+    (-> (.getToken messaging)
+        (.then (fn [token]
+                 (when token
+                   (.post client "/user/update_fcm_token" .data {"token" token})))))
+
+    (fcm/FirebaseMessaging.onMessage.listen
+     (fn [^fcm/RemoteMessage message]
+       ;; If WS is connected, ignore redundant FCM
+       (when-not (ws/connected?)
+         (let [notif (.-notification message)
+               data (.-data message)]
+           (show-local-notification (.-title notif) (.-body notif) (assoc data "type" "chat"))))))))
+
+;; =============================================================================
+;; 6. Unified Initialization
+;; =============================================================================
+
+(defn init! []
+  ;; A. Local notification initialization
+  (let [init-settings (lnc/InitializationSettings.
+                       .android (lnc/AndroidInitializationSettings. "@mipmap/ic_launcher")
+                       .iOS (lnc/DarwinInitializationSettings.))]
+    (.initialize local-notifications
+                 init-settings
+                 .onDidReceiveNotificationResponse handle-notification-tap))
+
+  ;; B. Platform-specific background service startup
+  (if (io/Platform.isAndroid)
+    (let [service (fbs/FlutterBackgroundService.)]
+      (.configure service
+                  .android (fbs/AndroidConfiguration.
+                            .onStart on-bg-start
+                            .autoStart true
+                            .isForegroundMode true
+                            .initialNotificationTitle "ᠵᠢᠷᠭᠡ ᠠᠵᠢᠯᠯᠠᠵᠤ ᠪᠠᠶᠢᠨᠠ"
+                            .initialNotificationContent "ᠮᠡᠳᠡᠭᠳᠡᠯ ᠦᠢᠯᠡᠴᠢᠯᠡᠭᠡ ᠢᠳᠡᠪᠬᠢᠲᠡᠢ"
+                            .foregroundServiceNotificationId 888)
+                  .ios (fbs/IosConfiguration. .onForeground (fn [_] nil) .onBackground (fn [_] true))))
+    (println "🍏 iOS: Use standard FCM wake"))
+
+  ;; C. Offline launch check (handle app process killed and launched via notification tap)
+  (-> (.getNotificationAppLaunchDetails local-notifications)
+      (.then (fn [^lnc/NotificationAppLaunchDetails? details]
+               (when (and details (.-didNotificationLaunchApp details))
+                 (let [resp (.-notificationResponse details)]
+                   (when resp
+                     (async/Future.delayed (dc/Duration. .milliseconds 800)
+                                           #(handle-notification-tap resp))))))))
+
+  ;; D. Enable FCM listener
+  (setup-fcm!))

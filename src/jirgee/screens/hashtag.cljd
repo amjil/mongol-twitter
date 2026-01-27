@@ -1,0 +1,96 @@
+(ns jirgee.screens.hashtag
+  (:require [cljd.flutter :as f]
+            ["package:flutter/material.dart" :as m]
+            ["package:mongol/mongol.dart" :as mgl]
+            [components.app-bar :refer [mongol-side-layout]]
+            [jirgee.services.hashtag :as hashtag-service]
+            [jirgee.state :refer [hashtag-state-atom
+                                  hashtag-posts-state-atom
+                                  hashtag-loading?-atom]]
+            [pull-to-refresh.refresh :refer [horizontal-refresh]]))
+
+(defn- post-item [post]
+  (f/widget
+   :context ctx
+   :get {{{:flds [surfaceVariant onSurface]} .-colorScheme
+          {:flds [bodyMedium titleSmall]} .-textTheme} m/Theme}
+   :let [content (get post "content" "")
+         user (get post "user" {})
+         username (get user "username" "")
+         avatar-url (get user "avatar_url")]
+   (m/Card
+    .margin (m/EdgeInsets.symmetric .vertical 4.0 .horizontal 12.0)
+    .child
+    (m/Padding
+     .padding (m/EdgeInsets.all 12.0)
+     .child
+     (m/Row
+      .crossAxisAlignment m/CrossAxisAlignment.start
+      .children
+      [(m/CircleAvatar
+        .backgroundImage (when avatar-url (m/NetworkImage avatar-url))
+        .child (if-not avatar-url (m/Icon m/Icons.person) (m/SizedBox)))
+       (m/SizedBox .width 12.0)
+       (m/Expanded
+        .child
+        (m/Column
+         .crossAxisAlignment m/CrossAxisAlignment.start
+         .children
+         [(mgl/MongolText username .style (.copyWith titleSmall .fontWeight m/FontWeight.bold))
+          (m/SizedBox .height 8.0)
+          (mgl/MongolText content .style bodyMedium .maxLines 3)]))])))))
+
+(defn hashtag-screen [{:keys [hashtag-name]}]
+  (f/widget
+   :context ctx
+   :watch [hashtag hashtag-state-atom
+           posts hashtag-posts-state-atom
+           is-loading? hashtag-loading?-atom]
+   :get {{{:flds [surface primary]} .-colorScheme} m/Theme}
+   :let [load-data! #(hashtag-service/load-hashtag-data! hashtag-name)]
+   
+   (mongol-side-layout
+    .title (str "#" hashtag-name)
+    .min-width 70.0
+    .body
+    (m/Scaffold
+     .backgroundColor surface
+     .body
+     (cond
+       is-loading?
+       (m/Center .child (m/CircularProgressIndicator))
+       
+       (nil? hashtag)
+       (m/Center .child (mgl/MongolText "ᠬᠣᠭᠣᠰᠤᠨ"))
+       
+       :else
+       (m/Column
+        .children
+        [;; Tag info
+         (m/Padding
+          .padding (m/EdgeInsets.all 16.0)
+          .child
+          (m/Row
+           .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+           .children
+           [(m/Column
+             .crossAxisAlignment m/CrossAxisAlignment.start
+             .children
+             [(mgl/MongolText (str "#" hashtag-name) .style (.copyWith (.-headlineSmall m/TextTheme) .fontWeight m/FontWeight.bold))
+              (m/SizedBox .height 8.0)
+              (m/Text (str (get hashtag "posts_count" 0) " ᠵᠢᠷᠭᠡᠯ") .style (.-bodyMedium m/TextTheme))])
+            (m/Icon m/Icons.tag .size 32.0 .color primary)]))
+         (m/Divider)
+         
+         ;; Post list
+         (m/Expanded
+          .child
+          (if (empty? posts)
+            (m/Center .child (mgl/MongolText "ᠬᠣᠭᠣᠰᠤᠨ"))
+            (horizontal-refresh
+             {:on-refresh (fn [] (load-data!))
+              :item-count (count posts)
+              :item-builder (fn [_ idx]
+                             (post-item (nth posts idx)))
+              :background-color surface
+              :reverse false})))]))))))

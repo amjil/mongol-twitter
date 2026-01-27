@@ -1,0 +1,28 @@
+(ns jirgee.components.like-anim-heart
+  (:require [cljd.flutter :as f]
+            ["package:flutter/material.dart" :as m]))
+
+(defn like-anim-heart [{:keys [on-finished]}]
+  (f/widget
+   (m/TweenAnimationBuilder
+    .tween (m/Tween .begin 0.0 .end 1.0)
+    .duration (m/Duration .milliseconds 600)
+    .onEnd on-finished
+    .builder (fn [ctx v child]
+               ;; v changes from 0.0 to 1.0
+               ;; Custom interpolation logic:
+               ;; Scale: from 0.6 to 1.6 -> 0.6 + (1.6 - 0.6) * v
+               (let [s (+ 0.6 (* 1.0 v))
+                     ;; Opacity: first 70% stays at 1.0, last 30% quickly fades
+                     o (if (< v 0.7)
+                         1.0
+                         (/ (- 1.0 v) 0.3))]
+                 (m/Opacity
+                  .opacity o
+                  .child (m/Transform.scale
+                          .scale s
+                          .child (m/Icon m/Icons.favorite
+                                         .color m/Colors.redAccent
+                                         .size 80.0
+                                         .shadows [(m/Shadow .blurRadius 15.0
+                                                             .color (m/Color 0x44000000))]))))))))

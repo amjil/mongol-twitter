@@ -1,0 +1,94 @@
+(ns jirgee.components.post-image-gallery
+  (:require [cljd.flutter :as f]
+            ["package:flutter/material.dart" :as m]
+            ["package:photo_view/photo_view.dart" :as pv]
+            ["package:photo_view/photo_view_gallery.dart" :as pvg]
+            ["dart:math" :as math]))
+
+;; --- Full-screen browser remains unchanged ---
+(defn- open-gallery [ctx urls initial-index]
+  (m/showDialog
+    .context ctx
+    .builder 
+    (fn [ctx]
+      (m/Scaffold
+        .backgroundColor m/Colors.black
+        .body (m/Stack
+                .children
+                [(pvg/PhotoViewGallery.builder
+                   .itemCount (count urls)
+                   .builder (fn [_ idx]
+                              (pvg/PhotoViewGalleryPageOptions.
+                                .imageProvider (m/NetworkImage (nth urls idx))
+                                .minScale pv/PhotoViewComputedScale.contained))
+                   .pageController (m/PageController. .initialPage initial-index))
+                 (m/Positioned
+                   .top 40.0 .right 20.0
+                   .child (m/IconButton
+                            .icon (m/Icon m/Icons.close .color m/Colors.white .size 30.0)
+                            .onPressed #(m/Navigator.pop ctx)))])))))
+
+;; --- Cell: with fixed height ---
+(defn- thumb-item [url idx all-urls ctx height]
+  (m/GestureDetector
+    .onTap #(open-gallery ctx all-urls idx)
+    .child (m/Container
+             .height height
+             .clipBehavior m/Clip.antiAlias
+             .decoration (m/BoxDecoration .borderRadius (m/BorderRadius.circular 4.0))
+             .child (m/Image.network url .fit m/BoxFit.cover))))
+
+;; --- Core gallery component ---
+(defn post-image-gallery [urls]
+  (f/widget
+    :context ctx
+    :get {{{:keys [width]} .-size} m/MediaQuery}
+    :let [total-width (* width 0.5)
+          total-height 420.0 ;; Set fixed total height
+          spacing 4.0
+          ;; Calculate: large image height takes half, bottom column images take half
+          top-height (/ (- total-height spacing) 2)
+          ;; In bottom column images, if there are 4, each image's height
+          row-item-height (/ (- top-height (* 3 spacing)) 4)]
+    (m/Container
+      .width total-width
+      .height total-height
+      .margin (m/EdgeInsets.only .right 20.0)
+      .child (m/Column
+               .children
+               (let [cnt (count urls)]
+                 (cond
+                   ;; Only 1 image: take full height
+                   (= cnt 1) [(thumb-item (first urls) 0 urls ctx total-height)]
+                   
+                   ;; Multiple images: 1 large image + bottom double column
+                   (> cnt 1)
+                   [(thumb-item (first urls) 0 urls ctx top-height)
+                    (m/SizedBox .height spacing)
+                    (let [remaining (rest urls)
+                          half (math/ceil (/ (count remaining) 2))
+                          left-col (take half remaining)
+                          right-col (drop half remaining)]
+                      (m/Expanded ;; Automatically occupy remaining bottom half space
+                        .child (m/Row
+                                 .crossAxisAlignment m/CrossAxisAlignment.start
+                                 .children
+                                 [(m/Expanded
+                                    .child (m/Column
+                                             .children (map-indexed 
+                                                         (fn [i url] 
+                                                           (m/Padding 
+                                                             .padding (m/EdgeInsets.only .bottom (if (< i (dec (count left-col))) spacing 0))
+                                                             .child
+                                                             (m/Expanded .child (thumb-item url (inc i) urls ctx nil))))
+                                                         left-col)))
+                                  (m/SizedBox .width spacing)
+                                  (m/Expanded
+                                    .child (m/Column
+                                             .children (map-indexed 
+                                                         (fn [i url] 
+                                                           (m/Padding 
+                                                             .padding (m/EdgeInsets.only .bottom (if (< i (dec (count right-col))) spacing 0))
+                                                             .child
+                                                             (m/Expanded .child (thumb-item url (+ i 1 (count left-col)) urls ctx nil))))
+                                                         right-col)))])))]))))))

@@ -1,0 +1,150 @@
+(ns jirgee.screens.report
+  (:require [cljd.flutter :as f]
+            ["package:flutter/material.dart" :as m]
+            ["package:mongol/mongol.dart" :as mgl]
+            [components.app-bar :refer [mongol-side-layout]]
+            [components.dialog :as dialog]
+            [components.text-field :as text-field]
+            [jirgee.services.report :as report-service]
+            [jirgee.state :refer [reports-state-atom
+                                  reports-loading?-atom
+                                  reports-selected-reason-atom
+                                  reports-create-desc-ctrl-atom
+                                  set-reports-state!
+                                  set-reports-loading?!
+                                  set-reports-selected-reason!
+                                  set-reports-create-desc-ctrl!]]
+            [pull-to-refresh.refresh :refer [horizontal-refresh]]))
+
+(defn- report-item [report]
+  (f/widget
+   :context ctx
+   :get {{{:flds [surfaceVariant onSurface primary]} .-colorScheme
+          {:flds [titleMedium bodySmall]} .-textTheme} m/Theme}
+   :let [reason (get report "reason" "")
+         description (get report "description" "")
+         status (get report "status" "")
+         reporter (get report "reporter" {})
+         reporter-name (get reporter "username" "")]
+   (m/Card
+    .margin (m/EdgeInsets.symmetric .vertical 4.0 .horizontal 12.0)
+    .child
+    (m/Padding
+     .padding (m/EdgeInsets.all 12.0)
+     .child
+     (m/Column
+      .crossAxisAlignment m/CrossAxisAlignment.start
+      .children
+      [(m/Row
+        .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+        .children
+        [(mgl/MongolText reporter-name .style titleMedium)
+         (m/Chip
+          .label (m/Text status)
+          .backgroundColor (case status
+                            "pending" surfaceVariant
+                            "resolved" primary
+                            "dismissed" surfaceVariant
+                            surfaceVariant))])
+       (m/SizedBox .height 8.0)
+       (mgl/MongolText reason .style bodySmall)
+       (when (not (empty? description))
+         [(m/SizedBox .height 8.0)
+          (mgl/MongolText description .style bodySmall)])])))))
+
+(defn report-screen [{:keys [reportable-type reportable-id]}]
+  (f/widget
+   :context ctx
+   :watch [reports reports-state-atom
+           is-loading? reports-loading?-atom
+           reason reports-selected-reason-atom
+           desc-ctrl reports-create-desc-ctrl-atom]
+   :get {{{:flds [surface primary]} .-colorScheme} m/Theme}
+   :let [load-reports! (fn []
+                        (set-reports-loading?! true)
+                        (-> (report-service/get-reports {})
+                            (.then (fn [data]
+                                    (set-reports-state! (get data "reports" []))
+                                    (set-reports-loading?! false)))
+                            (.catchError (fn [err]
+                                          (println "Load reports failed:" err)
+                                          (set-reports-loading?! false)))))
+         submit-report! (fn []
+                         (let [description (when desc-ctrl (.-text desc-ctrl))]
+                           (-> (report-service/create-report
+                                {:reportable-type reportable-type
+                                 :reportable-id reportable-id
+                                 :reason reason
+                                 :description description})
+                               (.then (fn [report-data]
+                                       (set-reports-create-desc-ctrl! (m/TextEditingController.))
+                                       (m/Navigator.pop ctx)
+                                       (load-reports!)))
+                               (.catchError (fn [err] (println "Submit report failed:" err))))))]
+   
+   (mongol-side-layout
+    .title "ᠮᠡᠳᠡᠭᠡᠯ"
+    .min-width 70.0
+    .body
+    (m/Scaffold
+     .backgroundColor surface
+     .body
+     (if reportable-type
+       ;; Create report form
+       (m/Padding
+        .padding (m/EdgeInsets.all 16.0)
+        .child
+        (m/Column
+         .children
+         [(mgl/MongolText "ᠮᠡᠳᠡᠭᠡᠯ ᠤᠨ ᠰᠠᠪ" .style (.copyWith (.-headlineSmall m/TextTheme) .fontWeight m/FontWeight.bold))
+          (m/SizedBox .height 24.0)
+          (mgl/MongolText "ᠰᠠᠪ" .style (.-titleMedium m/TextTheme))
+          (m/SizedBox .height 8.0)
+          (m/Column
+           .children
+           [(m/RadioListTile
+             .title (mgl/MongolText "ᠬᠦᠮᠦᠨ ᠤᠨ ᠬᠦᠮᠦᠨ")
+             .value "spam"
+             .groupValue reason
+             .onChanged #(set-reports-selected-reason! %))
+            (m/RadioListTile
+             .title (mgl/MongolText "ᠬᠠᠷᠢᠴᠠᠯ")
+             .value "harassment"
+             .groupValue reason
+             .onChanged #(set-reports-selected-reason! %))
+            (m/RadioListTile
+             .title (mgl/MongolText "ᠲᠡᠭᠦᠨ ᠦᠭᠡᠢ")
+             .value "inappropriate"
+             .groupValue reason
+             .onChanged #(set-reports-selected-reason! %))
+            (m/RadioListTile
+             .title (mgl/MongolText "ᠪᠤᠰᠤ")
+             .value "other"
+             .groupValue reason
+             .onChanged #(set-reports-selected-reason! %))])
+          (m/SizedBox .height 24.0)
+          (mgl/MongolText "ᠲᠠᠢᠯᠪᠠᠷ" .style (.-titleMedium m/TextTheme))
+          (m/SizedBox .height 8.0)
+          (text-field/mongol-text-field
+           {:controller desc-ctrl
+            :hint "ᠲᠠᠢᠯᠪᠠᠷ ᠪᠢᠴᠢᠬᠦ"})
+          (m/SizedBox .height 24.0)
+          (m/FilledButton
+           .onPressed submit-report!
+           .child (m/Text "ᠮᠡᠳᠡᠭᠡᠯ"))]))
+       ;; Show report list
+       (cond
+         is-loading?
+         (m/Center .child (m/CircularProgressIndicator))
+         
+         (empty? reports)
+         (m/Center .child (mgl/MongolText "ᠬᠣᠭᠣᠰᠤᠨ"))
+         
+         :else
+         (horizontal-refresh
+          {:on-refresh (fn [] (load-reports!))
+           :item-count (count reports)
+           :item-builder (fn [_ idx]
+                          (report-item (nth reports idx)))
+           :background-color surface
+           :reverse false})))))))

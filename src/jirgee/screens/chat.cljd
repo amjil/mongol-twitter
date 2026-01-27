@@ -1,0 +1,69 @@
+(ns jirgee.screens.chat
+  (:require [cljd.flutter :as f]
+            ["package:flutter/material.dart" :as m]
+            ["package:mongol/mongol.dart" :as mgl]
+            [jirgee.services.chat :as chat-service]
+            [jirgee.components.chat-bubble :refer [chat-bubble]]
+            [components.text-field :refer [text-field]]))
+
+(defn chat-screen [{:keys [peer-id peer-name my-id]}]
+  (f/widget
+   :get {{{:keys [height]} .-size} m/MediaQuery}
+   :managed [input-ctrl (m/TextEditingController.)]
+   ;; 1. Watch database stream, UI auto-redraws when local or sync updates occur
+   :watch [messages (chat-service/watch-messages peer-id)]
+   (m/Scaffold
+    .backgroundColor m/Colors.white
+    .appBar (m/AppBar
+             .backgroundColor m/Colors.white
+             .elevation 0
+             .centerTitle true
+             .title (mgl/MongolText peer-name .style (m/TextStyle .color m/Colors.black87 .fontWeight m/FontWeight.bold)))
+    .body
+    (m/Column
+     .children
+     [(m/Expanded
+       .child (m/Container
+               .color (m/Color 0xFFF8F8F8)
+               ;; Core: Horizontal scroll carries vertical bubbles
+               .child (m/ListView.builder
+                       .padding (m/EdgeInsets.symmetric .vertical 16.0)
+                       .scrollDirection m/Axis.horizontal
+                       .reverse true ;; New messages enter from the right
+                       .itemCount (count messages)
+                       .itemBuilder (fn [ctx idx]
+                                      (let [msg (nth messages idx)]
+                                        (chat-bubble msg (= (.-senderId msg) my-id)))))))
+
+      ;; --- Vertical input area ---
+      (m/SafeArea
+       .child (m/Container
+               .padding (m/EdgeInsets.all 12.0)
+               .decoration (m/BoxDecoration
+                            .color m/Colors.white
+                            .border (m/Border .top (m/BorderSide .color m/Colors.black12)))
+               .child (m/Row
+                       .crossAxisAlignment m/CrossAxisAlignment.end
+                       .children
+                       [(m/Expanded
+                         .child (m/Container
+                                 .constraints (m/BoxConstraints .maxHeight 120.0)
+                                 .decoration (m/BoxDecoration
+                                              .color (m/Color 0xFFF2F2F2)
+                                              .borderRadius (m/BorderRadius.circular 20.0))
+                                 .child (text-field {:controller input-ctrl
+                                                     :hint "ᠪᠢᠴᠢᠬᠦ..."
+                                                     :max-lines nil
+                                                     :decoration (m/InputDecoration
+                                                                  .border m/InputBorder.none
+                                                                  .contentPadding (m/EdgeInsets.all 12.0))})))
+                        (m/SizedBox .width 8.0)
+                        (m/IconButton
+                         .icon (m/Icon m/Icons.send_rounded .color m/Colors.blueAccent)
+                         .onPressed (fn []
+                                      (let [text (.text input-ctrl)]
+                                        (when-not (empty? text)
+                                          (chat-service/send-message
+                                           {:receiver-id peer-id :content text}
+                                           (fn [_] (.clear input-ctrl))
+                                           (fn [e] (println "Send failed: " e)))))))])))]))))

@@ -1,0 +1,59 @@
+(ns jirgee.services.base
+  (:require ["package:dio/dio.dart" :as dio]
+            ["package:mongol_jirgee/database.dart" :as db]
+            ["dart:core" :as dc]
+            [virtual-keyboard.options :as keyboard-options]
+            [virtual-keyboard.input-control :as control]
+            [virtual-keyboard.keyboard-candidates :as kc]
+            [virtual-keyboard.zip-utils :as zip-utils]
+            [virtual-keyboard.fst-reader :as fst-reader]
+            [jirgee.state :refer [set-database!] :as state]))
+
+;; Re-export database so other files can import from base.cljd
+(def database state/database)
+
+;; --- Network Configuration ---
+
+(def options
+  (dio/BaseOptions
+   .baseUrl "http://localhost:4000/api/v1"
+   .connectTimeout (dc/Duration .seconds 10)
+   .receiveTimeout (dc/Duration .seconds 10)
+   .headers {"Content-Type" "application/json"}))
+
+;; Global Dio instance
+(def client (dio/Dio options))
+
+;; Utility function to set authentication token
+(defn set-auth-header! [token]
+  (set! (.-headers (.-options client))
+        (merge (.-headers (.-options client))
+               {"Authorization" (str "Bearer " token)})))
+
+;; --- Database Configuration ---
+;; Database state has been moved to jirgee.state
+
+;; Function to initialize database
+;; Called at startup in main.cljd
+(defn init! [on-success on-error]
+  (-> (db/initDriftDatabase)
+      (.then (fn [db-instance]
+               (set-database! db-instance)
+               (on-success db-instance)))
+      (.catchError (fn [err]
+                     (if on-error
+                       (on-error err)
+                       (println "Database initialization failed: " err)))))
+  (control/set-control)
+  (zip-utils/read-json-from-asset-zip kc/next "assets/next.zip")
+  (fst-reader/ensure-loaded))
+
+;; --- Common Utilities ---
+
+;; Check if database is ready
+(defn db-ready? []
+  (not (nil? @database)))
+
+;; Get current database instance
+(defn get-db []
+  @database)

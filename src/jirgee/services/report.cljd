@@ -1,0 +1,44 @@
+(ns jirgee.services.report
+  (:require [jirgee.services.base :refer [client]]))
+
+;; =============================================================================
+;; Report Service
+;; =============================================================================
+
+;; Get reports list
+(defn get-reports [{:keys [limit offset]
+                   :or {limit 20 offset 0}}]
+  (-> (.get client "/reports"
+            .queryParameters {"limit" limit "offset" offset})
+      (.then (fn [resp] (.-data resp)))
+      (.catchError (fn [err]
+                     (println "Get reports failed:" err)
+                     {"reports" [] "meta" {"count" 0}}))))
+
+;; Create report
+(defn create-report [{:keys [reportable-type reportable-id reason description]}]
+  (-> (.post client "/reports"
+             .data {"reportable_type" reportable-type
+                   "reportable_id" reportable-id
+                   "reason" reason
+                   "description" description})
+      (.then (fn [resp] (get (.-data resp) "report")))
+      (.catchError (fn [err] (println "Create report failed:" err)))))
+
+;; Get report details
+(defn get-report [report-id]
+  (-> (.get client (str "/reports/" report-id))
+      (.then (fn [resp] (get (.-data resp) "report")))
+      (.catchError (fn [err]
+                     (println "Get report failed:" err)
+                     nil))))
+
+;; Check if already reported
+(defn is-reported [reportable-type reportable-id]
+  (-> (.get client "/reports/is_reported"
+            .queryParameters {"reportable_type" reportable-type
+                             "reportable_id" reportable-id})
+      (.then (fn [resp] (get (.-data resp) "is_reported" false)))
+      (.catchError (fn [err]
+                     (println "Check report status failed:" err)
+                     false))))

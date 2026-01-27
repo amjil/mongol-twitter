@@ -1,0 +1,90 @@
+(ns jirgee.components.post-actions
+  (:require [cljd.flutter :as f]
+            ["package:flutter/material.dart" :as m]
+            ["package:mongol/mongol.dart" :as mgl]
+            ["dart:core" :as dc]
+            ["dart:async" :as async]
+            [components.dialog :refer [vertical-custom-dialog]] ;; Import the provided component
+            [components.tokens :as tokens]))
+
+;; Extract single action button with built-in animation logic
+(defn- action-item [{:keys [icon active-icon count color active-color is-active on-tap]}]
+  (f/widget
+   :let [scale (atom 1.0)] ;; Used to control scale animation
+   (m/GestureDetector
+    .behavior m/HitTestBehavior.opaque
+    .onTap (fn []
+             ;; Simple scale feedback animation
+             (reset! scale 1.3)
+             (await (async/Future.delayed (dc/Duration .milliseconds 100)))
+             (reset! scale 1.0)
+             (on-tap))
+    .child
+    (m/Container ;; Add container
+     .padding (m/EdgeInsets.symmetric .vertical 4.0 .horizontal 8.0)
+     .child
+     (m/Column
+      .mainAxisSize m/MainAxisSize.min
+      .children
+      [(f/widget
+        :watch [s scale]
+        (m/Transform.scale
+         .scale s
+         .child (m/Icon (if is-active active-icon icon)
+                        .color (if is-active active-color color)
+                        .size 26.0)))
+       (m/SizedBox .height 4.0)
+       (m/Text (str count)
+               .style (m/TextStyle .fontSize 12.0
+                                   .color m/Colors.black54
+                                   .fontWeight m/FontWeight.w500))])))))
+
+
+;; --- Call the provided vertical dialog ---
+(defn- open-comment-dialog [ctx]
+  (m/showDialog
+    .context ctx
+    .builder
+    (fn [ctx]
+      (vertical-custom-dialog
+        {:title "ᠪᠢᠴᠢᠭᠡᠷᠡᠢ" ;; "Comment"
+         :body (m/SingleChildScrollView
+                 .child (mgl/MongolText "ᠪᠤᠰᠤᠳ ᠤᠨ ᠪᠢᠴᠢᠭᠡᠷᠡᠢ ᠨᠦᠭᠦᠳ..." ;; "Other's comment content..."
+                          .style (m/TextStyle .fontSize 16.0)))
+         :actions [(m/IconButton 
+                     .icon (m/Icon m/Icons.close) 
+                     .onPressed #(m/Navigator.pop ctx))
+                   (m/IconButton 
+                     .icon (m/Icon m/Icons.send .color m/Colors.blueAccent) 
+                     .onPressed #(println "Send comment"))]
+         :width-factor 0.9
+         :height-factor 0.7}))))
+
+(defn post-action-bar-vertical [{:keys [likes comments forwards is-liked on-like on-comment on-repost]}]
+  (f/widget
+   :context ctx
+   (m/Container
+    ;; Add subtle left border as boundary between content and action area
+    .decoration (m/BoxDecoration
+                 .border (m/Border .left (m/BorderSide .color m/Colors.black12 .width 0.5)))
+    .padding (m/EdgeInsets.only .left 12.0 .right 4.0)
+    .child
+    (m/Column
+     .mainAxisAlignment m/MainAxisAlignment.center ;; Center within card height
+     .mainAxisSize m/MainAxisSize.max
+     .children
+     [;; Like
+      (action-item {:icon m/Icons.favorite_border :active-icon m/Icons.favorite
+                    :count likes :is-active is-liked :on-tap (or on-like #()) :active-color m/Colors.redAccent})
+
+      (m/SizedBox .height 28.0)
+
+      ;; Comment
+      (action-item {:icon m/Icons.chat_bubble_outline :count comments
+                    :on-tap (or on-comment #(open-comment-dialog ctx))})
+
+      (m/SizedBox .height 28.0)
+
+      ;; Repost (use repost icon that better fits horizontal scroll logic)
+      (action-item {:icon m/Icons.repeat_rounded :count forwards
+                    :on-tap (or on-repost #()) :active-color m/Colors.greenAccent})]))))
