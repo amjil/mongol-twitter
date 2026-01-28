@@ -1,5 +1,6 @@
 (ns jirgee.router
   (:require ["package:flutter/material.dart" :as m]
+            [cljd.flutter :as f]
             [jirgee.screens.chat :refer [chat-screen]]
             [jirgee.screens.search :refer [search-screen]]
             [jirgee.screens.trending :refer [trending-screen]]
@@ -10,6 +11,7 @@
             [jirgee.screens.groups :refer [groups-screen]]
             [jirgee.screens.notifications :refer [notifications-screen]]
             [jirgee.screens.hashtag :refer [hashtag-screen]]
+            [jirgee.screens.register :refer [register-screen]]
             [jirgee.services.search :as search-service]
             [jirgee.services.trending :as trending-service]
             [jirgee.services.hashtag :as hashtag-service]
@@ -19,7 +21,11 @@
             [jirgee.services.mention :as mention-service]
             [jirgee.services.group :as group-service]
             [jirgee.services.base :refer [client]]
-            [jirgee.state :refer [search-history-atom
+            [jirgee.state :refer [
+                                  peer-id-atom
+                                  peer-name-atom
+                                  peer-my-id-atom
+                                  search-history-atom
                                   search-results-atom
                                   set-search-history!
                                   set-search-results!
@@ -32,6 +38,7 @@
                                   set-trending-hashtags-state!
                                   set-trending-loading?!
                                   hashtag-state-atom
+                                  hashtag-name-atom
                                   hashtag-posts-state-atom
                                   hashtag-loading?-atom
                                   set-hashtag-state!
@@ -48,6 +55,8 @@
                                   reports-state-atom
                                   reports-loading?-atom
                                   reports-create-desc-ctrl-atom
+                                  reportable-type-atom
+                                  reportable-id-atom
                                   set-reports-state!
                                   set-reports-loading?!
                                   set-reports-create-desc-ctrl!
@@ -73,16 +82,13 @@
                                   set-notifications-unread-count!]]))
 
 ;; Define global navigation key
-(defonce navigator-key (m/GlobalKey. .debugLabel "main-nav"))
+(defonce ^#/(m/GlobalKey m/NavigatorState) navigator-key (#/(m/GlobalKey m/NavigatorState)))
 
-(defn push-to-chat [user-id]
-  (let [state (.-currentState navigator-key)]
-    (when state
-      (.push state
-             (m/MaterialPageRoute.
-              .builder (fn [ctx] (chat-screen {:peer-id user-id
-                                               :peer-name user-id
-                                               :my-id "me"})))))))
+(defn push-to-chat [peer-id peer-name my-id]
+  (reset! peer-id-atom peer-id)
+  (reset! peer-name-atom peer-name)
+  (reset! peer-my-id-atom my-id)
+  (.pushNamed (.currentState navigator-key) "/chat"))
 
 ;; Navigate to search page
 (defn push-to-search [ctx]
@@ -92,9 +98,7 @@
     ;; If results are empty, initialize results
     (when (nil? results)
       (set-search-results! {"users" [] "posts" [] "groups" []}))
-    (.. m/Navigator (of ctx)
-        (push (m/MaterialPageRoute.
-               .builder (fn [_] (search-screen)))))))
+    (.pushNamed (.currentState navigator-key) "/search")))
 
 ;; Navigate to trending page
 (defn push-to-trending [ctx]
@@ -104,25 +108,24 @@
       (set-trending-loading?! true)
       (-> (trending-service/get-trending-posts {})
           (.then (fn [data]
-                  (set-trending-posts-state! data)
-                  (-> (trending-service/get-trending-users {})
-                      (.then (fn [user-data]
-                              (set-trending-users-state! user-data)
-                              (-> (hashtag-service/get-trending {})
-                                  (.then (fn [hashtag-data]
-                                          (set-trending-hashtags-state! (get hashtag-data "hashtags" []))
-                                          (set-trending-loading?! false)))
-                                  (.catchError (fn [err]
-                                                (println "Load hashtags failed:" err)
-                                                (set-trending-loading?! false))))))
-                      (.catchError (fn [err]
-                                    (println "Load users failed:" err)
-                                    (set-trending-loading?! false))))))
+                   (set-trending-posts-state! data)
+                   (-> (trending-service/get-trending-users {})
+                       (.then (fn [user-data]
+                                (set-trending-users-state! user-data)
+                                (-> (hashtag-service/get-trending {})
+                                    (.then (fn [hashtag-data]
+                                             (set-trending-hashtags-state! (get hashtag-data "hashtags" []))
+                                             (set-trending-loading?! false)))
+                                    (.catchError (fn [err]
+                                                   (println "Load hashtags failed:" err)
+                                                   (set-trending-loading?! false))))))
+                       (.catchError (fn [err]
+                                      (println "Load users failed:" err)
+                                      (set-trending-loading?! false))))))
           (.catchError (fn [err]
-                        (println "Load posts failed:" err)
-                        (set-trending-loading?! false)))))
-    (.. m/Navigator (of ctx)
-        (push (m/MaterialPageRoute .builder (fn [_] (trending-screen)))))))
+                         (println "Load posts failed:" err)
+                         (set-trending-loading?! false)))))
+    (.pushNamed (.currentState navigator-key) "/trending")))
 
 ;; Navigate to lists page
 (defn push-to-lists [ctx]
@@ -137,14 +140,12 @@
       (set-lists-loading?! true)
       (-> (list-service/get-lists)
           (.then (fn [data]
-                  (set-lists-state! data)
-                  (set-lists-loading?! false)))
+                   (set-lists-state! data)
+                   (set-lists-loading?! false)))
           (.catchError (fn [err]
-                        (println "Load lists failed:" err)
-                        (set-lists-loading?! false))))))
-  (.. m/Navigator (of ctx)
-      (push (m/MaterialPageRoute.
-             .builder (fn [_] (lists-screen))))))
+                         (println "Load lists failed:" err)
+                         (set-lists-loading?! false))))))
+  (.pushNamed (.currentState navigator-key) "/lists"))
 
 ;; Navigate to report page
 (defn push-to-report [ctx {:keys [reportable-type reportable-id]}]
@@ -157,15 +158,15 @@
       (set-reports-loading?! true)
       (-> (report-service/get-reports {})
           (.then (fn [data]
-                  (set-reports-state! (get data "reports" []))
-                  (set-reports-loading?! false)))
+                   (set-reports-state! (get data "reports" []))
+                   (set-reports-loading?! false)))
           (.catchError (fn [err]
-                        (println "Load reports failed:" err)
-                        (set-reports-loading?! false))))))
-  (.. m/Navigator (of ctx)
-      (push (m/MaterialPageRoute.
-             .builder (fn [_] (report-screen {:reportable-type reportable-type
-                                              :reportable-id reportable-id}))))))
+                         (println "Load reports failed:" err)
+                         (set-reports-loading?! false))))))
+  (reset! reportable-type-atom reportable-type)
+  (reset! reportable-id-atom reportable-id)
+
+  (.pushNamed (.currentState navigator-key) "/report"))
 
 ;; Navigate to bookmarks page
 (defn push-to-bookmarks [ctx]
@@ -180,9 +181,7 @@
           (.catchError (fn [err]
                         (println "Load bookmarks failed:" err)
                         (set-bookmarks-loading?! false))))))
-  (.. m/Navigator (of ctx)
-      (push (m/MaterialPageRoute.
-             .builder (fn [_] (bookmarks-screen))))))
+  (.pushNamed (.currentState navigator-key) "/bookmarks"))
 
 ;; Navigate to mentions page
 (defn push-to-mentions [ctx]
@@ -197,9 +196,7 @@
           (.catchError (fn [err]
                         (println "Load mentions failed:" err)
                         (set-mentions-loading?! false))))))
-  (.. m/Navigator (of ctx)
-      (push (m/MaterialPageRoute.
-             .builder (fn [_] (mentions-screen))))))
+  (.pushNamed (.currentState navigator-key) "/mentions"))
 
 ;; Navigate to groups page
 (defn push-to-groups [ctx]
@@ -209,14 +206,12 @@
       (set-groups-loading?! true)
       (-> (group-service/get-groups {:is-public @groups-filter-public?-atom})
           (.then (fn [data]
-                  (set-groups-state! data)
-                  (set-groups-loading?! false)))
+                   (set-groups-state! data)
+                   (set-groups-loading?! false)))
           (.catchError (fn [err]
-                        (println "Load groups failed:" err)
-                        (set-groups-loading?! false))))))
-  (.. m/Navigator (of ctx)
-      (push (m/MaterialPageRoute.
-             .builder (fn [_] (groups-screen))))))
+                         (println "Load groups failed:" err)
+                         (set-groups-loading?! false))))))
+  (.pushNamed (.currentState navigator-key) "/groups"))
 
 ;; Navigate to notifications page
 (defn push-to-notifications [ctx]
@@ -234,9 +229,7 @@
       (.then (fn [resp]
               (set-notifications-unread-count! (get (.-data resp) "unread_count" 0))))
       (.catchError (fn [err] (println "Load unread count failed:" err))))
-  (.. m/Navigator (of ctx)
-      (push (m/MaterialPageRoute.
-             .builder (fn [_] (notifications-screen))))))
+  (.pushNamed (.currentState navigator-key) "/notifications"))
 
 ;; Navigate to hashtag page
 (defn push-to-hashtag [ctx hashtag-name]
@@ -246,18 +239,21 @@
       (set-hashtag-loading?! true)
       (-> (hashtag-service/get-hashtag hashtag-name)
           (.then (fn [data]
-                  (set-hashtag-state! data)
-                  (when data
-                    (-> (hashtag-service/get-hashtag-posts hashtag-name {})
-                        (.then (fn [posts-data]
-                                (set-hashtag-posts-state! (get posts-data "posts" []))
-                                (set-hashtag-loading?! false)))
-                        (.catchError (fn [err]
-                                      (println "Load posts failed:" err)
-                                      (set-hashtag-loading?! false))))))
-          (.catchError (fn [err]
-                        (println "Load hashtag failed:" err)
-                        (set-hashtag-loading?! false))))))
-  (.. m/Navigator (of ctx)
-      (push (m/MaterialPageRoute.
-             .builder (fn [_] (hashtag-screen {:hashtag-name hashtag-name})))))))
+                   (set-hashtag-state! data)
+                   (when data
+                     (-> (hashtag-service/get-hashtag-posts hashtag-name {})
+                         (.then (fn [posts-data]
+                                  (set-hashtag-posts-state! (get posts-data "posts" []))
+                                  (set-hashtag-loading?! false)))
+                         (.catchError (fn [err]
+                                        (println "Load posts failed:" err)
+                                        (set-hashtag-loading?! false))))))
+                 (.catchError (fn [err]
+                                (println "Load hashtag failed:" err)
+                                (set-hashtag-loading?! false)))))))
+  (reset! hashtag-name-atom hashtag-name)
+  (.pushNamed (.currentState navigator-key) "/hashtag"))
+
+;; Navigate to register page
+(defn push-to-register [ctx]
+  (.pushNamed (.currentState navigator-key) "/register"))

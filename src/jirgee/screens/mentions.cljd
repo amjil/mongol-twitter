@@ -48,34 +48,34 @@
            is-loading? mentions-loading?-atom]
    :get {{{:flds [surface]} .-colorScheme} m/Theme}
    :let [load-mentions! (fn []
-                         (set-mentions-loading?! true)
-                         (-> (mention-service/get-mentions {})
-                             (.then (fn [data]
-                                     (set-mentions-state! data)
-                                     (set-mentions-loading?! false)))
-                             (.catchError (fn [err]
-                                           (println "Load mentions failed:" err)
-                                           (set-mentions-loading?! false)))))]
-   
+                          (set-mentions-loading?! true)
+                          (-> (mention-service/get-mentions {})
+                              (.then (fn [data]
+                                       (set-mentions-state! data)
+                                       (set-mentions-loading?! false)))
+                              (.catchError (fn [err]
+                                             (println "Load mentions failed:" err)
+                                             (set-mentions-loading?! false)))))]
+
    (mongol-side-layout
-    .title "ᠳᠠᠷᠤᠪᠠ"
-    .min-width 70.0
-    .body
-    (m/Scaffold
-     .backgroundColor surface
-     .body
-     (cond
-       is-loading?
-       (m/Center .child (m/CircularProgressIndicator))
-       
-       (empty? mentions)
-       (m/Center .child (mgl/MongolText "ᠬᠣᠭᠣᠰᠤᠨ"))
-       
-      :else
-      (horizontal-refresh
-       {:on-refresh (fn [] (load-mentions!))
-        :item-count (count mentions)
-        :item-builder (fn [_ idx]
-                       (mention-item (nth mentions idx)))
-        :background-color surface
-        :reverse false}))))))
+    {:title "ᠳᠠᠷᠤᠪᠠ"
+     :min-width 70.0
+     :body
+     (m/Scaffold
+      .backgroundColor surface
+      .body
+      (cond
+        is-loading?
+        (m/Center .child (m/CircularProgressIndicator))
+
+        (empty? mentions)
+        (m/Center .child (mgl/MongolText "ᠬᠣᠭᠣᠰᠤᠨ"))
+
+        :else
+        (horizontal-refresh
+         {:on-refresh (fn [] (load-mentions!))
+          :item-count (count mentions)
+          :item-builder (fn [_ idx]
+                          (mention-item (nth mentions idx)))
+          :background-color surface
+          :reverse false})))})))

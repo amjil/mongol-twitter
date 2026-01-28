@@ -5,6 +5,7 @@
             [virtual-keyboard.keyboard :as keyboard]
             [jirgee.services.auth :as auth]
             [jirgee.main-layout :refer [main-layout]]
+            [jirgee.router :refer [push-to-register]]
             [components.toast :as toast]
             [components.text-field :refer [text-field]]))
 
@@ -39,7 +40,7 @@
                     .crossAxisAlignment m/CrossAxisAlignment.center
                     .children
                     [;; --- Title decoration ---
-                     (mgl/MongolText "ᠬᠠᠷᠠᠭᠠᠳᠤ ᠨᠡᠪᠲᠡᠷᠡᠬᠦ" ;; "Welcome to login"
+                     (mgl/MongolText "Welcome to login" ;; "Welcome to login"
                                      .style (.copyWith headlineMedium .color primary .fontWeight m/FontWeight.bold))
 
                      (m/SizedBox .width 60.0)
@@ -50,10 +51,9 @@
                       .height 300.0
                       .child
                       (text-field {:controller email-ctrl
-                                   :hint "ᠢ-ᠮᠧᠢᠯ" ;; Email
+                                   :hint "Email address" ;; Email
                                    :decoration (m/InputDecoration
-                                                .labelText "ᠢ-ᠮᠧᠢᠯ" ;; Email
-                                                .hintText "Email address"
+                                                .labelText "Email address" ;; Email
                                                 .border (m/OutlineInputBorder))}))
 
                      (m/SizedBox .width 24.0)
@@ -62,12 +62,11 @@
                       .height 300.0
                       .child
                       (text-field {:controller pass-ctrl
-                                   :hint "ᠨᠢᠭᠤᠴᠠ ᠦᠭᠡ" ;; Password
+                                   :hint "Password" ;; Password
                                    :max-lines 1
                                    :obscure-text true
                                    :decoration (m/InputDecoration
-                                                .labelText "ᠨᠢᠭᠤᠴᠠ ᠦᠭᠡ" ;; Password
-                                                .hintText "Password"
+                                                .labelText "Password" ;; Password
                                                 .border (m/OutlineInputBorder))}))
 
                      (m/SizedBox .width 48.0)
@@ -97,19 +96,19 @@
                                           ;; Error handling
                                           (let [error-msg (if (and (.-response err) (.-status (.-response err)))
                                                             (case (.-status (.-response err))
-                                                              401 "ᠨᠢᠭᠤᠴᠠ ᠦᠭᠡ ᠪᠤᠰᠤᠳ ᠪᠤᠷᠤᠭᠤᠯᠠᠭᠰᠠᠨ" ;; "Password is incorrect"
-                                                              404 "ᠬᠡᠷᠡᠭᠯᠡᠭᠴᠢ ᠣᠯᠪᠠᠭᠰᠠᠨ ᠦᠭᠡᠭᠡᠷ ᠪᠤᠰᠤᠳ" ;; "User not found"
-                                                              "ᠨᠡᠪᠲᠡᠷᠡᠬᠦ ᠠᠮᠢᠳᠠᠭᠠᠯᠠᠭᠰᠠᠨ" ;; "Login failed"
+                                                              401 "Password is incorrect"
+                                                              404 "User not found"
+                                                              "Login failed"
                                                               )
-                                                            "ᠨᠡᠪᠲᠡᠷᠡᠬᠦ ᠠᠮᠢᠳᠠᠭᠠᠯᠠᠭᠰᠠᠨ")] ;; "Login failed"
+                                                            "Login failed")] ;; "Login failed"
                                             (toast/error ctx error-msg))))))
-                        .child (mgl/MongolText "ᠨᠡᠪᠲᠡᠷᠡᠬᠦ" .style labelLarge)) ;; Login button
+                        .child (mgl/MongolText "Login" .style labelLarge)) ;; Login button
 
                        (m/SizedBox .height 20.0)
 
                        (mgl/MongolTextButton
-                        .onPressed (fn [] (println "Navigate to Register"))
-                        .child (mgl/MongolText "ᠪᠦᠷᠢᠳᠬᠡᠭᠦᠯᠬᠦ" ;; Register button
+                        .onPressed (fn [] (push-to-register ctx))
+                        .child (mgl/MongolText "Register" ;; Register button
                                                .style (.copyWith labelLarge .color primary)))])])))
           (keyboard/candidates nil)]))
 

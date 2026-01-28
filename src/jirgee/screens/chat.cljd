@@ -3,13 +3,19 @@
             ["package:flutter/material.dart" :as m]
             ["package:mongol/mongol.dart" :as mgl]
             [jirgee.services.chat :as chat-service]
+            [jirgee.state :refer [peer-id-atom
+                                  peer-name-atom
+                                  peer-my-id-atom]]
             [jirgee.components.chat-bubble :refer [chat-bubble]]
             [components.text-field :refer [text-field]]))
 
-(defn chat-screen [{:keys [peer-id peer-name my-id]}]
+(defn chat-screen []
   (f/widget
    :get {{{:keys [height]} .-size} m/MediaQuery}
-   :managed [input-ctrl (m/TextEditingController.)]
+   :managed [input-ctrl (m/TextEditingController.)
+             peer-id peer-id-atom
+             peer-name peer-name-atom
+             my-id peer-my-id-atom]
    ;; 1. Watch database stream, UI auto-redraws when local or sync updates occur
    :watch [messages (chat-service/watch-messages peer-id)]
    (m/Scaffold

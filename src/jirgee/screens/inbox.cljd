@@ -2,21 +2,17 @@
   (:require [cljd.flutter :as f]
             ["package:flutter/material.dart" :as m]
             ["package:mongol/mongol.dart" :as mgl]
-            [jirgee.services.chat :as chat-service]
-            [jirgee.screens.chat :refer [chat-screen]]))
+            [jirgee.services.chat :as chat-service]))
 
 (defn- session-tile [session ctx]
   (let [peer-id (if (= (.-senderId session) "me")
                   (.-receiverId session)
                   (.-senderId session))
         content (.-content session)]
-    (m/ListTile
+    (mgl/MongolListTile
      .onTap (fn []
-              (m/Navigator.push ctx
-                                (m/MaterialPageRoute.
-                                 .builder (fn [_] (chat-screen {:peer-id peer-id
-                                                                :peer-name peer-id
-                                                                :my-id "me"})))))
+              (.. m/Navigator (of ctx)
+                  (.pushNamed "/chat")))
      .leading (m/CircleAvatar .child (m/Icon m/Icons.person))
      .title (m/Text peer-id) ;; In actual app, should get nickname from Users table
      ;; Message summary uses small preview of vertical text

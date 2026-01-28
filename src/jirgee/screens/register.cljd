@@ -1,0 +1,147 @@
+(ns jirgee.screens.register
+  (:require [cljd.flutter :as f]
+            ["package:flutter/material.dart" :as m]
+            ["package:mongol/mongol.dart" :as mgl]
+            [virtual-keyboard.keyboard :as keyboard]
+            [jirgee.services.auth :as auth]
+            [jirgee.main-layout :refer [main-layout]]
+            [components.toast :as toast]
+            [components.text-field :refer [text-field]]))
+
+(defn register-screen []
+  (f/widget
+   :context ctx
+   ;; 1. Lifecycle management: Auto dispose controllers
+   :managed [email-ctrl (m/TextEditingController)
+             pass-ctrl (m/TextEditingController)
+             confirm-pass-ctrl (m/TextEditingController)
+             nickname-ctrl (m/TextEditingController)]
+   ;; 2. Nested theme destructuring: Extract colors and fonts at once
+   :get {{{:flds [primary onPrimaryContainer surface]} .-colorScheme
+          {:flds [headlineMedium labelLarge]} .-textTheme} m/Theme}
+
+   (m/Scaffold
+    .backgroundColor surface
+    .body
+    (m/SafeArea
+     .child
+     (m/Column
+      .children
+      [(m/Expanded
+        .child
+        (m/Stack
+         .children
+         [(m/Center
+           .child (m/SingleChildScrollView
+                   .scrollDirection m/Axis.horizontal
+                   .padding (m/EdgeInsets.symmetric .horizontal 40.0)
+                   .child
+                   (m/Row
+                    .mainAxisAlignment m/MainAxisAlignment.center
+                    .crossAxisAlignment m/CrossAxisAlignment.center
+                    .children
+                    [;; --- Title decoration ---
+                     (mgl/MongolText "Welcome to register" ;; "Welcome to register"
+                                     .style (.copyWith headlineMedium .color primary .fontWeight m/FontWeight.bold))
+
+                     (m/SizedBox .width 60.0)
+
+                     ;; --- Form input area ---
+                     ;; Each text-field should be given a height (vertical length)
+                     (m/SizedBox
+                      .height 300.0
+                      .child
+                      (text-field {:controller email-ctrl
+                                   :hint "Email address" ;; Email
+                                   :decoration (m/InputDecoration
+                                                .labelText "Email address" ;; Email
+                                                .border (m/OutlineInputBorder))}))
+
+                     (m/SizedBox .width 24.0)
+
+                     (m/SizedBox
+                      .height 300.0
+                      .child
+                      (text-field {:controller nickname-ctrl
+                                   :hint "Nickname" ;; Nickname
+                                   :decoration (m/InputDecoration
+                                                .labelText "Nickname" ;; Nickname
+                                                .border (m/OutlineInputBorder))}))
+
+                     (m/SizedBox .width 24.0)
+
+                     (m/SizedBox
+                      .height 300.0
+                      .child
+                      (text-field {:controller pass-ctrl
+                                   :hint "Password" ;; Password
+                                   :max-lines 1
+                                   :obscure-text true
+                                   :decoration (m/InputDecoration
+                                                .labelText "Password" ;; Password
+                                                .border (m/OutlineInputBorder))}))
+
+                     (m/SizedBox .width 24.0)
+
+                     (m/SizedBox
+                      .height 300.0
+                      .child
+                      (text-field {:controller confirm-pass-ctrl
+                                   :hint "Confirm Password" ;; Confirm Password
+                                   :max-lines 1
+                                   :obscure-text true
+                                   :decoration (m/InputDecoration
+                                                .labelText "Confirm Password" ;; Confirm Password
+                                                .border (m/OutlineInputBorder))}))
+
+                     (m/SizedBox .width 48.0)
+
+                     ;; --- Action buttons area ---
+                     (m/Column
+                      .mainAxisSize m/MainAxisSize.min
+                      .children
+                      [(mgl/MongolElevatedButton
+                        .style (m/ElevatedButton.styleFrom
+                                .backgroundColor primary
+                                .foregroundColor onPrimaryContainer
+                                .padding (m/EdgeInsets.symmetric .vertical 20.0))
+                        .onPressed
+                        (fn []
+                          (let [email (.-text email-ctrl)
+                                pass (.-text pass-ctrl)
+                                confirm-pass (.-text confirm-pass-ctrl)
+                                nickname (.-text nickname-ctrl)]
+                            (if (not= pass confirm-pass)
+                              (toast/error ctx "Passwords do not match") ;; "Passwords do not match"
+                              (if (or (empty? email) (empty? pass) (empty? nickname))
+                                (toast/error ctx "Please fill in all fields") ;; "Please fill in all fields"
+                                (auth/register {:email email
+                                                :password pass
+                                                :nickname nickname}
+                                               (fn [_data]
+                                                 ;; Navigate to main layout on successful registration
+                                                 (m/Navigator.pushReplacement
+                                                  ctx
+                                                  (m/MaterialPageRoute.
+                                                   .builder (fn [_] (main-layout))))
+                                                 nil)
+                                               (fn [err]
+                                                 ;; Error handling
+                                                 (let [error-msg (if (and (.-response err) (.-status (.-response err)))
+                                                                   (case (.-status (.-response err))
+                                                                     400 "Invalid registration data"
+                                                                     409 "Email already exists"
+                                                                     "Registration failed")
+                                                                   "Registration failed")] ;; "Registration failed"
+                                                   (toast/error ctx error-msg))))))))
+                        .child (mgl/MongolText "Register" .style labelLarge)) ;; Register button
+
+                       (m/SizedBox .height 20.0)
+
+                       (mgl/MongolTextButton
+                        .onPressed (fn [] (m/Navigator.pop ctx))
+                        .child (mgl/MongolText "Back to Login" ;; Back to Login button
+                                               .style (.copyWith labelLarge .color primary)))])])))
+          (keyboard/candidates nil)]))
+
+       (keyboard/keyboard {:custom-fns {}})])))))

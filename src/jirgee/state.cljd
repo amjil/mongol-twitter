@@ -46,6 +46,7 @@
 (defonce ^:private search-type (atom "all"))
 (defonce ^:private search-loading? (atom false))
 (defonce ^:private search-history (atom nil))
+(defonce ^:private search-filter-chips (atom {"all" true "users" false "posts" false "groups" false}))
 
 ;; ============================================
 ;; Screen State - Hashtag
@@ -53,6 +54,7 @@
 (defonce ^:private hashtag-state (atom nil))
 (defonce ^:private hashtag-posts-state (atom nil))
 (defonce ^:private hashtag-loading? (atom false))
+(defonce hashtag-name-atom (atom nil))
 
 ;; ============================================
 ;; Screen State - Trending
@@ -62,6 +64,7 @@
 (defonce ^:private trending-hashtags-state (atom nil))
 (defonce ^:private trending-loading? (atom false))
 (defonce ^:private trending-current-tab (atom 0))
+(defonce ^:private trending-filter-chips (atom {0 true 1 false 2 false}))
 
 ;; ============================================
 ;; Screen State - Notifications
@@ -70,6 +73,7 @@
 (defonce ^:private notifications-loading? (atom false))
 (defonce ^:private notifications-unread-count (atom 0))
 (defonce ^:private notifications-filter-read? (atom nil))
+(defonce ^:private notifications-filter-chips (atom {"all" true "unread" false "read" false}))
 
 ;; ============================================
 ;; Screen State - Groups
@@ -77,6 +81,7 @@
 (defonce ^:private groups-state (atom nil))
 (defonce ^:private groups-loading? (atom false))
 (defonce ^:private groups-filter-public? (atom nil))
+(defonce ^:private groups-filter-chips (atom {"all" true "public" false}))
 
 ;; ============================================
 ;; Screen State - Mentions
@@ -98,11 +103,18 @@
 (defonce ^:private reports-selected-reason (atom "spam"))
 (defonce ^:private reports-create-desc-ctrl (atom nil))
 
+(defonce reportable-type-atom (atom nil))
+(defonce reportable-id-atom (atom nil))
+
 ;; ============================================
 ;; Screen State - Conversations
 ;; ============================================
 (defonce ^:private conversations-chats-state (atom nil))
 (defonce ^:private conversations-error-state (atom nil))
+
+(defonce peer-id-atom (atom nil))
+(defonce peer-name-atom (atom nil))
+(defonce peer-my-id-atom (atom nil))
 
 ;; ============================================
 ;; Service State - Base
@@ -192,6 +204,8 @@
 (defn set-search-loading?! [v] (reset! search-loading? v))
 (defn get-search-history [] @search-history)
 (defn set-search-history! [v] (reset! search-history v))
+(defn get-search-filter-chips [] @search-filter-chips)
+(defn set-search-filter-chips! [v] (reset! search-filter-chips v))
 
 ;; ============================================
 ;; Export Functions - Hashtag
@@ -216,6 +230,8 @@
 (defn set-trending-loading?! [v] (reset! trending-loading? v))
 (defn get-trending-current-tab [] @trending-current-tab)
 (defn set-trending-current-tab! [v] (reset! trending-current-tab v))
+(defn get-trending-filter-chips [] @trending-filter-chips)
+(defn set-trending-filter-chips! [v] (reset! trending-filter-chips v))
 
 ;; ============================================
 ;; Export Functions - Notifications
@@ -229,6 +245,8 @@
 (defn set-notifications-unread-count! [v] (reset! notifications-unread-count v))
 (defn get-notifications-filter-read? [] @notifications-filter-read?)
 (defn set-notifications-filter-read?! [v] (reset! notifications-filter-read? v))
+(defn get-notifications-filter-chips [] @notifications-filter-chips)
+(defn set-notifications-filter-chips! [v] (reset! notifications-filter-chips v))
 
 ;; ============================================
 ;; Export Functions - Groups
@@ -239,6 +257,8 @@
 (defn set-groups-loading?! [v] (reset! groups-loading? v))
 (defn get-groups-filter-public? [] @groups-filter-public?)
 (defn set-groups-filter-public?! [v] (reset! groups-filter-public? v))
+(defn get-groups-filter-chips [] @groups-filter-chips)
+(defn set-groups-filter-chips! [v] (reset! groups-filter-chips v))
 
 ;; ============================================
 ;; Export Functions - Mentions
@@ -327,6 +347,7 @@
 (def search-type-atom search-type)
 (def search-loading?-atom search-loading?)
 (def search-history-atom search-history)
+(def search-filter-chips-atom search-filter-chips)
 
 ;; Hashtag
 (def hashtag-state-atom hashtag-state)
@@ -339,17 +360,20 @@
 (def trending-hashtags-state-atom trending-hashtags-state)
 (def trending-loading?-atom trending-loading?)
 (def trending-current-tab-atom trending-current-tab)
+(def trending-filter-chips-atom trending-filter-chips)
 
 ;; Notifications
 (def notifications-state-atom notifications-state)
 (def notifications-loading?-atom notifications-loading?)
 (def notifications-unread-count-atom notifications-unread-count)
 (def notifications-filter-read?-atom notifications-filter-read?)
+(def notifications-filter-chips-atom notifications-filter-chips)
 
 ;; Groups
 (def groups-state-atom groups-state)
 (def groups-loading?-atom groups-loading?)
 (def groups-filter-public?-atom groups-filter-public?)
+(def groups-filter-chips-atom groups-filter-chips)
 
 ;; Mentions
 (def mentions-state-atom mentions-state)

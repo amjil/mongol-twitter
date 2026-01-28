@@ -4,10 +4,22 @@
             [cljd.flutter :as f]
             [virtual-keyboard.options :as keyboard-options]
             [jirgee.main-layout :refer [main-layout]]
-            [jirgee.screens.login :refer [login-screen]]
+            [jirgee.router :refer [navigator-key]]
             [jirgee.services.base :as base]
             [jirgee.services.network :as network]
-            [jirgee.services.storage :as storage]))
+            [jirgee.services.storage :as storage]
+            [jirgee.screens.login :refer [login-screen]]
+            [jirgee.screens.chat :refer [chat-screen]]
+            [jirgee.screens.register :refer [register-screen]]
+            [jirgee.screens.search :refer [search-screen]]
+            [jirgee.screens.trending :refer [trending-screen]]
+            [jirgee.screens.lists :refer [lists-screen]]
+            [jirgee.screens.report :refer [report-screen]]
+            [jirgee.screens.bookmarks :refer [bookmarks-screen]]
+            [jirgee.screens.mentions :refer [mentions-screen]]
+            [jirgee.screens.groups :refer [groups-screen]]
+            [jirgee.screens.notifications :refer [notifications-screen]]
+            [jirgee.screens.hashtag :refer [hashtag-screen]]))
 
 (defn- start-app [initial-route]
   "Start app, only call runApp once"
@@ -20,12 +32,26 @@
                        :keyboard/mongol-font-family "OnonSoninSans"})]
     :bind {:info info}
     (m/MaterialApp
+     .navigatorKey navigator-key
      .title "Jirgee"
      .debugShowCheckedModeBanner false
-     .theme (m/ThemeData .useMaterial3 true .colorSchemeSeed m/Colors.brown)
+     .theme (m/ThemeData .useMaterial3 true
+                         .brightness m/Brightness.dark
+                         .colorSchemeSeed m/Colors.blue)
      .initialRoute initial-route
      .routes {"/home" (fn [_] ^m/Widget (main-layout))
-              "/login" (fn [_] ^m/Widget (login-screen))}))))
+              "/login" (fn [_] ^m/Widget (login-screen))
+              "/register" (fn [_] ^m/Widget (register-screen))
+              "/search" (fn [_] ^m/Widget (search-screen))
+              "/trending" (fn [_] ^m/Widget (trending-screen))
+              "/lists" (fn [_] ^m/Widget (lists-screen))
+              "/report" (fn [_] ^m/Widget (report-screen))
+              "/bookmarks" (fn [_] ^m/Widget (bookmarks-screen))
+              "/mentions" (fn [_] ^m/Widget (mentions-screen))
+              "/groups" (fn [_] ^m/Widget (groups-screen))
+              "/notifications" (fn [_] ^m/Widget (notifications-screen))
+              "/hashtag" (fn [_] ^m/Widget (hashtag-screen))
+              "/chat" (fn [_] ^m/Widget (chat-screen))}))))
 
 (defn- init-and-start []
   "Initialize and start app"

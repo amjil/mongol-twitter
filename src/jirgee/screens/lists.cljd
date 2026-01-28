@@ -50,80 +50,80 @@
            public? lists-create-is-public?-atom]
    :get {{{:flds [surface primary]} .-colorScheme} m/Theme}
    :let [load-lists! (fn []
-                      (set-lists-loading?! true)
-                      (-> (list-service/get-lists)
-                          (.then (fn [data]
-                                  (set-lists-state! data)
-                                  (set-lists-loading?! false)))
-                          (.catchError (fn [err]
-                                        (println "Load lists failed:" err)
-                                        (set-lists-loading?! false)))))
+                       (set-lists-loading?! true)
+                       (-> (list-service/get-lists)
+                           (.then (fn [data]
+                                    (set-lists-state! data)
+                                    (set-lists-loading?! false)))
+                           (.catchError (fn [err]
+                                          (println "Load lists failed:" err)
+                                          (set-lists-loading?! false)))))
          create-list! (fn []
-                       (let [name (when name-ctrl (.-text name-ctrl))
-                             desc (when desc-ctrl (.-text desc-ctrl))]
-                         (when (and name (not (empty? name)))
-                           (-> (list-service/create-list {"name" name
-                                                         "description" desc
-                                                         "is_public" public?})
-                               (.then (fn [list-data]
-                                       (set-lists-create-name-ctrl! (m/TextEditingController.))
-                                       (set-lists-create-desc-ctrl! (m/TextEditingController.))
-                                       (set-lists-create-is-public?! false)
-                                       (load-lists!)
-                                       (m/Navigator.pop ctx)))
-                               (.catchError (fn [err] (println "Create list failed:" err)))))))]
-   
+                        (let [name (when name-ctrl (.-text name-ctrl))
+                              desc (when desc-ctrl (.-text desc-ctrl))]
+                          (when (and name (not (empty? name)))
+                            (-> (list-service/create-list {"name" name
+                                                           "description" desc
+                                                           "is_public" public?})
+                                (.then (fn [list-data]
+                                         (set-lists-create-name-ctrl! (m/TextEditingController.))
+                                         (set-lists-create-desc-ctrl! (m/TextEditingController.))
+                                         (set-lists-create-is-public?! false)
+                                         (load-lists!)
+                                         (m/Navigator.pop ctx)))
+                                (.catchError (fn [err] (println "Create list failed:" err)))))))]
+
    (mongol-side-layout
-    .title "ᠲᠠᠷᠢᠭ"
-    .min-width 70.0
-    .actions [{:icon m/Icons.add
-              :on-tap #(m/showDialog
-                        .context ctx
-                        .builder
-                        (fn [dialog-ctx]
-                          (dialog/vertical-custom-dialog
-                           {:title "ᠰᠢᠨᠡ ᠲᠠᠷᠢᠭ"
-                            :body
-                            (m/Column
-                             .mainAxisSize m/MainAxisSize.min
-                             .children
-                             [(text-field/mongol-text-field
-                               {:controller name-ctrl
-                                :hint "ᠨᠡᠷᠡ"})
-                              (m/SizedBox .height 16.0)
-                              (text-field/mongol-text-field
-                               {:controller desc-ctrl
-                                :hint "ᠲᠠᠢᠯᠪᠠᠷ"})
-                              (m/SizedBox .height 16.0)
-                              (m/CheckboxListTile
-                               .title (mgl/MongolText "ᠦᠨᠳᠡᠰᠦ")
-                               .value public?
-                               .onChanged (fn [v] (set-lists-create-is-public?! v)))])
-                            :actions
-                            [(m/TextButton
-                              .onPressed (fn [] (m/Navigator.pop dialog-ctx))
-                              .child (m/Text "ᠪᠤᠯᠢ"))
-                             (m/TextButton
-                              .onPressed (fn []
-                                          (create-list!)
-                                          (m/Navigator.pop dialog-ctx))
-                              .child (m/Text "ᠨᠡᠮᠡᠬᠦ"))]})))}]
-    .body
-    (m/Scaffold
-     .backgroundColor surface
-     .body
-     (cond
-       is-loading?
-       (m/Center .child (m/CircularProgressIndicator))
-       
-       (empty? lists)
-       (m/Center .child (mgl/MongolText "ᠬᠣᠭᠣᠰᠤᠨ"))
-       
-      :else
-      (horizontal-refresh
-       {:on-refresh (fn [] (load-lists!))
-        :item-count (count lists)
-        :item-builder (fn [_ idx]
-                       (list-item (nth lists idx)))
-        :background-color surface
-        :reverse false}))))))
+    {:title "ᠲᠠᠷᠢᠭ"
+     :min-width 70.0
+     :actions [{:icon m/Icons.add
+                :on-tap #(m/showDialog
+                          .context ctx
+                          .builder
+                          (fn [dialog-ctx]
+                            (dialog/vertical-custom-dialog
+                             {:title "ᠰᠢᠨᠡ ᠲᠠᠷᠢᠭ"
+                              :body
+                              (m/Column
+                               .mainAxisSize m/MainAxisSize.min
+                               .children
+                               [(text-field/text-field
+                                 {:controller name-ctrl
+                                  :hint "ᠨᠡᠷᠡ"})
+                                (m/SizedBox .height 16.0)
+                                (text-field/text-field
+                                 {:controller desc-ctrl
+                                  :hint "ᠲᠠᠢᠯᠪᠠᠷ"})
+                                (m/SizedBox .height 16.0)
+                                (m/CheckboxListTile
+                                 .title (mgl/MongolText "ᠦᠨᠳᠡᠰᠦ")
+                                 .value public?
+                                 .onChanged (fn [v] (set-lists-create-is-public?! v)))])
+                              :actions
+                              [(m/TextButton
+                                .onPressed (fn [] (m/Navigator.pop dialog-ctx))
+                                .child (m/Text "ᠪᠤᠯᠢ"))
+                               (m/TextButton
+                                .onPressed (fn []
+                                             (create-list!)
+                                             (m/Navigator.pop dialog-ctx))
+                                .child (m/Text "ᠨᠡᠮᠡᠬᠦ"))]})))}]
+     :body
+     (m/Scaffold
+      .backgroundColor surface
+      .body
+      (cond
+        is-loading?
+        (m/Center .child (m/CircularProgressIndicator))
+
+        (empty? lists)
+        (m/Center .child (mgl/MongolText "ᠬᠣᠭᠣᠰᠤᠨ"))
+
+        :else
+        (horizontal-refresh
+         {:on-refresh (fn [] (load-lists!))
+          :item-count (count lists)
+          :item-builder (fn [_ idx]
+                          (list-item (nth lists idx)))
+          :background-color surface
+          :reverse false})))})))

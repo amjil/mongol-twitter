@@ -59,26 +59,26 @@
            is-loading? bookmarks-loading?-atom]
    :get {{{:flds [surface]} .-colorScheme} m/Theme}
    :let [load-bookmarks! bookmark-service/load-bookmarks!]
-   
+
    (mongol-side-layout
-    .title "ᠬᠠᠢᠢᠯᠠᠭᠤᠯᠤᠭᠰᠠᠨ"
-    .min-width 70.0
-    .body
-    (m/Scaffold
-     .backgroundColor surface
-     .body
-     (cond
-       is-loading?
-       (m/Center .child (m/CircularProgressIndicator))
-       
-       (empty? bookmarks)
-       (m/Center .child (mgl/MongolText "ᠬᠣᠭᠣᠰᠤᠨ"))
-       
-      :else
-      (horizontal-refresh
-       {:on-refresh (fn [] (load-bookmarks!))
-        :item-count (count bookmarks)
-        :item-builder (fn [_ idx]
-                       (bookmark-item (nth bookmarks idx)))
-        :background-color surface
-        :reverse false}))))))
+    {:title "ᠬᠠᠢᠢᠯᠠᠭᠤᠯᠤᠭᠰᠠᠨ"
+     :min-width 70.0
+     :body
+     (m/Scaffold
+      .backgroundColor surface
+      .body
+      (cond
+        is-loading?
+        (m/Center .child (m/CircularProgressIndicator))
+
+        (empty? bookmarks)
+        (m/Center .child (mgl/MongolText "ᠬᠣᠭᠣᠰᠤᠨ"))
+
+        :else
+        (horizontal-refresh
+         {:on-refresh (fn [] (load-bookmarks!))
+          :item-count (count bookmarks)
+          :item-builder (fn [_ idx]
+                          (bookmark-item (nth bookmarks idx)))
+          :background-color surface
+          :reverse false})))})))

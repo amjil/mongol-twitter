@@ -3,11 +3,13 @@
             ["package:flutter/material.dart" :as m]
             ["package:mongol/mongol.dart" :as mgl]
             [components.app-bar :refer [mongol-side-layout]]
+            [components.chip :refer [filter-chip]]
             [jirgee.services.base :refer [client]]
             [jirgee.state :refer [notifications-state-atom
                                   notifications-loading?-atom
                                   notifications-unread-count-atom
                                   notifications-filter-read?-atom
+                                  notifications-filter-chips-atom
                                   set-notifications-state!
                                   swap-notifications-state!
                                   set-notifications-loading?!
@@ -26,7 +28,7 @@
          actor-avatar (get actor "avatar_url")
          is-read (get notification "read" false)
          post (get notification "post" {})]
-   (m/ListTile
+   (mgl/MongolListTile
     .leading (m/Stack
               .children
               [(m/CircleAvatar
@@ -55,7 +57,7 @@
                             .fontWeight (if is-read m/FontWeight.normal m/FontWeight.bold)))
     .subtitle (mgl/MongolText
                (get post "content" "")
-               .style (.copyWith bodySmall .maxLines 2)
+               .style bodySmall
                .maxLines 2)
     .trailing (m/Text
                (let [time-str (get notification "inserted_at" "")]
@@ -81,80 +83,87 @@
    :watch [notifications notifications-state-atom
            is-loading? notifications-loading?-atom
            unread notifications-unread-count-atom
-           filter-read notifications-filter-read?-atom]
+           filter-read notifications-filter-read?-atom
+           filter-chips notifications-filter-chips-atom]
    :get {{{:flds [surface primary]} .-colorScheme} m/Theme}
    :let [load-notifications! (fn []
-                              (set-notifications-loading?! true)
-                              (-> (.get client "/notifications"
-                                        .queryParameters (when filter-read {"read" filter-read}))
-                                  (.then (fn [resp]
-                                          (set-notifications-state! (get (.-data resp) "notifications" []))
-                                          (set-notifications-loading?! false)))
-                                  (.catchError (fn [err]
-                                                (println "Load notifications failed:" err)
-                                                (set-notifications-loading?! false)))))
+                               (set-notifications-loading?! true)
+                               (-> (.get client "/notifications"
+                                         .queryParameters (when filter-read {"read" filter-read}))
+                                   (.then (fn [resp]
+                                            (set-notifications-state! (get (.-data resp) "notifications" []))
+                                            (set-notifications-loading?! false)))
+                                   (.catchError (fn [err]
+                                                  (println "Load notifications failed:" err)
+                                                  (set-notifications-loading?! false)))))
          load-unread-count! (fn []
-                             (-> (.get client "/notifications/unread_count")
-                                 (.then (fn [resp]
-                                         (set-notifications-unread-count! (get (.-data resp) "unread_count" 0))))
-                                 (.catchError (fn [err] (println "Load unread count failed:" err)))))
+                              (-> (.get client "/notifications/unread_count")
+                                  (.then (fn [resp]
+                                           (set-notifications-unread-count! (get (.-data resp) "unread_count" 0))))
+                                  (.catchError (fn [err] (println "Load unread count failed:" err)))))
          mark-all-read! (fn []
-                        (-> (.put client "/notifications/read_all")
-                            (.then (fn [resp]
-                                    (set-notifications-unread-count! 0)
-                                    (swap-notifications-state!
-                                     (fn [notifs]
-                                      (mapv #(assoc % "read" true) notifs)))))
-                            (.catchError (fn [err] (println "Mark all read failed:" err)))))]
-   
+                          (-> (.put client "/notifications/read_all")
+                              (.then (fn [resp]
+                                       (set-notifications-unread-count! 0)
+                                       (swap-notifications-state!
+                                        (fn [notifs]
+                                          (mapv #(assoc % "read" true) notifs)))))
+                              (.catchError (fn [err] (println "Mark all read failed:" err)))))
+         _ (let [selected-filter (first (keep (fn [[k v]] (when v k)) filter-chips))]
+             (when selected-filter
+               (let [new-filter-read (case selected-filter
+                                       "all" nil
+                                       "unread" false
+                                       "read" true
+                                       nil)]
+                 (when (not= filter-read new-filter-read)
+                   (set-notifications-filter-read?! new-filter-read)))))]
+
    (mongol-side-layout
-    .title "ᠮᠡᠳᠡᠭᠡᠯ"
-    .min-width 70.0
-    .actions [{:icon m/Icons.done_all
-              :on-tap mark-all-read!}]
-    .body
-    (m/Scaffold
-     .backgroundColor surface
-     .body
-     (m/Column
-      .children
-      [;; Filter
-       (m/SingleChildScrollView
-        .scrollDirection m/Axis.horizontal
-        .padding (m/EdgeInsets.all 16.0)
-        .child
-        (m/Row
-         .children
-         [(m/FilterChip
-           .label (m/Text "ᠪᠦᠬᠦ")
-           .selected (nil? filter-read)
-           .onSelected #(set-notifications-filter-read?! nil))
-          (m/SizedBox .width 8.0)
-          (m/FilterChip
-           .label (m/Text "ᠤᠨᠳᠠᠭᠠᠰᠤ")
-           .selected (= filter-read false)
-           .onSelected #(set-notifications-filter-read?! false))
-          (m/SizedBox .width 8.0)
-          (m/FilterChip
-           .label (m/Text "ᠤᠨᠳᠠᠭᠠᠰᠤ ᠦᠭᠡᠢ")
-           .selected (= filter-read true)
-           .onSelected #(set-notifications-filter-read?! true))]))
-       
-       ;; Notification list
-       (m/Expanded
-        .child
-        (cond
-          is-loading?
-          (m/Center .child (m/CircularProgressIndicator))
-          
-          (empty? notifications)
-          (m/Center .child (mgl/MongolText "ᠬᠣᠭᠣᠰᠤᠨ"))
-          
-          :else
-          (horizontal-refresh
-           {:on-refresh (fn [] (load-notifications!))
-            :item-count (count notifications)
-            :item-builder (fn [_ idx]
-                           (notification-item (nth notifications idx)))
-            :background-color surface
-            :reverse false})))])))))
+    {:title "ᠮᠡᠳᠡᠭᠡᠯ"
+     :min-width 70.0
+     :actions [{:icon m/Icons.done_all
+                :on-tap mark-all-read!}]
+     :body
+     (m/Scaffold
+      .backgroundColor surface
+      .body
+      (m/Column
+       .children
+       [;; Filter
+        (m/SingleChildScrollView
+         .scrollDirection m/Axis.horizontal
+         .padding (m/EdgeInsets.all 16.0)
+         .child
+         (m/Row
+          .children
+          [(filter-chip "all" "ᠪᠦᠬᠦ" notifications-filter-chips-atom
+                        :max-select 1
+                        :haptic? true)
+           (m/SizedBox .width 8.0)
+           (filter-chip "unread" "ᠤᠨᠳᠠᠭᠠᠰᠤ" notifications-filter-chips-atom
+                        :max-select 1
+                        :haptic? true)
+           (m/SizedBox .width 8.0)
+           (filter-chip "read" "ᠤᠨᠳᠠᠭᠠᠰᠤ ᠦᠭᠡᠢ" notifications-filter-chips-atom
+                        :max-select 1
+                        :haptic? true)]))
+
+        ;; Notification list
+        (m/Expanded
+         .child
+         (cond
+           is-loading?
+           (m/Center .child (m/CircularProgressIndicator))
+
+           (empty? notifications)
+           (m/Center .child (mgl/MongolText "ᠬᠣᠭᠣᠰᠤᠨ"))
+
+           :else
+           (horizontal-refresh
+            {:on-refresh (fn [] (load-notifications!))
+             :item-count (count notifications)
+             :item-builder (fn [_ idx]
+                             (notification-item (nth notifications idx)))
+             :background-color surface
+             :reverse false})))]))})))

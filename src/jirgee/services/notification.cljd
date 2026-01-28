@@ -45,10 +45,13 @@
       (try
         (let [data (convert/jsonDecode payload-str)
               type (get data "type")
-              sender-id (get data "sender_id")]
+              sender-id (get data "sender_id")
+              peer-id (get data "peer_id")
+              peer-name (get data "peer_name")
+              my-id (get data "my_id")]
           (println "🖱️ User tapped notification, executing navigation:" data)
           (case type
-            "chat" (router/push-to-chat sender-id)
+            "chat" (router/push-to-chat peer-id peer-name my-id)
             (println "Unknown notification type")))
         (catch Exception e (println "Payload parsing failed:" e))))))
 

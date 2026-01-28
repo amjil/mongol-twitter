@@ -2,14 +2,16 @@
   (:require [cljd.flutter :as f]
             ["package:flutter/material.dart" :as m]
             ["package:mongol/mongol.dart" :as mgl]
-            [jirgee.screens.chat :refer [chat-screen]]
             [jirgee.state :refer [conversations-chats-state-atom
-                                  conversations-error-state-atom]]))
+                                  conversations-error-state-atom
+                                  peer-id-atom
+                                  peer-name-atom
+                                  peer-my-id-atom]]))
 
 ;; Sub-component: Conversation item
 (defn- conversation-item [chat]
   (f/widget
-   :context ctx
+   :get [m/Navigator]
    :get {{{:flds [onSurface surfaceVariant primary]} .-colorScheme
           {:flds [titleMedium bodySmall]} .-textTheme} m/Theme}
    :let [nickname (or (.read chat "nickname") "ᠬᠡᠷᠡᠭᠯᠡᠭᠴᠢ")
@@ -17,13 +19,10 @@
          avatar-url (.read chat "avatar_url")]
    (mgl/MongolListTile
     .onTap (fn []
-             (m/Navigator.push
-              ctx
-              (m/MaterialPageRoute.
-               .builder (fn [_]
-                          (chat-screen {:peer-id (.read chat "id")
-                                        :peer-name nickname
-                                        :my-id "me"}))))
+             (reset! peer-id-atom (.read chat "id"))
+             (reset! peer-name-atom nickname)
+             (reset! peer-my-id-atom "me")
+             (.pushNamed navigator "/chat")
              nil)
     .leading (m/CircleAvatar
               .backgroundColor surfaceVariant

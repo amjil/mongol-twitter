@@ -3,12 +3,14 @@
             ["package:flutter/material.dart" :as m]
             ["package:mongol/mongol.dart" :as mgl]
             [components.app-bar :refer [mongol-side-layout]]
+            [components.chip :refer [filter-chip]]
             [jirgee.services.trending :as trending-service]
             [jirgee.state :refer [trending-posts-state-atom
                                   trending-users-state-atom
                                   trending-hashtags-state-atom
                                   trending-loading?-atom
                                   trending-current-tab-atom
+                                  trending-filter-chips-atom
                                   set-trending-current-tab!]]
             [pull-to-refresh.refresh :refer [horizontal-refresh]]))
 
@@ -82,7 +84,7 @@
           {:flds [titleMedium bodySmall]} .-textTheme} m/Theme}
    :let [name (get hashtag "name" "")
          posts-count (get hashtag "posts_count" 0)]
-   (m/ListTile
+   (mgl/MongolListTile
     .leading (m/Icon m/Icons.tag .color primary)
     .title (mgl/MongolText (str "#" name) .style titleMedium)
     .subtitle (mgl/MongolText (str posts-count " ᠵᠢᠷᠭᠡᠯ") .style bodySmall)
@@ -97,77 +99,78 @@
            users trending-users-state-atom
            hashtags trending-hashtags-state-atom
            is-loading? trending-loading?-atom
-           tab trending-current-tab-atom]
+           tab trending-current-tab-atom
+           filter-chips trending-filter-chips-atom]
    :get {{{:flds [surface]} .-colorScheme} m/Theme}
-   :let [load-data! trending-service/load-trending-data!]
-   
+   :let [load-data! trending-service/load-trending-data!
+         _ (when-let [selected-tab (first (keep (fn [[k v]] (when v k)) filter-chips))]
+             (when (not= tab selected-tab)
+               (set-trending-current-tab! selected-tab)))]
+
    (mongol-side-layout
-    .title "ᠬᠦᠷᠡᠯᠲᠡ"
-    .min-width 70.0
-    .body
-    (m/Scaffold
-     .backgroundColor surface
-     .body
-     (m/Column
-      .children
-      [;; Tab selection
-       (m/SingleChildScrollView
-        .scrollDirection m/Axis.horizontal
-        .padding (m/EdgeInsets.all 16.0)
-        .child
-        (m/Row
-         .children
-         [(m/FilterChip
-           .label (m/Text "ᠵᠢᠷᠭᠡᠯ")
-           .selected (= tab 0)
-           .onSelected #(set-trending-current-tab! 0))
-          (m/SizedBox .width 8.0)
-          (m/FilterChip
-           .label (m/Text "ᠬᠡᠷᠡᠭᠯᠡᠭᠴᠢ")
-           .selected (= tab 1)
-           .onSelected #(set-trending-current-tab! 1))
-          (m/SizedBox .width 8.0)
-          (m/FilterChip
-           .label (m/Text "ᠬᠠᠢᠢᠯᠠᠭ")
-           .selected (= tab 2)
-           .onSelected #(set-trending-current-tab! 2))]))
-       
-       ;; Content
-       (m/Expanded
-        .child
-        (cond
-          is-loading?
-          (m/Center .child (m/CircularProgressIndicator))
-          
-          (= tab 0)
-          (if (empty? posts)
-            (m/Center .child (mgl/MongolText "ᠬᠣᠭᠣᠰᠤᠨ"))
-            (horizontal-refresh
-             {:on-refresh (fn [] (load-data!))
-              :item-count (count posts)
-              :item-builder (fn [_ idx]
-                             (post-item (nth posts idx)))
-              :background-color surface
-              :reverse false}))
-          
-          (= tab 1)
-          (if (empty? users)
-            (m/Center .child (mgl/MongolText "ᠬᠣᠭᠣᠰᠤᠨ"))
-            (horizontal-refresh
-             {:on-refresh (fn [] (load-data!))
-              :item-count (count users)
-              :item-builder (fn [_ idx]
-                             (user-item (nth users idx)))
-              :background-color surface
-              :reverse false}))
-          
-          (= tab 2)
-          (if (empty? hashtags)
-            (m/Center .child (mgl/MongolText "ᠬᠣᠭᠣᠰᠤᠨ"))
-            (horizontal-refresh
-             {:on-refresh (fn [] (load-data!))
-              :item-count (count hashtags)
-              :item-builder (fn [_ idx]
-                             (hashtag-item (nth hashtags idx)))
-              :background-color surface
-              :reverse false}))))])))))
+    {:title "ᠬᠦᠷᠡᠯᠲᠡ"
+     :min-width 70.0
+     :body
+     (m/Scaffold
+      .backgroundColor surface
+      .body
+      (m/Column
+       .children
+       [;; Tab selection
+        (m/SingleChildScrollView
+         .scrollDirection m/Axis.horizontal
+         .padding (m/EdgeInsets.all 16.0)
+         .child
+         (m/Row
+          .children
+          [(filter-chip 0 "ᠵᠢᠷᠭᠡᠯ" trending-filter-chips-atom
+                        :max-select 1
+                        :haptic? true)
+           (m/SizedBox .width 8.0)
+           (filter-chip 1 "ᠬᠡᠷᠡᠭᠯᠡᠭᠴᠢ" trending-filter-chips-atom
+                        :max-select 1
+                        :haptic? true)
+           (m/SizedBox .width 8.0)
+           (filter-chip 2 "ᠬᠠᠢᠢᠯᠠᠭ" trending-filter-chips-atom
+                        :max-select 1
+                        :haptic? true)]))
+
+        ;; Content
+        (m/Expanded
+         .child
+         (cond
+           is-loading?
+           (m/Center .child (m/CircularProgressIndicator))
+
+           (= tab 0)
+           (if (empty? posts)
+             (m/Center .child (mgl/MongolText "ᠬᠣᠭᠣᠰᠤᠨ"))
+             (horizontal-refresh
+              {:on-refresh (fn [] (load-data!))
+               :item-count (count posts)
+               :item-builder (fn [_ idx]
+                               (post-item (nth posts idx)))
+               :background-color surface
+               :reverse false}))
+
+           (= tab 1)
+           (if (empty? users)
+             (m/Center .child (mgl/MongolText "ᠬᠣᠭᠣᠰᠤᠨ"))
+             (horizontal-refresh
+              {:on-refresh (fn [] (load-data!))
+               :item-count (count users)
+               :item-builder (fn [_ idx]
+                               (user-item (nth users idx)))
+               :background-color surface
+               :reverse false}))
+
+           (= tab 2)
+           (if (empty? hashtags)
+             (m/Center .child (mgl/MongolText "ᠬᠣᠭᠣᠰᠤᠨ"))
+             (horizontal-refresh
+              {:on-refresh (fn [] (load-data!))
+               :item-count (count hashtags)
+               :item-builder (fn [_ idx]
+                               (hashtag-item (nth hashtags idx)))
+               :background-color surface
+               :reverse false}))))]))})))
