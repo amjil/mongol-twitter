@@ -1,9 +1,11 @@
 (ns jirgee.screens.register
   (:require [cljd.flutter :as f]
+            [clojure.string :as str]
             ["package:flutter/material.dart" :as m]
             ["package:mongol/mongol.dart" :as mgl]
             [virtual-keyboard.keyboard :as keyboard]
             [jirgee.services.auth :as auth]
+            [jirgee.services.base :refer [safe-get-response]]
             [jirgee.main-layout :refer [main-layout]]
             [components.toast :as toast]
             [components.text-field :refer [text-field]]))
@@ -53,6 +55,8 @@
                       .child
                       (text-field {:controller email-ctrl
                                    :hint "Email address" ;; Email
+                                   :autofocus true
+                                   :max-lines 1
                                    :decoration (m/InputDecoration
                                                 .labelText "Email address" ;; Email
                                                 .border (m/OutlineInputBorder))}))
@@ -64,6 +68,7 @@
                       .child
                       (text-field {:controller nickname-ctrl
                                    :hint "Nickname" ;; Nickname
+                                   :max-lines 1
                                    :decoration (m/InputDecoration
                                                 .labelText "Nickname" ;; Nickname
                                                 .border (m/OutlineInputBorder))}))
@@ -107,33 +112,56 @@
                                 .padding (m/EdgeInsets.symmetric .vertical 20.0))
                         .onPressed
                         (fn []
+                          (println "[Register] 注册按钮被点击")
                           (let [email (.-text email-ctrl)
                                 pass (.-text pass-ctrl)
                                 confirm-pass (.-text confirm-pass-ctrl)
                                 nickname (.-text nickname-ctrl)]
+                            (println "[Register] 表单值 email:" (pr-str email) "nickname:" (pr-str nickname)
+                                     "pass-len:" (count pass) "confirm-len:" (count confirm-pass))
                             (if (not= pass confirm-pass)
-                              (toast/error ctx "Passwords do not match") ;; "Passwords do not match"
+                              (do (println "[Register] 校验失败: 两次密码不一致")
+                                  (toast/error ctx "Passwords do not match")) ;; "Passwords do not match"
                               (if (or (empty? email) (empty? pass) (empty? nickname))
-                                (toast/error ctx "Please fill in all fields") ;; "Please fill in all fields"
-                                (auth/register {:email email
-                                                :password pass
-                                                :nickname nickname}
-                                               (fn [_data]
-                                                 ;; Navigate to main layout on successful registration
-                                                 (m/Navigator.pushReplacement
-                                                  ctx
-                                                  (m/MaterialPageRoute.
-                                                   .builder (fn [_] (main-layout))))
-                                                 nil)
-                                               (fn [err]
-                                                 ;; Error handling
-                                                 (let [error-msg (if (and (.-response err) (.-status (.-response err)))
-                                                                   (case (.-status (.-response err))
-                                                                     400 "Invalid registration data"
-                                                                     409 "Email already exists"
-                                                                     "Registration failed")
-                                                                   "Registration failed")] ;; "Registration failed"
-                                                   (toast/error ctx error-msg))))))))
+                                (do (println "[Register] 校验失败: 存在空字段")
+                                    (toast/error ctx "Please fill in all fields")) ;; "Please fill in all fields"
+                                (do (println "[Register] 校验通过，调用 auth/register ...")
+                                    (auth/register {"email" email
+                                                   "password" pass
+                                                   "nickname" nickname}
+                                                   (fn [_data]
+                                                     (println "[Register] 注册成功，即将跳转")
+                                                     ;; Navigate to main layout on successful registration
+                                                     (m/Navigator.pushReplacement
+                                                      ctx
+                                                      (m/MaterialPageRoute.
+                                                       .builder (fn [_] (main-layout))))
+                                                     nil)
+                                                   (fn [err]
+                                                     (println "[Register] 注册失败 err:" (pr-str err))
+                                                     ;; Error handling: err 可能非 DioException，安全取 response；data/errors 转为 Clojure map
+                                                     (let [resp (safe-get-response err)
+                                                           status (when resp (.-statusCode resp))
+                                                           raw-data (when resp (.-data resp))
+                                                           data (when raw-data (into {} raw-data))
+                                                           errors (when data (when-let [e (get data "errors")] (into {} e)))
+                                                           message (when data (get data "message"))
+                                                           error-msg (cond
+                                                                      (= status 429)
+                                                                      (or message "Too many requests. Please try again later (limit: 3 per hour)")
+                                                                      (and (= status 422) (map? errors) (not (empty? errors)))
+                                                                      (->> errors
+                                                                           (map (fn [[k v]] (str k ": " (first (if (sequential? v) v (into [] v))))))
+                                                                           (str/join "; "))
+                                                                      status
+                                                                      (case status
+                                                                        400 "Invalid registration data"
+                                                                        409 "Email already exists"
+                                                                        422 "Validation failed"
+                                                                        429 "Too many requests. Please try again later"
+                                                                        "Registration failed")
+                                                                      :else "Registration failed")]
+                                                       (toast/error ctx error-msg)))))))))
                         .child (mgl/MongolText "Register" .style labelLarge)) ;; Register button
 
                        (m/SizedBox .height 20.0)

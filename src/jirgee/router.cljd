@@ -20,7 +20,7 @@
             [jirgee.services.bookmark :as bookmark-service]
             [jirgee.services.mention :as mention-service]
             [jirgee.services.group :as group-service]
-            [jirgee.services.base :refer [client]]
+            [jirgee.services.base :refer [client response-data]]
             [jirgee.state :refer [
                                   peer-id-atom
                                   peer-name-atom
@@ -220,14 +220,16 @@
   (-> (.get client "/notifications"
             .queryParameters (when @notifications-filter-read?-atom {"read" @notifications-filter-read?-atom}))
       (.then (fn [resp]
-              (set-notifications-state! (get (.-data resp) "notifications" []))
-              (set-notifications-loading?! false)))
+              (let [data (response-data resp)
+                    notifs (get data "notifications" [])]
+                (set-notifications-state! (mapv #(into {} %) (into [] (or notifs []))))
+                (set-notifications-loading?! false))))
       (.catchError (fn [err]
                     (println "Load notifications failed:" err)
                     (set-notifications-loading?! false))))
   (-> (.get client "/notifications/unread_count")
       (.then (fn [resp]
-              (set-notifications-unread-count! (get (.-data resp) "unread_count" 0))))
+              (set-notifications-unread-count! (get (response-data resp) "unread_count" 0))))
       (.catchError (fn [err] (println "Load unread count failed:" err))))
   (.pushNamed (.currentState navigator-key) "/notifications"))
 

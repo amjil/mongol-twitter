@@ -1,17 +1,20 @@
 (ns jirgee.services.auth
-  (:require [jirgee.services.base :refer [client set-auth-header!]]
+  (:require [jirgee.services.base :refer [client set-auth-header! safe-get-response]]
             [jirgee.services.storage :as storage]))
 
 ;; --- Authentication Operations ---
 
 ;; Login
 (defn login [{:keys [email password]} on-success on-error]
+  (println "[Auth] login 被调用, email:" (pr-str email))
   (-> (.post client "/auth/login"
              .data {"email" email "password" password})
       (.then (fn [resp]
+               (println "[Auth] 登录请求成功, resp.data:" (pr-str (.-data resp)))
                (let [data (.-data resp)
                      token (get data "token")
                      user (get data "user")]
+                 (println "[Auth] 提取 token:" (pr-str token) "user:" (pr-str user))
                  ;; 1. Inject Token into Dio global config
                  (set-auth-header! token)
                  ;; 2. Save Token and user info to SharedPreferences
@@ -19,14 +22,25 @@
                  ;; 3. Execute success callback, return user info
                  (on-success data))))
       (.catchError (fn [err]
+                     (println "[Auth] 登录请求失败 err:" (pr-str err))
+                     (when-let [resp (safe-get-response err)]
+                       (println "[Auth] 响应状态码:" (.-statusCode resp))
+                       (println "[Auth] 响应数据:" (pr-str (.-data resp))))
                      ;; Possible errors: 401 (wrong password), 404 (user not found)
                      (on-error err)))))
 
-;; Register (supports passing Mongolian nickname)
+;; Register: API 要求 user 含 email, username, password, display_name（见 API.md）
 (defn register [user-params on-success on-error]
-  (let [payload {"user" user-params}] ; user-params should include email, password, nickname, bio, etc.
+  (println "[Auth] register 被调用, user-params:" (pr-str user-params))
+  (let [nickname (or (get user-params "nickname") (get user-params "username") "")
+        api-user (-> user-params
+                     (dissoc "nickname")
+                     (assoc "username" nickname "display_name" nickname))
+        payload {"user" api-user}]
+    (println "[Auth] 请求 payload:" (pr-str payload))
     (-> (.post client "/auth/register" .data payload)
         (.then (fn [resp]
+                 (println "[Auth] 注册请求成功, resp.data:" (pr-str (.-data resp)))
                  (let [data (.-data resp)
                        token (get data "token")
                        user (get data "user")]
@@ -36,7 +50,12 @@
                    (storage/save-auth-data! token user)
                    ;; 3. Execute success callback
                    (on-success data))))
-        (.catchError on-error))))
+        (.catchError (fn [err]
+                       (println "[Auth] 注册请求失败 err:" (pr-str err))
+                       (when-let [resp (safe-get-response err)]
+                         (println "[Auth] 响应状态码:" (.-statusCode resp))
+                         (println "[Auth] 响应数据:" (pr-str (.-data resp))))
+                       (on-error err))))))
 
 ;; Logout
 (defn logout [on-success]
@@ -54,7 +73,7 @@
 ;; Request password reset email
 (defn forgot-password [email on-success on-error]
   (-> (.post client "/auth/forgot_password" .data {"email" email})
-      (.then (fn [resp] (on-success (.-data resp))))
+      (.then (fn [resp] (on-success (into {} (.-data resp)))))
       (.catchError on-error)))
 
 ;; Change password using reset token
@@ -63,7 +82,7 @@
              .data {"token" token
                     "password" password
                     "password_confirmation" password-confirmation})
-      (.then (fn [resp] (on-success (.-data resp))))
+      (.then (fn [resp] (on-success (into {} (.-data resp)))))
       (.catchError on-error)))
 
 ;; Change password while logged in
@@ -71,5 +90,5 @@
   (-> (.post client "/auth/change_password"
              .data {"current_password" current-password
                     "new_password" new-password})
-      (.then (fn [resp] (on-success (.-data resp))))
+      (.then (fn [resp] (on-success (into {} (.-data resp)))))
       (.catchError on-error)))

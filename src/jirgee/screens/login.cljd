@@ -4,6 +4,7 @@
             ["package:mongol/mongol.dart" :as mgl]
             [virtual-keyboard.keyboard :as keyboard]
             [jirgee.services.auth :as auth]
+            [jirgee.services.base :refer [safe-get-response]]
             [jirgee.main-layout :refer [main-layout]]
             [jirgee.router :refer [push-to-register]]
             [components.toast :as toast]
@@ -52,6 +53,8 @@
                       .child
                       (text-field {:controller email-ctrl
                                    :hint "Email address" ;; Email
+                                   :autofocus true
+                                   :max-lines 1
                                    :decoration (m/InputDecoration
                                                 .labelText "Email address" ;; Email
                                                 .border (m/OutlineInputBorder))}))
@@ -84,8 +87,10 @@
                         (fn []
                           (let [email (.-text email-ctrl)
                                 pass (.-text pass-ctrl)]
+                            (println "[Login] 点击登录, email:" (pr-str email))
                             (auth/login {:email email :password pass}
                                         (fn [_data]
+                                          (println "[Login] 登录成功，跳转主界面")
                                           ;; Navigate to main layout on successful login
                                           (m/Navigator.pushReplacement
                                            ctx
@@ -93,14 +98,24 @@
                                             .builder (fn [_] (main-layout))))
                                           nil)
                                         (fn [err]
-                                          ;; Error handling
-                                          (let [error-msg (if (and (.-response err) (.-status (.-response err)))
-                                                            (case (.-status (.-response err))
-                                                              401 "Password is incorrect"
-                                                              404 "User not found"
-                                                              "Login failed"
-                                                              )
-                                                            "Login failed")] ;; "Login failed"
+                                          (println "[Login] 登录错误回调 err:" (pr-str err))
+                                          ;; 与注册页一致：安全取 response，直接使用 get 获取值
+                                          (let [resp (safe-get-response err)
+                                                status (when resp (.-statusCode resp))
+                                                data (when resp (.-data resp))
+                                                message (when data (get data "message"))
+                                                error-msg (cond
+                                                           (= status 429)
+                                                           (or message "Too many requests. Please try again later (limit: 3 per hour)")
+                                                           (= status 422)
+                                                           (or message "Validation failed")
+                                                           status
+                                                           (case status
+                                                             401 "Password is incorrect"
+                                                             404 "User not found"
+                                                             "Login failed")
+                                                           :else "Login failed")]
+                                            (println "[Login] 解析后 status:" (pr-str status) "data:" (pr-str data) "error-msg:" (pr-str error-msg))
                                             (toast/error ctx error-msg))))))
                         .child (mgl/MongolText "Login" .style labelLarge)) ;; Login button
 

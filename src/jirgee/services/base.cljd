@@ -24,11 +24,34 @@
 ;; Global Dio instance
 (def client (dio/Dio options))
 
-;; Utility function to set authentication token
+;; 当前 token，供拦截器读取；Dio 的 headers 必须是 Map<String, dynamic>，不能赋 Clojure map
+(def ^:private auth-token-atom (atom nil))
+
+;; 请求拦截器：从 atom 读取 token 并设置到 RequestOptions.headers（Dart Map 上直接 []=
+(doto client
+  (.interceptors.add
+   (dio/InterceptorsWrapper
+    .onRequest (fn [options handler]
+                 (when-let [token @auth-token-atom]
+                   (let [h (.-headers options)]
+                     (when h ((.-[]= h) "Authorization" (str "Bearer " token)))))
+                 ((.-next handler) options)))))
+
+;; 将 Dio 响应体转为 Clojure map，避免 Dart Map 导致 ICollection 等协议错误
+(defn response-data [resp]
+  (into {} (.-data resp)))
+
+;; 安全获取错误对象的 response（如果是 DioException），否则返回 nil
+;; 内部处理 NoSuchMethodError（Error 类型），避免在调用处需要 catch dynamic
+(defn safe-get-response [err]
+  (try
+    (.-response err)
+    (catch Exception _ nil)
+    (catch dc/Error _ nil)))
+
+;; Utility function to set authentication token（写入 atom，拦截器会在每次请求时带上）
 (defn set-auth-header! [token]
-  (set! (.-headers (.-options client))
-        (merge (.-headers (.-options client))
-               {"Authorization" (str "Bearer " token)})))
+  (reset! auth-token-atom token))
 
 ;; --- Database Configuration ---
 ;; Database state has been moved to jirgee.state

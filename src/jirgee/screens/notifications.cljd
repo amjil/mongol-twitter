@@ -4,7 +4,7 @@
             ["package:mongol/mongol.dart" :as mgl]
             [components.app-bar :refer [mongol-side-layout]]
             [components.chip :refer [filter-chip]]
-            [jirgee.services.base :refer [client]]
+            [jirgee.services.base :refer [client response-data]]
             [jirgee.state :refer [notifications-state-atom
                                   notifications-loading?-atom
                                   notifications-unread-count-atom
@@ -91,15 +91,17 @@
                                (-> (.get client "/notifications"
                                          .queryParameters (when filter-read {"read" filter-read}))
                                    (.then (fn [resp]
-                                            (set-notifications-state! (get (.-data resp) "notifications" []))
-                                            (set-notifications-loading?! false)))
+                                            (let [data (response-data resp)
+                                                  notifs (get data "notifications" [])]
+                                              (set-notifications-state! (mapv #(into {} %) (into [] (or notifs []))))
+                                              (set-notifications-loading?! false))))
                                    (.catchError (fn [err]
                                                   (println "Load notifications failed:" err)
                                                   (set-notifications-loading?! false)))))
          load-unread-count! (fn []
                               (-> (.get client "/notifications/unread_count")
                                   (.then (fn [resp]
-                                           (set-notifications-unread-count! (get (.-data resp) "unread_count" 0))))
+                                           (set-notifications-unread-count! (get (response-data resp) "unread_count" 0))))
                                   (.catchError (fn [err] (println "Load unread count failed:" err)))))
          mark-all-read! (fn []
                           (-> (.put client "/notifications/read_all")
