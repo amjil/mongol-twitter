@@ -13,6 +13,7 @@
                                   main-layout-is-pinned-atom
                                   conversations-chats-state-atom
                                   timeline-posts-state-atom
+                                  timeline-loading?-atom
                                   profile-state-atom
                                   set-main-layout-current-tab!
                                   set-conversations-chats-state!
@@ -23,8 +24,12 @@
 (defn main-layout []
   (f/widget
    :watch [idx main-layout-current-tab-atom
-           mode main-layout-theme-mode-atom]
+           mode main-layout-theme-mode-atom
+           timeline-posts timeline-posts-state-atom
+           timeline-loading? timeline-loading?-atom]
    :get {{{:flds [primary onSurfaceVariant surface]} .-colorScheme} m/Theme}
+   :let [_ (when (and (= idx 0) (nil? timeline-posts) (not timeline-loading?))
+             (post-service/load-timeline-data!))]
    (m/Scaffold
     .backgroundColor surface
     .body

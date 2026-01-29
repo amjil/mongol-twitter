@@ -7,7 +7,8 @@
             [virtual-keyboard.keyboard-candidates :as kc]
             [virtual-keyboard.zip-utils :as zip-utils]
             [virtual-keyboard.fst-reader :as fst-reader]
-            [jirgee.state :refer [set-database!] :as state]))
+            [jirgee.state :refer [set-database!] :as state]
+            [jirgee.services.storage :as storage]))
 
 ;; Re-export database so other files can import from base.cljd
 (def database state/database)
@@ -27,15 +28,63 @@
 ;; Current token for interceptor; Dio headers must be Map<String, dynamic>, not Clojure map
 (def ^:private auth-token-atom (atom nil))
 
-;; Request interceptor: read token from atom and set on RequestOptions.headers
+(defn set-auth-header! [token]
+  (reset! auth-token-atom token))
+
+(defn get-auth-token []
+  @auth-token-atom)
+
+;; POST with Authorization in request Options (bypasses interceptor). Use when interceptor does not attach header.
+;; Returns the same Promise as (.post client path .data data [.options opts]).
+(defn post-with-auth [path data]
+  (let [token (get-auth-token)
+        opts (when token (dio/Options. .headers (dc/Map.from {"Authorization" (str "Bearer " token)})))]
+    (if opts
+      (.post client path .data data .options opts)
+      (-> (storage/get-auth-data)
+          (.then (fn [auth-data]
+                   (when auth-data (set-auth-header! (:token auth-data)))
+                   (let [t (get-auth-token)
+                         o (when t (dio/Options. .headers (dc/Map.from {"Authorization" (str "Bearer " t)})))]
+                     (if o
+                       (.post client path .data data .options o)
+                       (.post client path .data data)))))))))
+
+;; GET with Authorization. Same pattern as post-with-auth: ensure token from atom or storage before request.
+(defn get-with-auth [path]
+  (let [token (get-auth-token)
+        opts (when token (dio/Options. .headers (dc/Map.from {"Authorization" (str "Bearer " token)})))]
+    (if opts
+      (.get client path .options opts)
+      (-> (storage/get-auth-data)
+          (.then (fn [auth-data]
+                   (when auth-data (set-auth-header! (:token auth-data)))
+                   (let [t (get-auth-token)
+                         o (when t (dio/Options. .headers (dc/Map.from {"Authorization" (str "Bearer " t)})))]
+                     (if o
+                       (.get client path .options o)
+                       (.get client path)))))))))
+
+;; Build headers map: Content-Type + Authorization when token present (same as post.cljd explicit Options).
+(defn- auth-headers [token]
+  (dc/Map.from (cond-> {"Content-Type" "application/json"}
+                 token (assoc "Authorization" (str "Bearer " token)))))
+
+;; Request interceptor: set Authorization on every request. If atom has no token, load from storage first.
 (doto client
   (.interceptors.add
    (dio/InterceptorsWrapper
     .onRequest (fn [options handler]
-                 (when-let [token @auth-token-atom]
-                   (let [h (.-headers options)]
-                     (when h ((.-[]= h) "Authorization" (str "Bearer " token)))))
-                 ((.-next handler) options)))))
+                 (let [token @auth-token-atom]
+                   (if token
+                     (do (set! (.-headers options) (auth-headers token))
+                         ((.-next handler) options))
+                     (-> (storage/get-auth-data)
+                         (.then (fn [auth-data]
+                                  (when auth-data (set-auth-header! (:token auth-data)))
+                                  (let [t (get-auth-token)]
+                                    (set! (.-headers options) (auth-headers t))
+                                    ((.-next handler) options)))))))))))
 
 ;; Convert Dio response body to Clojure map to avoid ICollection protocol errors with Dart Map
 (defn response-data [resp]
@@ -48,10 +97,6 @@
     (.-response err)
     (catch Exception _ nil)
     (catch dc/Error _ nil)))
-
-;; Set authentication token (written to atom; interceptor adds it to each request)
-(defn set-auth-header! [token]
-  (reset! auth-token-atom token))
 
 ;; --- Database Configuration ---
 ;; Database state has been moved to jirgee.state

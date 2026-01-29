@@ -1,37 +1,22 @@
 (ns jirgee.services.post
-  (:require [jirgee.services.base :refer [client]]
+  (:require [jirgee.services.base :refer [post-with-auth get-with-auth]]
             [jirgee.state :refer [set-timeline-posts-state!
                                   set-timeline-loading?!]]))
 
-;; =============================================================================
-;; 1. Posting (network only)
-;; =============================================================================
-
-;; Build API request body: API expects {"post": {"content" "...", "visibility" "public", "media" [...]}}
-(defn- post-request-body [content-str image-url]
-  (let [post-map (cond-> {"content" (str content-str)
-                          "visibility" "public"}
-                   image-url (assoc "media" [{"file_url" image-url "media_type" "image"}]))]
-    {"post" post-map}))
-
-;; Create new post (network only)
+;; Create post. Body: {"post": {"content" "...", "visibility" "public", "media"?}}. Auth via post-with-auth (Options).
 (defn create [{:keys [content image-url]} on-success on-error]
-  (let [^String content-str (str content)
-        body (post-request-body content-str image-url)]
-    (-> (.post client "/posts" .data body)
+  (let [post-map (cond-> {"content" (str content) "visibility" "public"}
+                   image-url (assoc "media" [{"file_url" image-url "media_type" "image"}]))
+        body {"post" post-map}]
+    (-> (post-with-auth "/posts" body)
         (.then (fn [resp]
-                 (let [post-data (get (.-data resp) "post")]
-                   (on-success (or post-data {:local-id nil :status :created})))))
+                 (on-success (or (get (.-data resp) "post") {:local-id nil :status :created}))))
         (.catchError on-error))))
 
-;; =============================================================================
-;; 2. Timeline (fetch from API)
-;; =============================================================================
-
-;; Load timeline data from backend API
+;; Load timeline from API
 (defn load-timeline-data! []
   (set-timeline-loading?! true)
-  (-> (.get client "/timeline")
+  (-> (get-with-auth "/timeline")
       (.then (fn [resp]
                (set-timeline-posts-state! (or (get (.-data resp) "posts") []))
                (set-timeline-loading?! false)))

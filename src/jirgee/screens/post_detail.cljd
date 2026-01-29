@@ -101,19 +101,21 @@
                    (m/SizedBox .width 48.0)
 
                    ;; --- B. Media area ---
-                   (m/SizedBox
-                    .width (* width 0.6)
-                    .height (* height 0.65)
-                    .child (m/Hero
-                            .tag id
-                            .child (m/ClipRRect
-                                    .borderRadius (m/BorderRadius.circular 24.0)
-                                    .child (cond
-                                             (seq image-urls)
-                                             (post-image-gallery image-urls)
-                                             video-url
-                                             (actual-video-player video-url cover-url)
-                                             :else (m/Container .color surfaceContainerHighest)))))
+                   (if (or (seq image-urls) video-url)
+                     (m/SizedBox
+                      .width (* width 0.6)
+                      .height (* height 0.65)
+                      .child (m/Hero
+                              .tag id
+                              .child (m/ClipRRect
+                                      .borderRadius (m/BorderRadius.circular 24.0)
+                                      .child (cond
+                                               (seq image-urls)
+                                               (post-image-gallery image-urls)
+                                               video-url
+                                               (actual-video-player video-url cover-url)
+                                               :else (m/Container .color surfaceContainerHighest)))))
+                     (m/SizedBox.shrink))
 
                    (m/SizedBox .width 48.0)
 
