@@ -2,8 +2,7 @@
   (:require [cljd.flutter :as f]
             ["package:flutter/material.dart" :as m]
             ["package:photo_view/photo_view.dart" :as pv]
-            ["package:photo_view/photo_view_gallery.dart" :as pvg]
-            ["dart:math" :as math]))
+            ["package:photo_view/photo_view_gallery.dart" :as pvg]))
 
 ;; --- Full-screen browser remains unchanged ---
 (defn- open-gallery [ctx urls initial-index]
@@ -66,7 +65,8 @@
                    [(thumb-item (first urls) 0 urls ctx top-height)
                     (m/SizedBox .height spacing)
                     (let [remaining (rest urls)
-                          half (math/ceil (/ (count remaining) 2))
+                          n (count remaining)
+                          half (+ (quot n 2) (if (zero? (rem n 2)) 0 1))
                           left-col (take half remaining)
                           right-col (drop half remaining)]
                       (m/Expanded ;; Automatically occupy remaining bottom half space

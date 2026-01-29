@@ -21,7 +21,8 @@
             [jirgee.screens.groups :refer [groups-screen]]
             [jirgee.screens.notifications :refer [notifications-screen]]
             [jirgee.screens.hashtag :refer [hashtag-screen]]
-            [jirgee.screens.create-post :refer [create-post-screen]]))
+            [jirgee.screens.create-post :refer [create-post-screen]]
+            [jirgee.screens.post-detail :refer [post-detail-screen]]))
 
 (defn- start-app [initial-route]
   "Start app, only call runApp once"
@@ -55,7 +56,8 @@
               "/notifications" (fn [_] ^m/Widget (notifications-screen))
               "/hashtag" (fn [_] ^m/Widget (hashtag-screen))
               "/chat" (fn [_] ^m/Widget (chat-screen))
-              "/create-post" (fn [_] ^m/Widget (create-post-screen))}))))
+              "/create-post" (fn [_] ^m/Widget (create-post-screen))
+              "/post-detail" (fn [_] ^m/Widget (post-detail-screen))}))))
 
 (defn- init-and-start 
   "Initialize and start app"

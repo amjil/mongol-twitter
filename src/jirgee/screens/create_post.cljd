@@ -41,6 +41,7 @@
                                     (fn [_]
                                       (set-create-post-posting?! false)
                                       (set-create-post-selected-image-path! nil)
+                                      (post-service/load-timeline-data!)
                                       (.pop navigator))
                                     (fn [err]
                                       (set-create-post-posting?! false)

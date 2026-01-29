@@ -1,5 +1,6 @@
 (ns jirgee.components.post-card-vertical
   (:require [cljd.flutter :as f]
+            ["dart:core" :as dc]
             ["package:flutter/material.dart" :as m]
             ["package:mongol/mongol.dart" :as mgl]
             [jirgee.components.post-image-gallery :refer [post-image-gallery]]
@@ -7,9 +8,18 @@
             [jirgee.components.actual-video-player :refer [actual-video-player]]
             [jirgee.components.post-actions :refer [post-action-bar-vertical]]))
 
-(defn post-card-vertical [{:keys [post]}]
-  (let [{:keys [id content image-urls video-url cover-url
-                likes comments forwards is-liked]} post
+(defn post-card-vertical [arg]
+  (let [post (if (contains? arg :post) (:post arg) arg)
+        ;; Support both string-key (from Drift->map) and keyword-key maps
+        id (or (get post "id") (get post :id))
+        content (or (get post "content") (get post :content) "")
+        image-urls (or (get post "image_urls") (when-let [url (get post "image_url")] [url]) [])
+        video-url (get post "video_url")
+        cover-url (get post "cover_url")
+        likes (or (get post "likes_count") (get post "likes") 0)
+        comments (or (get post "comments_count") (get post "comments") 0)
+        forwards (or (get post "reposts_count") (get post "forwards") 0)
+        is-liked (get post "is_liked" false)
         ;; 1. Playback state defined in outer let of widget
         is-playing (atom false)
         media-w 160.0
@@ -53,10 +63,10 @@
               ;; Video preview: tap to play in place
               video-url
               (m/AnimatedSwitcher
-               .duration (m/Duration .milliseconds 400)
+               .duration (dc/Duration .milliseconds 400)
                .child (if playing
                         (m/Container .key (m/ValueKey "p")
-                                     (actual-video-player video-url cover-url))
+                                     .child (actual-video-player video-url cover-url))
                         (m/Container .key (m/ValueKey "c")
                                      (post-video-preview
                                       {:cover-url cover-url

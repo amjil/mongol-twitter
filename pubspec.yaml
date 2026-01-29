@@ -95,6 +95,7 @@ flutter:
     - assets/bg_home.jpg
     - assets/bg_chat.jpg
     - assets/bg_profile.jpg
+    - assets/parchment_bg.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

@@ -1,5 +1,7 @@
 (ns jirgee.components.actual-video-player
   (:require ["package:flutter/material.dart" :as m]
+            ["dart:ui" :as ui]
+            ["dart:core" :as dc]
             ["package:video_player/video_player.dart" :as vp]
             [cljd.flutter :as f]))
 
@@ -28,14 +30,14 @@
          ;; Layer 2: frosted glass blur layer (optional, adds artistic feel)
          (if-not isInitialized
            (m/BackdropFilter 
-             .filter (m/ImageFilter.blur .sigmaX 10.0 .sigmaY 10.0)
+             .filter (ui/ImageFilter.blur .sigmaX 10.0 .sigmaY 10.0)
              .child (m/Container .color (m/Color 0x20FFFFFF)))
            (m/SizedBox.shrink))
 
          ;; Layer 3: actual video (fade in after loading)
          (if isInitialized
            (m/AnimatedOpacity
-             .opacity 1.0 .duration (m/Duration .milliseconds 500)
+             .opacity 1.0 .duration (dc/Duration .milliseconds 500)
              .child (m/FittedBox .fit m/BoxFit.cover
                       .child (m/SizedBox
                                .width (.-width (.-size (.-value controller)))

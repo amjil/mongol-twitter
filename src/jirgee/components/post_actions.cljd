@@ -10,7 +10,9 @@
 ;; Extract single action button with built-in animation logic
 (defn- action-item [{:keys [icon active-icon count color active-color is-active on-tap]}]
   (f/widget
-   :let [scale (atom 1.0)] ;; Used to control scale animation
+   :get {{{:flds [onSurfaceVariant]} .-colorScheme} m/Theme}
+   :let [scale (atom 1.0)
+         icon-color (or color onSurfaceVariant)]
    (m/GestureDetector
     .behavior m/HitTestBehavior.opaque
     .onTap (fn []
@@ -31,12 +33,12 @@
         (m/Transform.scale
          .scale s
          .child (m/Icon (if is-active active-icon icon)
-                        .color (if is-active active-color color)
+                        .color (if is-active active-color icon-color)
                         .size 26.0)))
        (m/SizedBox .height 4.0)
        (m/Text (str count)
                .style (m/TextStyle .fontSize 12.0
-                                   .color m/Colors.black54
+                                   .color onSurfaceVariant
                                    .fontWeight m/FontWeight.w500))])))))
 
 
@@ -63,10 +65,11 @@
 (defn post-action-bar-vertical [{:keys [likes comments forwards is-liked on-like on-comment on-repost]}]
   (f/widget
    :context ctx
+   :get {{{:flds [outlineVariant]} .-colorScheme} m/Theme}
    (m/Container
     ;; Add subtle left border as boundary between content and action area
     .decoration (m/BoxDecoration
-                 .border (m/Border .left (m/BorderSide .color m/Colors.black12 .width 0.5)))
+                 .border (m/Border .left (m/BorderSide .color outlineVariant .width 0.5)))
     .padding (m/EdgeInsets.only .left 12.0 .right 4.0)
     .child
     (m/Column

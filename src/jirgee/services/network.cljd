@@ -1,7 +1,6 @@
 (ns jirgee.services.network
   (:require ["package:connectivity_plus/connectivity_plus.dart" :as connectivity]
             [jirgee.services.chat :as chat]
-            [jirgee.services.post :as post]
             ["dart:async" :as async]
             [jirgee.state :refer [network-subscription-atom
                                   set-network-subscription!]]))
@@ -19,9 +18,7 @@
                       (when online?
                         (println "🌐 Network restored, triggering sync...")
                         ;; Trigger message sync
-                        (chat/sync-pending-actions)
-                        ;; If there's post sync logic, it can also be placed here
-                        (post/sync-pending-posts)))))))))
+                        (chat/sync-pending-actions)))))))))
 
 (defn stop-observing! []
   (when-let [sub @network-subscription-atom]

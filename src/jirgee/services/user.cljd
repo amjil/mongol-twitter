@@ -1,6 +1,5 @@
 (ns jirgee.services.user
   (:require [jirgee.services.base :refer [client]]
-            [jirgee.services.post :as post-service]
             [jirgee.state :refer [set-profile-state!
                                   set-profile-user-posts-state!]]))
 
@@ -17,6 +16,14 @@
   (-> (.get client (str "/users/" user-id))
       (.then (fn [resp] (on-success (.-data resp))))
       (.catchError on-error)))
+
+;; Get user's posts (fully from backend API)
+(defn get-user-posts [user-id on-success on-error]
+  (-> (.get client (str "/users/" user-id "/posts"))
+      (.then (fn [resp] (on-success (or (get (.-data resp) "posts") []))))
+      (.catchError (fn [err]
+                     (when on-error (on-error err))
+                     (on-success [])))))
 
 ;; Update profile (nickname, bio, avatar URL, etc.)
 (defn update-profile [user-params on-success on-error]
@@ -72,8 +79,9 @@
       (.then (fn [resp] (on-success (get (.-data resp) "users"))))
       (.catchError on-error)))
 
-;; Load profile data (user information and post list)
+;; Load profile data (user information and post list; both from backend API)
 (defn load-profile-data! [user-id]
   (get-profile user-id #(set-profile-state! %) (fn [err] (println "Get profile failed:" err)))
-  (-> (post-service/get-timeline)
-      (.then (fn [data] (set-profile-user-posts-state! data)))))
+  (get-user-posts user-id
+                  #(set-profile-user-posts-state! %)
+                  (fn [_] (set-profile-user-posts-state! []))))

@@ -42,6 +42,11 @@
 (defonce ^:private timeline-loading? (atom false))
 
 ;; ============================================
+;; Screen State - Post Detail (current viewed post detail, detail screen reads from state)
+;; ============================================
+(defonce ^:private post-detail-state (atom nil))
+
+;; ============================================
 ;; Screen State - Search
 ;; ============================================
 (defonce ^:private search-query (atom ""))
@@ -201,6 +206,12 @@
 (defn set-timeline-loading?! [v] (reset! timeline-loading? v))
 
 ;; ============================================
+;; Export Functions - Post Detail
+;; ============================================
+(defn get-post-detail-state [] @post-detail-state)
+(defn set-post-detail-state! [v] (reset! post-detail-state v))
+
+;; ============================================
 ;; Export Functions - Search
 ;; ============================================
 (defn get-search-query [] @search-query)
@@ -352,6 +363,9 @@
 ;; Timeline
 (def timeline-posts-state-atom timeline-posts-state)
 (def timeline-loading?-atom timeline-loading?)
+
+;; Post Detail
+(def post-detail-state-atom post-detail-state)
 
 ;; Search
 (def search-query-atom search-query)
