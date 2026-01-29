@@ -1,8 +1,10 @@
 (ns jirgee.services.websocket
-  (:require ["package:web_socket_channel/web_socket_channel.dart" :as wsc]
+  "Phoenix Socket client for Elixir Phoenix backend WebSocket."
+  (:require ["package:phoenix_socket/phoenix_socket.dart" :as ps]
             ["dart:async" :as async]
             ["dart:core" :as dc]
-            ["dart:convert" :as convert]
+            [jirgee.services.base :refer [options]]
+            [jirgee.services.storage :as storage]
             [jirgee.state :refer [websocket-channel-atom
                                   websocket-heartbeat-timer-atom
                                   websocket-active?-atom
@@ -12,47 +14,92 @@
 
 (defn connected? [] @websocket-active?-atom)
 
-(defn- start-heartbeat! []
-  ;; Cancel old timer first
-  (when @websocket-heartbeat-timer-atom (.cancel ^async/Timer @websocket-heartbeat-timer-atom))
-  ;; Send heartbeat every 30 seconds
-  (set-websocket-heartbeat-timer!
-   (async/Timer.periodic
-    (dc/Duration. .seconds 30)
-    (fn [timer]
-      (if @websocket-active?-atom
-        (try
-          (.sink.add @websocket-channel-atom (convert/jsonEncode {"type" "ping"}))
-          (catch Exception e (println "Heartbeat send failed")))
-        (.cancel timer))))))
+(defn- base-url-to-socket-endpoint []
+  (let [base (.-baseUrl options)
+        uri (dc/Uri.parse base)]
+    (str "ws://" (.-host uri) ":" (or (.-port uri) 4000) "/socket/websocket")))
+
+;; Convert Phoenix channel payload to app on-message format (sender_id, receiver_id, content, sender_name, etc.)
+(defn- phoenix-payload->app-msg [payload]
+  (when payload
+    (let [m (into {} (if (map? payload) payload {}))
+          sender (get m "sender")
+          receiver (get m "receiver")
+          sender-map (when sender (into {} (if (map? sender) sender {})))
+          receiver-map (when receiver (into {} (if (map? receiver) receiver {})))]
+      (cond-> {"id" (get m "id")
+               "content" (get m "content" "")
+               "inserted_at" (get m "inserted_at")
+               "message_type" (get m "message_type" "text")}
+        sender-map (assoc "sender_id" (get sender-map "id")
+                         "sender_name" (or (get sender-map "display_name") (get sender-map "username") ""))
+        receiver-map (assoc "receiver_id" (get receiver-map "id"))))))
 
 (defn connect! [{:keys [on-message on-close]}]
-  (try
-    (let [url "ws://your-api.com/chat"
-          c (wsc/WebSocketChannel.connect (Uri/parse url))]
-      (set-websocket-channel! c)
-      (set-websocket-active?! true)
-      (start-heartbeat!) ;; Start heartbeat
-
-      (-> (.-stream c)
-          (.listen
-           (fn [data]
-             (let [msg (convert/jsonDecode data)]
-               (if (= (get msg "type") "pong")
-                 (comment "Received server response, connection healthy")
-                 (on-message msg))))
-           .onDone (fn []
+  (-> (storage/get-auth-data)
+      (.then (fn [auth-data]
+               (if (or (nil? auth-data) (nil? (:token auth-data)))
+                 (do (set-websocket-active?! false)
+                     (when on-close (on-close)))
+                 (let [token (:token auth-data)
+                       user (:user auth-data)
+                       user-id (when user (str (get (into {} user) "id")))
+                       endpoint (str (base-url-to-socket-endpoint)
+                                     "?token=" (dc/Uri.encodeComponent token)
+                                     "&vsn=2.0.0")
+                       socket (ps/PhoenixSocket. endpoint)]
+                   (-> (.connect socket)
+                       (.then (fn [_]
+                                (if (or (nil? user-id) (= user-id ""))
+                                  (do (set-websocket-active?! false)
+                                      (.close socket)
+                                      (when on-close (on-close)))
+                                  (let [topic (str "direct_message:" user-id)
+                                        channel (.addChannel socket .topic topic .parameters nil)
+                                        sub (-> (.-messages channel)
+                                                (.listen (fn [^ps/Message message]
+                                                           (let [ev (.-event message)
+                                                                 ev-str (str ev)]
+                                                             (when (= ev-str "new_message")
+                                                               (when-let [app-msg (phoenix-payload->app-msg (.-payload message))]
+                                                                 (when on-message
+                                                                   (on-message app-msg))))))))
+                                        close-sub (-> (.-closeStream socket)
+                                                     (.listen (fn [_]
+                                                                (set-websocket-active?! false)
+                                                                (when on-close (on-close)))))]
+                                    (-> (.join channel)
+                                        (.then (fn [_]
+                                                 (set-websocket-channel! {:socket socket :channel channel :subscription sub :close-subscription close-sub})
+                                                 (set-websocket-active?! true)))
+                                        (.catchError (fn [e]
+                                                       (println "Phoenix channel join failed:" e)
+                                                       (set-websocket-active?! false)
+                                                       (try (.cancel close-sub) (catch Exception _ nil))
+                                                       (.close socket)
+                                                       (when on-close (on-close))))))))))
+                       (.catchError (fn [e]
+                                      (println "Phoenix socket connect failed:" e)
+                                      (set-websocket-active?! false)
+                                      (when on-close (on-close)))))))))
+      (.catchError (fn [e]
+                     (println "Failed to get auth data for socket:" e)
                      (set-websocket-active?! false)
-                     (when @websocket-heartbeat-timer-atom (.cancel ^async/Timer @websocket-heartbeat-timer-atom))
-                     (on-close))
-           .onError (fn [e]
-                      (set-websocket-active?! false)
-                      (on-close)))))
-    (catch Exception e
-      (set-websocket-active?! false)
-      (on-close))))
+                     (when on-close (on-close)))))
 
 (defn disconnect! []
-  (when-let [c @websocket-channel-atom] (.sink.close c))
-  (when-let [t @websocket-heartbeat-timer-atom] (.cancel ^async/Timer t))
-  (set-websocket-active?! false))
+  (when-let [v @websocket-channel-atom]
+    (let [m (if (map? v) v {})
+          socket (:socket m)
+          channel (:channel m)
+          sub (:subscription m)
+          close-sub (:close-subscription m)]
+      (when sub (try (.cancel ^async/StreamSubscription sub) (catch Exception _ nil)))
+      (when close-sub (try (.cancel ^async/StreamSubscription close-sub) (catch Exception _ nil)))
+      (when channel (try (.close channel) (catch Exception _ nil)))
+      (when socket (try (.close socket) (catch Exception _ nil))))
+  (set-websocket-channel! nil)
+  (when @websocket-heartbeat-timer-atom
+    (try (.cancel ^async/Timer @websocket-heartbeat-timer-atom) (catch Exception _ nil)))
+  (set-websocket-heartbeat-timer! nil)
+  (set-websocket-active?! false)))
