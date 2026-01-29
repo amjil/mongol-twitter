@@ -2,6 +2,7 @@
   (:require [cljd.flutter :as f]
             ["package:flutter/material.dart" :as m]
             ["package:mongol/mongol.dart" :as mgl]
+            ["package:mongol_jirgee/post_frame_trigger.dart" :as post-frame-trigger]
             [jirgee.services.comment :as comment-service]
             ["dart:math" :as math]))
 
@@ -91,7 +92,8 @@
                       (if has-more
                         ;; Case A: more available, show sentinel and trigger load
                         (f/widget
-                         :managed [_ (do (load-fn!) (reify m/Disposable (dispose [_])))]
+                         (post-frame-trigger/PostFrameTrigger
+                          .onLayout load-fn!)
                          (m/Container
                           .width 100.0
                           .alignment m/Alignment.center
@@ -110,4 +112,4 @@
                                                .decoration (m/BoxDecoration .color m/Colors.black12 .shape m/BoxShape.circle))
                                   (m/SizedBox .height 16.0)
                                   (mgl/MongolText "End"
-                                  .style (m/TextStyle .fontSize 12.0 .color m/Colors.black12))])))))))])))))
+                                                  .style (m/TextStyle .fontSize 12.0 .color m/Colors.black12))])))))))])))))

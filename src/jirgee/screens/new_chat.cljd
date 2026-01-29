@@ -2,6 +2,7 @@
   (:require [cljd.flutter :as f]
             ["package:flutter/material.dart" :as m]
             ["package:mongol/mongol.dart" :as mgl]
+            [virtual-keyboard.keyboard :as keyboard]
             [components.tab-layout :refer [sidebar-page]]
             [components.text-field :as text-field]
             [jirgee.router :refer [push-to-chat]]
@@ -95,75 +96,79 @@
             {:flds [primary]} .-colorScheme} m/Theme}
      (m/Container
       .color surface
-      .child (m/Row
-              .crossAxisAlignment m/CrossAxisAlignment.stretch
-              .children
-              [
-               (m/Padding
-                .padding (m/EdgeInsets.all 16.0)
-                .child (m/Column
-                        .children
-                        [(m/Container
-                          .width 60.0
-                          .decoration (m/BoxDecoration
-                                       .color surfaceVariant
-                                       .borderRadius (m/BorderRadius.circular 12.0)
-                                       .border (m/Border.all .color outline .width 0.5))
-                          .child (text-field/text-field
-                                  {:controller query-ctrl
-                                   :hint "Search"
-                                   :decoration (m/InputDecoration .border m/InputBorder.none .contentPadding (m/EdgeInsets.all 8.0))
-                                   :on-submitted (fn [q]
-                                                   (when-not (empty? q)
-                                                     (reset! search-loading? true)
-                                                     (user-service/search q 
-                                                       #(do (reset! search-results (or % [])) (reset! search-loading? false))
-                                                       #(do (reset! search-results []) (reset! search-loading? false)))))}))
-                         (m/SizedBox .height 12.0)
-                         (m/IconButton
-                          .icon (m/Icon m/Icons.search .color primary)
-                          .onPressed (fn []
-                                       (let [q (.-text query-ctrl)]
-                                         (when-not (empty? q)
-                                           (reset! search-loading? true)
-                                           (user-service/search q 
-                                             #(do (reset! search-results (or % [])) (reset! search-loading? false))
-                                             #(do (reset! search-results []) (reset! search-loading? false)))))))]))
-               
-               (cond
-                 loading? (m/Expanded .child (m/Center .child (m/CircularProgressIndicator .strokeWidth 2.0)))
-                 
-                 (and results (seq results))
-                 (m/Expanded
-                  .child (m/ListView.builder
-                          .scrollDirection m/Axis.horizontal
-                          .padding (m/EdgeInsets.symmetric .vertical 16.0)
-                          .itemCount (count results)
-                          .itemBuilder (fn [_ idx]
-                                         (let [u (nth results idx)]
-                                           (user-action-card 
-                                            {:uid (get u "id")
-                                             :name (or (get u "display_name") (get u "username") "User")
-                                             :avatar-url (get u "avatar_url")
-                                             :bio (get u "bio")})))))
+      .child
+      (m/Row
+       .crossAxisAlignment m/CrossAxisAlignment.stretch
+       .children
+       [(m/Padding
+         .padding (m/EdgeInsets.all 16.0)
+         .child (m/Column
+                 .children
+                 [(m/Expanded
+                   .child
+                   (text-field/text-field
+                    {:controller query-ctrl
+                     :hint "Search"
+                     :max-lines 1
+                     :on-submitted (fn [q]
+                                     (when-not (empty? q)
+                                       (reset! search-loading? true)
+                                       (user-service/search q
+                                                            #(do (reset! search-results (or % [])) (reset! search-loading? false))
+                                                            #(do (reset! search-results []) (reset! search-loading? false)))))}))
+                  (m/SizedBox .height 12.0)
+                  (m/IconButton
+                   .icon (m/Icon m/Icons.search .color primary)
+                   .onPressed (fn []
+                                (let [q (.-text query-ctrl)]
+                                  (when-not (empty? q)
+                                    (reset! search-loading? true)
+                                    (user-service/search q
+                                                         #(do (reset! search-results (or % [])) (reset! search-loading? false))
+                                                         #(do (reset! search-results []) (reset! search-loading? false)))))))]))
 
-                 :else
-                 (m/Expanded
-                  .child (m/Center
-                          .child (mgl/MongolText "Please search..."
-                          .style (m/TextStyle .color m/Colors.black26))))) ])))))
+        (cond
+          loading? (m/Expanded .child (m/Center .child (m/CircularProgressIndicator .strokeWidth 2.0)))
+
+          (and results (seq results))
+          (m/Expanded
+           .child (m/ListView.builder
+                   .scrollDirection m/Axis.horizontal
+                   .padding (m/EdgeInsets.symmetric .vertical 16.0)
+                   .itemCount (count results)
+                   .itemBuilder (fn [_ idx]
+                                  (let [u (nth results idx)]
+                                    (user-action-card
+                                     {:uid (get u "id")
+                                      :name (or (get u "display_name") (get u "username") "User")
+                                      :avatar-url (get u "avatar_url")
+                                      :bio (get u "bio")})))))
+
+          :else
+          (m/Expanded
+           .child (m/Center
+                   .child (mgl/MongolText "Please search..."
+                                          .style (m/TextStyle .color m/Colors.black26)))))])))))
 
 ;; --- 4. Screen entry ---
 (defn new-chat-screen []
   (f/widget
-   :get {{{:flds [surface]} .-colorScheme} m/Theme}
+   :context ctx
+   :get {{{:flds [surface onSurface]} .-colorScheme} m/Theme}
    (m/Scaffold
-    .backgroundColor surface)
+    .backgroundColor surface
+    .appBar (m/AppBar
+             .backgroundColor surface
+             .elevation 0
+             .leading (m/IconButton
+                       .icon (m/Icon m/Icons.arrow_back .color onSurface)
+                       .onPressed #(m/Navigator.pop ctx)))
     .body
-   (m/SafeArea)
-   (sidebar-page
+   (m/SafeArea
+    .child
+    (sidebar-page
     {:tabs [{:text "Following" :icon m/Icons.people_outline}
             {:text "Search" :icon m/Icons.search}]
      :contents [(following-list-content)
                 (search-for-chat-content)]
-     :initial-idx 0})))
+     :initial-idx 0})))))

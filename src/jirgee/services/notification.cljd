@@ -12,7 +12,8 @@
             ["dart:core" :as dc]
             ["dart:convert" :as convert]
             ["dart:async" :as async]
-            ["dart:ui" :as ui]))
+            ["dart:ui" :as ui]
+            ["dart:math" :as math]))
 
 ;; =============================================================================
 ;; 1. Global Configuration & State
@@ -62,7 +63,7 @@
 (declare connect-with-retry!)
 
 (defn- start-reconnect-timer [retry-count]
-  (let [delay (min 60 (Math/pow 2 retry-count))]
+  (let [delay (min 60 (math/pow 2 retry-count))]
     (async/Timer. (dc/Duration. .seconds (int delay))
                   #(connect-with-retry! (inc retry-count)))))
 
@@ -129,14 +130,14 @@
   (if (io/Platform.isAndroid)
     (let [service (fbs/FlutterBackgroundService.)]
       (.configure service
-                  .android (fbs/AndroidConfiguration.
-                            .onStart on-bg-start
-                            .autoStart true
-                            .isForegroundMode true
-                            .initialNotificationTitle "Jirgee syncing"
-                            .initialNotificationContent "Syncing notifications"
-                            .foregroundServiceNotificationId 888)
-                  .ios (fbs/IosConfiguration. .onForeground (fn [_] nil) .onBackground (fn [_] true))))
+                  .androidConfiguration (fbs/AndroidConfiguration.
+                                         .onStart on-bg-start
+                                         .autoStart true
+                                         .isForegroundMode true
+                                         .initialNotificationTitle "Jirgee syncing"
+                                         .initialNotificationContent "Syncing notifications"
+                                         .foregroundServiceNotificationId 888)
+                  .iosConfiguration (fbs/IosConfiguration. .onForeground (fn [_] nil) .onBackground (fn [_] true))))
     (println "🍏 iOS: Use standard FCM wake"))
 
   ;; C. Offline launch check (handle app process killed and launched via notification tap)

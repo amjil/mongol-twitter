@@ -1,7 +1,8 @@
 (ns jirgee.main-layout
   (:require [cljd.flutter :as f]
             ["package:flutter/material.dart" :as m]
-            ["package:mongol/mongol.dart" :as mgl]
+            ["package:flutter/widgets.dart" :as widgets]
+            ["package:mongol_jirgee/post_frame_trigger.dart" :as post-frame-trigger]
             [jirgee.screens.timeline :refer [timeline-screen]]
             [jirgee.screens.conversations :refer [conversation-screen]]
             [jirgee.screens.profile :refer [profile-screen]]
@@ -28,8 +29,10 @@
            timeline-posts timeline-posts-state-atom
            timeline-loading? timeline-loading?-atom]
    :get {{{:flds [primary onSurfaceVariant surface]} .-colorScheme} m/Theme}
-   :let [_ (when (and (= idx 0) (nil? timeline-posts) (not timeline-loading?))
-             (post-service/load-timeline-data!))]
+   (post-frame-trigger/PostFrameTrigger
+    .onLayout (fn [] (when (and (= idx 0) (nil? timeline-posts) (not timeline-loading?))
+                       (fn [_] (post-service/load-timeline-data!)))
+                nil))
    (m/Scaffold
     .backgroundColor surface
     .body

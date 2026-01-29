@@ -49,6 +49,7 @@
    (m/Scaffold
     .backgroundColor surface
     .floatingActionButton (m/FloatingActionButton
+                           .heroTag "conversations-fab"
                            .onPressed (fn []
                                        (push-to-new-chat)
                                        nil)

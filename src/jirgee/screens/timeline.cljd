@@ -125,6 +125,7 @@
     (m/Scaffold
      .backgroundColor surface
      .floatingActionButton (m/FloatingActionButton
+                            .heroTag "timeline-fab"
                             .onPressed #(do (m/Navigator.pushNamed ctx "/create-post") nil)
                             .backgroundColor primary
                             .child (m/Icon m/Icons.edit .color m/Colors.white))
