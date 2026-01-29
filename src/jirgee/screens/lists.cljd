@@ -30,7 +30,7 @@
    (m/ListTile
     .leading (m/Icon m/Icons.list)
     .title (mgl/MongolText name .style titleMedium)
-    .subtitle (mgl/MongolText (str description " · " members-count " ᠬᠦᠮᠦᠨ") .style bodySmall)
+    .subtitle (mgl/MongolText (str description " · " members-count " members") .style bodySmall)
     .trailing (m/Row
                .mainAxisSize m/MainAxisSize.min
                .children
@@ -74,7 +74,7 @@
                                 (.catchError (fn [err] (println "Create list failed:" err)))))))]
 
    (mongol-side-layout
-    {:title "ᠲᠠᠷᠢᠭ"
+    {:title "Lists"
      :min-width 70.0
      :actions [{:icon m/Icons.add
                 :on-tap #(m/showDialog
@@ -82,32 +82,32 @@
                           .builder
                           (fn [dialog-ctx]
                             (dialog/vertical-custom-dialog
-                             {:title "ᠰᠢᠨᠡ ᠲᠠᠷᠢᠭ"
+                             {:title "New list"
                               :body
                               (m/Column
                                .mainAxisSize m/MainAxisSize.min
                                .children
                                [(text-field/text-field
                                  {:controller name-ctrl
-                                  :hint "ᠨᠡᠷᠡ"})
+                                  :hint "Name"})
                                 (m/SizedBox .height 16.0)
                                 (text-field/text-field
                                  {:controller desc-ctrl
-                                  :hint "ᠲᠠᠢᠯᠪᠠᠷ"})
+                                  :hint "Description"})
                                 (m/SizedBox .height 16.0)
                                 (m/CheckboxListTile
-                                 .title (mgl/MongolText "ᠦᠨᠳᠡᠰᠦ")
+                                 .title (mgl/MongolText "Public")
                                  .value public?
                                  .onChanged (fn [v] (set-lists-create-is-public?! v)))])
                               :actions
                               [(m/TextButton
                                 .onPressed (fn [] (m/Navigator.pop dialog-ctx))
-                                .child (m/Text "ᠪᠤᠯᠢ"))
+                                .child (m/Text "Cancel"))
                                (m/TextButton
                                 .onPressed (fn []
                                              (create-list!)
                                              (m/Navigator.pop dialog-ctx))
-                                .child (m/Text "ᠨᠡᠮᠡᠬᠦ"))]})))}]
+                                .child (m/Text "Create"))]})))}]
      :body
      (m/Scaffold
       .backgroundColor surface
@@ -117,7 +117,7 @@
         (m/Center .child (m/CircularProgressIndicator))
 
         (empty? lists)
-        (m/Center .child (mgl/MongolText "ᠬᠣᠭᠣᠰᠤᠨ"))
+        (m/Center .child (mgl/MongolText "Empty"))
 
         :else
         (horizontal-refresh

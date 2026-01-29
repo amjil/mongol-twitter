@@ -44,15 +44,15 @@
                                       .shape m/BoxShape.circle))))])
     .title (mgl/MongolText
             (case type
-              "like" (str actor-name " ᠳᠠᠭᠠᠭᠴᠢ ᠵᠢᠷᠭᠡᠯ")
-              "follow" (str actor-name " ᠳᠠᠭᠠᠪᠠ")
-              "reply" (str actor-name " ᠬᠠᠷᠢᠴᠠᠪᠠ")
-              "repost" (str actor-name " ᠳᠠᠭᠤᠪᠠ")
-              "mention" (str actor-name " ᠳᠠᠷᠤᠪᠠ")
-              "direct_message" (str actor-name " ᠰᠣᠨᠢᠨ")
-              "group_invitation" (str actor-name " ᠬᠦᠮᠦᠨ ᠤᠨ ᠤᠷᠢᠶᠠᠭᠤᠯᠤᠯ")
-              "group_message" (str actor-name " ᠬᠦᠮᠦᠨ ᠤᠨ ᠰᠣᠨᠢᠨ")
-              (str actor-name " ᠮᠡᠳᠡᠭᠡᠯ"))
+              "like" (str actor-name " liked post")
+              "follow" (str actor-name " followed")
+              "reply" (str actor-name " replied")
+              "repost" (str actor-name " reposted")
+              "mention" (str actor-name " mentioned")
+              "direct_message" (str actor-name " message")
+              "group_invitation" (str actor-name " group invite")
+              "group_message" (str actor-name " group message")
+              (str actor-name " notification"))
             .style (.copyWith titleMedium
                             .fontWeight (if is-read m/FontWeight.normal m/FontWeight.bold)))
     .subtitle (mgl/MongolText
@@ -61,7 +61,7 @@
                .maxLines 2)
     .trailing (m/Text
                (let [time-str (get notification "inserted_at" "")]
-                 (if (empty? time-str) "" "ᠴᠠᠭ"))
+                 (if (empty? time-str) "" "ago"))
                .style bodySmall)
     .onTap (fn []
              (when-not is-read
@@ -122,7 +122,7 @@
                    (set-notifications-filter-read?! new-filter-read)))))]
 
    (mongol-side-layout
-    {:title "ᠮᠡᠳᠡᠭᠡᠯ"
+    {:title "Notifications"
      :min-width 70.0
      :actions [{:icon m/Icons.done_all
                 :on-tap mark-all-read!}]
@@ -139,15 +139,15 @@
          .child
          (m/Row
           .children
-          [(filter-chip "all" "ᠪᠦᠬᠦ" notifications-filter-chips-atom
+          [(filter-chip "all" "All" notifications-filter-chips-atom
                         :max-select 1
                         :haptic? true)
            (m/SizedBox .width 8.0)
-           (filter-chip "unread" "ᠤᠨᠳᠠᠭᠠᠰᠤ" notifications-filter-chips-atom
+           (filter-chip "unread" "Unread" notifications-filter-chips-atom
                         :max-select 1
                         :haptic? true)
            (m/SizedBox .width 8.0)
-           (filter-chip "read" "ᠤᠨᠳᠠᠭᠠᠰᠤ ᠦᠭᠡᠢ" notifications-filter-chips-atom
+           (filter-chip "read" "Read" notifications-filter-chips-atom
                         :max-select 1
                         :haptic? true)]))
 
@@ -159,7 +159,7 @@
            (m/Center .child (m/CircularProgressIndicator))
 
            (empty? notifications)
-           (m/Center .child (mgl/MongolText "ᠬᠣᠭᠣᠰᠤᠨ"))
+           (m/Center .child (mgl/MongolText "Empty"))
 
            :else
            (horizontal-refresh

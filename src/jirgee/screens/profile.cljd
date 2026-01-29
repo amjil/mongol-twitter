@@ -30,7 +30,7 @@
           {:flds [headlineSmall bodyMedium]} .-textTheme} m/Theme}
 
    (mongol-side-layout
-    {:title (if is-me? "ᠪᠢ" "ᠬᠡᠷᠡᠭᠯᠡᠭᠴᠢ") ;; "Me" or "User"
+    {:title (if is-me? "Me" "User")
      :min-width 70.0
      :actions [{:icon m/Icons.settings :on-tap #(println "Settings")}]
      :body
@@ -60,9 +60,9 @@
                  (m/Row
                   .mainAxisAlignment m/MainAxisAlignment.spaceAround
                   .children
-                  [(stat-item "ᠳᠠᠭᠠᠭᠴᠢ" (get profile "followers_count" 0))
-                   (stat-item "ᠳᠠᠭᠠᠪᠤᠷᠢ" (get profile "following_count" 0))
-                   (stat-item "ᠵᠢᠷᠭᠡᠯ" (get profile "posts_count" 0))]))])
+                  [(stat-item "Followers" (get profile "followers_count" 0))
+                   (stat-item "Following" (get profile "following_count" 0))
+                   (stat-item "Posts" (get profile "posts_count" 0))]))])
 
               (m/SizedBox .height 20.0)
 
@@ -72,7 +72,7 @@
                (m/Column
                 .crossAxisAlignment m/CrossAxisAlignment.start
                 .children
-                [(mgl/MongolText (get profile "nickname" "ᠬᠡᠷᠡᠭᠯᠡᠭᠴᠢ")
+                [(mgl/MongolText (get profile "nickname" "User")
                                  .style (.copyWith headlineSmall .fontWeight m/FontWeight.bold))
                  (m/SizedBox .height 12.0)
                  (m/SizedBox
@@ -97,7 +97,7 @@
            (m/Padding
             .padding (m/EdgeInsets.only .left 24.0 .bottom 16.0)
             .child
-            (mgl/MongolText "ᠪᠦᠲᠡᠭᠡᠯ" .style headlineSmall))) ;; "Posts"
+            (mgl/MongolText "Posts" .style headlineSmall)))
 
           ;; Horizontally scrolling posts gallery
           (m/SliverFillRemaining

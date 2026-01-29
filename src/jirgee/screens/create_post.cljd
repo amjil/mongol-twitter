@@ -65,7 +65,7 @@
     [(m/Expanded
       .child
       (mongol-side-layout
-       {:title "ᠪᠢᠴᠢᠬᠦ" ;; "Write/Publish"
+       {:title "Post"
         :pinned? true
         :min-width 40.0
         :actions [{:icon m/Icons.send
@@ -82,15 +82,13 @@
             (m/Row
              .crossAxisAlignment m/CrossAxisAlignment.start
              .children
-             [;; Mongolian vertical input field
-              (text-field {:controller content-ctrl
-                           ;;  :hint "ᠰᠡᠳᠬᠢᠯᠭᠡ ᠪᠡᠨ ᠪᠢᠴᠢᠭᠡᠷᠡᠢ..." ;; "Write down your thoughts..."
+             [(text-field {:controller content-ctrl
                            :max-lines 10
                            :min-lines 4
                            :autofocus true
                            :style bodyLarge
                            :decoration (m/InputDecoration
-                                        .hintText "ᠰᠡᠳᠬᠢᠯᠭᠡ ᠪᠡᠨ ᠪᠢᠴᠢᠭᠡᠷᠡᠢ..." ;; "Write down your thoughts..."
+                                        .hintText "Write your thoughts..."
                                         .border m/InputBorder.none)})
 
               (m/SizedBox .width 12.0)

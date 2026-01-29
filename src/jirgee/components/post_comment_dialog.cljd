@@ -37,7 +37,7 @@
                       .padding (m/EdgeInsets.only .top (tokens/space :l) .left (tokens/space :m) .right (tokens/space :m))
                       .decoration (m/BoxDecoration 
                                     .border (m/Border .right (m/BorderSide .color surfaceVariant .width 1.5)))
-                      .child (mgl/MongolText "ᠪᠢᠴᠢᠭᠡᠷᠡᠢ" ;; "Comment"
+                      .child (mgl/MongolText "Comment"
                                .style (.copyWith titleLarge 
                                         .fontWeight m/FontWeight.bold
                                         .color onSurface)))
@@ -72,7 +72,7 @@
                                .children
                                [(text-field/text-field 
                                   {:controller comment-ctrl
-                                   :hint-text "ᠪᠢᠴᠢᠭᠡᠷᠡᠢ..." 
+                                   :hint-text "Comment..." 
                                    :autofocus true
                                    :max-lines nil
                                    :on-changed #(swap! data-atom assoc :text %)})

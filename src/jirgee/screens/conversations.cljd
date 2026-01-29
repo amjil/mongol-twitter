@@ -2,6 +2,7 @@
   (:require [cljd.flutter :as f]
             ["package:flutter/material.dart" :as m]
             ["package:mongol/mongol.dart" :as mgl]
+            [jirgee.router :refer [push-to-new-chat]]
             [jirgee.state :refer [conversations-chats-state-atom
                                   conversations-error-state-atom
                                   peer-id-atom
@@ -14,7 +15,7 @@
    :get [m/Navigator]
    :get {{{:flds [onSurface surfaceVariant primary]} .-colorScheme
           {:flds [titleMedium bodySmall]} .-textTheme} m/Theme}
-   :let [nickname (or (.read chat "nickname") "ᠬᠡᠷᠡᠭᠯᠡᠭᠴᠢ")
+   :let [nickname (or (.read chat "nickname") "User")
          content (or (.read chat "content") "")
          avatar-url (.read chat "avatar_url")]
    (mgl/MongolListTile
@@ -41,13 +42,18 @@
 (defn conversation-screen []
   (f/widget
    :context ctx
-   ;; 1. Use :watch to listen to external atoms
+   ;; Watch external atoms
    :watch [chats conversations-chats-state-atom
            error conversations-error-state-atom]
-   ;; 2. Nested theme destructuring
    :get {{{:flds [surface]} .-colorScheme} m/Theme}
    (m/Scaffold
     .backgroundColor surface
+    .floatingActionButton (m/FloatingActionButton
+                           .onPressed (fn []
+                                       (push-to-new-chat)
+                                       nil)
+                           .child (m/Icon m/Icons.add)
+                           .tooltip "New conversation")
     .body
     (cond
       error
@@ -57,7 +63,7 @@
       (m/Center .child (m/CircularProgressIndicator))
 
       (empty? chats)
-      (m/Center .child (mgl/MongolText "ᠬᠣᠭᠣᠰᠤᠨ"))
+      (m/Center .child (mgl/MongolText "Empty"))
 
       :else
       (m/ListView.builder

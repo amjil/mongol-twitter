@@ -9,6 +9,7 @@
             [jirgee.services.bookmark :as bookmark-service]
             [jirgee.services.mention :as mention-service]
             [jirgee.services.group :as group-service]
+            [jirgee.services.user :as user-service]
             [jirgee.services.base :refer [client response-data]]
             [jirgee.state :refer [
                                   peer-id-atom
@@ -68,7 +69,9 @@
                                   notifications-filter-read?-atom
                                   set-notifications-state!
                                   set-notifications-loading?!
-                                  set-notifications-unread-count!]]))
+                                  set-notifications-unread-count!
+                                  set-new-chat-following-state!
+                                  set-new-chat-following-loading?!]]))
 
 ;; Define global navigation key
 (defonce ^#/(m/GlobalKey m/NavigatorState) navigator-key (#/(m/GlobalKey m/NavigatorState)))
@@ -78,6 +81,20 @@
   (reset! peer-name-atom peer-name)
   (reset! peer-my-id-atom my-id)
   (.pushNamed (.currentState navigator-key) "/chat"))
+
+;; Navigate to new-chat page (load following list at entry, then push)
+(defn push-to-new-chat []
+  (set-new-chat-following-loading?! true)
+  (user-service/get-following
+   "me"
+   (fn [data]
+     (set-new-chat-following-state! (or data []))
+     (set-new-chat-following-loading?! false)
+     (.pushNamed (.currentState navigator-key) "/new-chat"))
+   (fn [_]
+     (set-new-chat-following-state! [])
+     (set-new-chat-following-loading?! false)
+     (.pushNamed (.currentState navigator-key) "/new-chat"))))
 
 ;; Navigate to search page
 (defn push-to-search [ctx]

@@ -64,7 +64,7 @@
         (m/Center .child (m/CircularProgressIndicator))
 
         (nil? hashtag)
-        (m/Center .child (mgl/MongolText "ᠬᠣᠭᠣᠰᠤᠨ"))
+        (m/Center .child (mgl/MongolText "Empty"))
 
         :else
         (m/Column
@@ -81,7 +81,7 @@
               .children
               [(mgl/MongolText (str "#" hashtag-name) .style (.copyWith headlineSmall .fontWeight m/FontWeight.bold))
                (m/SizedBox .height 8.0)
-               (m/Text (str (get hashtag "posts_count" 0) " ᠵᠢᠷᠭᠡᠯ") .style bodyMedium)])
+               (m/Text (str (get hashtag "posts_count" 0) " posts") .style bodyMedium)])
              (m/Icon m/Icons.tag .size 32.0 .color primary)]))
           (m/Divider)
 
@@ -89,7 +89,7 @@
           (m/Expanded
            .child
            (if (empty? posts)
-             (m/Center .child (mgl/MongolText "ᠬᠣᠭᠣᠰᠤᠨ"))
+             (m/Center .child (mgl/MongolText "Empty"))
              (horizontal-refresh
               {:on-refresh (fn [] (load-data!))
                :item-count (count posts)

@@ -72,7 +72,7 @@
               .backgroundImage (when avatar-url (m/NetworkImage avatar-url))
               .child (if-not avatar-url (m/Icon m/Icons.person) (m/SizedBox)))
     .title (mgl/MongolText (or display-name username) .style titleMedium)
-    .subtitle (mgl/MongolText (str followers-count " ᠳᠠᠭᠠᠭᠴᠢ · " posts-count " ᠵᠢᠷᠭᠡᠯ") .style bodySmall)
+    .subtitle (mgl/MongolText (str followers-count " followers · " posts-count " posts") .style bodySmall)
     .trailing (m/IconButton
                .icon (m/Icon m/Icons.arrow_forward_ios .size 16.0)
                .onPressed #(println "Navigate to user profile")))))
@@ -87,7 +87,7 @@
    (mgl/MongolListTile
     .leading (m/Icon m/Icons.tag .color primary)
     .title (mgl/MongolText (str "#" name) .style titleMedium)
-    .subtitle (mgl/MongolText (str posts-count " ᠵᠢᠷᠭᠡᠯ") .style bodySmall)
+    .subtitle (mgl/MongolText (str posts-count " posts") .style bodySmall)
     .trailing (m/IconButton
                .icon (m/Icon m/Icons.arrow_forward_ios .size 16.0)
                .onPressed #(println "Navigate to hashtag:" name)))))
@@ -108,7 +108,7 @@
                (set-trending-current-tab! selected-tab)))]
 
    (mongol-side-layout
-    {:title "ᠬᠦᠷᠡᠯᠲᠡ"
+    {:title "Trending"
      :min-width 70.0
      :body
      (m/Scaffold
@@ -123,15 +123,15 @@
          .child
          (m/Row
           .children
-          [(filter-chip 0 "ᠵᠢᠷᠭᠡᠯ" trending-filter-chips-atom
+          [(filter-chip 0 "Posts" trending-filter-chips-atom
                         :max-select 1
                         :haptic? true)
            (m/SizedBox .width 8.0)
-           (filter-chip 1 "ᠬᠡᠷᠡᠭᠯᠡᠭᠴᠢ" trending-filter-chips-atom
+           (filter-chip 1 "Users" trending-filter-chips-atom
                         :max-select 1
                         :haptic? true)
            (m/SizedBox .width 8.0)
-           (filter-chip 2 "ᠬᠠᠢᠢᠯᠠᠭ" trending-filter-chips-atom
+           (filter-chip 2 "Search" trending-filter-chips-atom
                         :max-select 1
                         :haptic? true)]))
 
@@ -144,7 +144,7 @@
 
            (= tab 0)
            (if (empty? posts)
-             (m/Center .child (mgl/MongolText "ᠬᠣᠭᠣᠰᠤᠨ"))
+             (m/Center .child (mgl/MongolText "Empty"))
              (horizontal-refresh
               {:on-refresh (fn [] (load-data!))
                :item-count (count posts)
@@ -155,7 +155,7 @@
 
            (= tab 1)
            (if (empty? users)
-             (m/Center .child (mgl/MongolText "ᠬᠣᠭᠣᠰᠤᠨ"))
+             (m/Center .child (mgl/MongolText "Empty"))
              (horizontal-refresh
               {:on-refresh (fn [] (load-data!))
                :item-count (count users)
@@ -166,7 +166,7 @@
 
            (= tab 2)
            (if (empty? hashtags)
-             (m/Center .child (mgl/MongolText "ᠬᠣᠭᠣᠰᠤᠨ"))
+             (m/Center .child (mgl/MongolText "Empty"))
              (horizontal-refresh
               {:on-refresh (fn [] (load-data!))
                :item-count (count hashtags)

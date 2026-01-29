@@ -29,7 +29,7 @@
               .backgroundImage (when avatar-url (m/NetworkImage avatar-url))
               .child (if-not avatar-url (m/Icon m/Icons.group) (m/SizedBox)))
     .title (mgl/MongolText name .style titleMedium)
-    .subtitle (mgl/MongolText (str description " · " members-count " ᠬᠦᠮᠦᠨ") .style bodySmall)
+    .subtitle (mgl/MongolText (str description " · " members-count " members") .style bodySmall)
     .trailing (m/Row
                .mainAxisSize m/MainAxisSize.min
                .children
@@ -67,7 +67,7 @@
                    (load-groups!)))))]
 
    (mongol-side-layout
-    {:title "ᠬᠦᠮᠦᠨ"
+    {:title "Groups"
      :min-width 70.0
      :body
      (m/Scaffold
@@ -82,11 +82,11 @@
          .child
          (m/Row
           .children
-          [(filter-chip "all" "ᠪᠦᠬᠦ" groups-filter-chips-atom
+          [(filter-chip "all" "All" groups-filter-chips-atom
                         :max-select 1
                         :haptic? true)
            (m/SizedBox .width 8.0)
-           (filter-chip "public" "ᠦᠨᠳᠡᠰᠦ" groups-filter-chips-atom
+           (filter-chip "public" "Public" groups-filter-chips-atom
                         :max-select 1
                         :haptic? true)]))
 
@@ -98,7 +98,7 @@
            (m/Center .child (m/CircularProgressIndicator))
 
            (empty? groups)
-           (m/Center .child (mgl/MongolText "ᠬᠣᠭᠣᠰᠤᠨ"))
+           (m/Center .child (mgl/MongolText "Empty"))
 
            :else
            (horizontal-refresh

@@ -49,9 +49,9 @@
     .builder
     (fn [ctx]
       (vertical-custom-dialog
-        {:title "ᠪᠢᠴᠢᠭᠡᠷᠡᠢ" ;; "Comment"
+        {:title "Comment"
          :body (m/SingleChildScrollView
-                 .child (mgl/MongolText "ᠪᠤᠰᠤᠳ ᠤᠨ ᠪᠢᠴᠢᠭᠡᠷᠡᠢ ᠨᠦᠭᠦᠳ..." ;; "Other's comment content..."
+                 .child (mgl/MongolText "Add a comment..."
                           .style (m/TextStyle .fontSize 16.0)))
          :actions [(m/IconButton 
                      .icon (m/Icon m/Icons.close) 

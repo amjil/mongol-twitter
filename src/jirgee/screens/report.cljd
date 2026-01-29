@@ -91,7 +91,7 @@
                                 (.catchError (fn [err] (println "Submit report failed:" err))))))]
 
    (mongol-side-layout
-    {:title "ᠮᠡᠳᠡᠭᠡᠯ"
+    {:title "Report"
      :min-width 70.0
      :body
      (m/Scaffold
@@ -104,49 +104,49 @@
          .child
          (m/Column
           .children
-          [(mgl/MongolText "ᠮᠡᠳᠡᠭᠡᠯ ᠤᠨ ᠰᠠᠪ" .style (.copyWith headlineSmall .fontWeight m/FontWeight.bold))
+          [(mgl/MongolText "Report reason" .style (.copyWith headlineSmall .fontWeight m/FontWeight.bold))
            (m/SizedBox .height 24.0)
-           (mgl/MongolText "ᠰᠠᠪ" .style titleMedium)
+           (mgl/MongolText "Reason" .style titleMedium)
            (m/SizedBox .height 8.0)
            (m/Column
             .children
             [(m/RadioListTile
-              .title (mgl/MongolText "ᠬᠦᠮᠦᠨ ᠤᠨ ᠬᠦᠮᠦᠨ")
+              .title (mgl/MongolText "Spam")
               .value "spam"
               .groupValue reason
               .onChanged #(set-reports-selected-reason! %))
              (m/RadioListTile
-              .title (mgl/MongolText "ᠬᠠᠷᠢᠴᠠᠯ")
+              .title (mgl/MongolText "Harassment")
               .value "harassment"
               .groupValue reason
               .onChanged #(set-reports-selected-reason! %))
              (m/RadioListTile
-              .title (mgl/MongolText "ᠲᠡᠭᠦᠨ ᠦᠭᠡᠢ")
+              .title (mgl/MongolText "Inappropriate")
               .value "inappropriate"
               .groupValue reason
               .onChanged #(set-reports-selected-reason! %))
              (m/RadioListTile
-              .title (mgl/MongolText "ᠪᠤᠰᠤ")
+              .title (mgl/MongolText "Other")
               .value "other"
               .groupValue reason
               .onChanged #(set-reports-selected-reason! %))])
            (m/SizedBox .height 24.0)
-           (mgl/MongolText "ᠲᠠᠢᠯᠪᠠᠷ" .style titleMedium)
+           (mgl/MongolText "Details" .style titleMedium)
            (m/SizedBox .height 8.0)
            (text-field/text-field
             {:controller desc-ctrl
-             :hint "ᠲᠠᠢᠯᠪᠠᠷ ᠪᠢᠴᠢᠬᠦ"})
+             :hint "Details"})
            (m/SizedBox .height 24.0)
            (m/FilledButton
             .onPressed submit-report!
-            .child (m/Text "ᠮᠡᠳᠡᠭᠡᠯ"))]))
+            .child (m/Text "Submit"))]))
         ;; Show report list
         (cond
           is-loading?
           (m/Center .child (m/CircularProgressIndicator))
 
           (empty? reports)
-          (m/Center .child (mgl/MongolText "ᠬᠣᠭᠣᠰᠤᠨ"))
+          (m/Center .child (mgl/MongolText "Empty"))
 
           :else
           (horizontal-refresh

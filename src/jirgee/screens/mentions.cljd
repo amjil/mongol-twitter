@@ -58,7 +58,7 @@
                                              (set-mentions-loading?! false)))))]
 
    (mongol-side-layout
-    {:title "ᠳᠠᠷᠤᠪᠠ"
+    {:title "Mentions"
      :min-width 70.0
      :body
      (m/Scaffold
@@ -69,7 +69,7 @@
         (m/Center .child (m/CircularProgressIndicator))
 
         (empty? mentions)
-        (m/Center .child (mgl/MongolText "ᠬᠣᠭᠣᠰᠤᠨ"))
+        (m/Center .child (mgl/MongolText "Empty"))
 
         :else
         (horizontal-refresh

@@ -81,7 +81,7 @@
               .backgroundImage (when avatar-url (m/NetworkImage avatar-url))
               .child (if-not avatar-url (m/Icon m/Icons.group) (m/SizedBox)))
     .title (mgl/MongolText name .style titleMedium)
-    .subtitle (mgl/MongolText (str description " · " members-count " ᠬᠦᠮᠦᠨ") .style bodySmall)
+    .subtitle (mgl/MongolText (str description " · " members-count " members") .style bodySmall)
     .trailing (m/IconButton
                .icon (m/Icon m/Icons.arrow_forward_ios .size 16.0)
                .onPressed #(println "Navigate to group")))))
@@ -110,7 +110,7 @@
                (set-search-type! selected-type)))]
 
    (mongol-side-layout
-    {:title "ᠬᠠᠢᠢᠯᠠᠭ"
+    {:title "Search"
      :min-width 70.0
      :body
      (m/Scaffold
@@ -127,7 +127,7 @@
           [(m/Expanded
             .child (text-field/text-field
                     {:controller query-ctrl
-                     :hint "ᠬᠠᠢᠢᠯᠠᠭ..."
+                     :hint "Search..."
                      :on-submitted handle-search!}))
            (m/SizedBox .width 8.0)
            (m/IconButton
@@ -141,19 +141,19 @@
          .child
          (m/Row
           .children
-          [(filter-chip "all" "ᠪᠦᠬᠦ" search-filter-chips-atom
+          [(filter-chip "all" "All" search-filter-chips-atom
                         :max-select 1
                         :haptic? true)
            (m/SizedBox .width 8.0)
-           (filter-chip "users" "ᠬᠡᠷᠡᠭᠯᠡᠭᠴᠢ" search-filter-chips-atom
+           (filter-chip "users" "Users" search-filter-chips-atom
                         :max-select 1
                         :haptic? true)
            (m/SizedBox .width 8.0)
-           (filter-chip "posts" "ᠵᠢᠷᠭᠡᠯ" search-filter-chips-atom
+           (filter-chip "posts" "Posts" search-filter-chips-atom
                         :max-select 1
                         :haptic? true)
            (m/SizedBox .width 8.0)
-           (filter-chip "groups" "ᠬᠦᠮᠦᠨ" search-filter-chips-atom
+           (filter-chip "groups" "Groups" search-filter-chips-atom
                         :max-select 1
                         :haptic? true)]))
 
@@ -176,7 +176,7 @@
                       [(m/Padding
                         .padding (m/EdgeInsets.all 16.0)
                         .child
-                        (mgl/MongolText "ᠬᠡᠷᠡᠭᠯᠡᠭᠴᠢ" .style (.copyWith titleLarge .fontWeight m/FontWeight.bold)))
+                        (mgl/MongolText "Users" .style (.copyWith titleLarge .fontWeight m/FontWeight.bold)))
                        (m/Divider)]
                       (map user-item (get results "users"))))
                    (when (seq (get results "posts"))
@@ -184,7 +184,7 @@
                       [(m/Padding
                         .padding (m/EdgeInsets.all 16.0)
                         .child
-                        (mgl/MongolText "ᠵᠢᠷᠭᠡᠯ" .style (.copyWith titleLarge .fontWeight m/FontWeight.bold)))
+                        (mgl/MongolText "Posts" .style (.copyWith titleLarge .fontWeight m/FontWeight.bold)))
                        (m/Divider)]
                       (map post-item (get results "posts"))))
                    (when (seq (get results "groups"))
@@ -192,7 +192,7 @@
                       [(m/Padding
                         .padding (m/EdgeInsets.all 16.0)
                         .child
-                        (mgl/MongolText "ᠬᠦᠮᠦᠨ" .style (.copyWith titleLarge .fontWeight m/FontWeight.bold)))
+                        (mgl/MongolText "Groups" .style (.copyWith titleLarge .fontWeight m/FontWeight.bold)))
                        (m/Divider)]
                       (map group-item (get results "groups")))))))
 
@@ -211,4 +211,4 @@
                                          .onPressed #(search-service/delete-search-history (get item "id")))))))
 
            :else
-           (m/Center .child (mgl/MongolText "ᠬᠣᠭᠣᠰᠤᠨ"))))]))})))
+           (m/Center .child (mgl/MongolText "Empty"))))]))})))

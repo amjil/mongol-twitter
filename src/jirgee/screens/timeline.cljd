@@ -14,7 +14,7 @@
 ;; Convert timeline post (API/DB format) into the shape required by post detail screen
 (defn- timeline-post->detail-post [post]
   (let [user (get post "user" {})
-        nickname (get user "display_name" (get user "username" "ᠬᠡᠷᠡᠭᠯᠡᠭᠴᠢ"))]
+        nickname (get user "display_name" (get user "username" "User"))]
     {:id (str (get post "id"))
      :content (get post "content" "")
      :image-urls (or (get post "image_urls") (when-let [url (get post "image_url")] [url]) [])
@@ -31,7 +31,7 @@
 (defn- post-card [ctx post]
   (let [post-id (get post "id")
         user (get post "user" {})
-        nickname (get user "display_name" (get user "username" "ᠬᠡᠷᠡᠭᠯᠡᠭᠴᠢ"))
+        nickname (get user "display_name" (get user "username" "User"))
         content (get post "content" "")
         avatar-url (get user "avatar_url")
         ;; Local state for immediate feedback (Optimistic UI)
@@ -149,7 +149,7 @@
                           .mainAxisSize m/MainAxisSize.min
                           .children [(m/Icon m/Icons.inbox .size 48.0 .color onSurfaceVariant)
                                      (m/SizedBox .height 16.0)
-                                     (mgl/MongolText "ᠬᠣᠭᠣᠰᠤᠨ" .style (m/TextStyle .color onSurfaceVariant))]))
+                                     (mgl/MongolText "Empty" .style (m/TextStyle .color onSurfaceVariant))]))
 
         :else
         ;; Horizontal refresh component adapted for Mongolian reading direction

@@ -125,6 +125,12 @@
 (defonce peer-my-id-atom (atom nil))
 
 ;; ============================================
+;; Screen State - New Chat (following list loaded at navigation)
+;; ============================================
+(defonce ^:private new-chat-following-state (atom nil))
+(defonce ^:private new-chat-following-loading? (atom false))
+
+;; ============================================
 ;; Service State - Base
 ;; ============================================
 (defonce database (atom nil))
@@ -317,6 +323,12 @@
 (defn set-conversations-error-state! [v] (reset! conversations-error-state v))
 
 ;; ============================================
+;; Export Functions - New Chat
+;; ============================================
+(defn set-new-chat-following-state! [v] (reset! new-chat-following-state v))
+(defn set-new-chat-following-loading?! [v] (reset! new-chat-following-loading? v))
+
+;; ============================================
 ;; Export Functions - WebSocket
 ;; ============================================
 (defn get-websocket-channel [] @websocket-channel)
@@ -418,6 +430,10 @@
 ;; Conversations
 (def conversations-chats-state-atom conversations-chats-state)
 (def conversations-error-state-atom conversations-error-state)
+
+;; New Chat
+(def new-chat-following-state-atom new-chat-following-state)
+(def new-chat-following-loading?-atom new-chat-following-loading?)
 
 ;; WebSocket
 (def websocket-channel-atom websocket-channel)

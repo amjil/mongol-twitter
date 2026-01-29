@@ -23,7 +23,7 @@
 ;; Show local notification (Payload contains business data for tap navigation)
 (defn show-local-notification [title body data]
   (let [android-details (lnc/AndroidNotificationDetails.
-                         "jirgee_chat" "ᠵᠢᠷᠭᠡ ᠴᠠᠲ" ;; "Jirgee Chat"
+                         "jirgee_chat" "Jirgee Chat"
                          .importance lnc/Importance.max
                          .priority lnc/Priority.high
                          .showWhen true)
@@ -133,8 +133,8 @@
                             .onStart on-bg-start
                             .autoStart true
                             .isForegroundMode true
-                            .initialNotificationTitle "ᠵᠢᠷᠭᠡ ᠠᠵᠢᠯᠯᠠᠵᠤ ᠪᠠᠶᠢᠨᠠ"
-                            .initialNotificationContent "ᠮᠡᠳᠡᠭᠳᠡᠯ ᠦᠢᠯᠡᠴᠢᠯᠡᠭᠡ ᠢᠳᠡᠪᠬᠢᠲᠡᠢ"
+                            .initialNotificationTitle "Jirgee syncing"
+                            .initialNotificationContent "Syncing notifications"
                             .foregroundServiceNotificationId 888)
                   .ios (fbs/IosConfiguration. .onForeground (fn [_] nil) .onBackground (fn [_] true))))
     (println "🍏 iOS: Use standard FCM wake"))
