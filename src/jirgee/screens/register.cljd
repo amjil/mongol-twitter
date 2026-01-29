@@ -112,25 +112,25 @@
                                 .padding (m/EdgeInsets.symmetric .vertical 20.0))
                         .onPressed
                         (fn []
-                          (println "[Register] 注册按钮被点击")
+                          (println "[Register] register button clicked")
                           (let [email (.-text email-ctrl)
                                 pass (.-text pass-ctrl)
                                 confirm-pass (.-text confirm-pass-ctrl)
                                 nickname (.-text nickname-ctrl)]
-                            (println "[Register] 表单值 email:" (pr-str email) "nickname:" (pr-str nickname)
+                            (println "[Register] form values email:" (pr-str email) "nickname:" (pr-str nickname)
                                      "pass-len:" (count pass) "confirm-len:" (count confirm-pass))
                             (if (not= pass confirm-pass)
-                              (do (println "[Register] 校验失败: 两次密码不一致")
+                              (do (println "[Register] validation failed: passwords do not match")
                                   (toast/error ctx "Passwords do not match")) ;; "Passwords do not match"
                               (if (or (empty? email) (empty? pass) (empty? nickname))
-                                (do (println "[Register] 校验失败: 存在空字段")
+                                (do (println "[Register] validation failed: empty fields")
                                     (toast/error ctx "Please fill in all fields")) ;; "Please fill in all fields"
-                                (do (println "[Register] 校验通过，调用 auth/register ...")
+                                (do (println "[Register] validation passed, calling auth/register ...")
                                     (auth/register {"email" email
                                                    "password" pass
                                                    "nickname" nickname}
                                                    (fn [_data]
-                                                     (println "[Register] 注册成功，即将跳转")
+                                                     (println "[Register] register success, navigating")
                                                      ;; Navigate to main layout on successful registration
                                                      (m/Navigator.pushReplacement
                                                       ctx
@@ -138,8 +138,8 @@
                                                        .builder (fn [_] (main-layout))))
                                                      nil)
                                                    (fn [err]
-                                                     (println "[Register] 注册失败 err:" (pr-str err))
-                                                     ;; Error handling: err 可能非 DioException，安全取 response；data/errors 转为 Clojure map
+                                                     (println "[Register] register failed err:" (pr-str err))
+                                                     ;; Error handling: err may not be DioException; safely get response; convert data/errors to Clojure map
                                                      (let [resp (safe-get-response err)
                                                            status (when resp (.-statusCode resp))
                                                            raw-data (when resp (.-data resp))

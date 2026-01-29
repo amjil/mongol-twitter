@@ -1,17 +1,6 @@
 (ns jirgee.router
   (:require ["package:flutter/material.dart" :as m]
             [cljd.flutter :as f]
-            [jirgee.screens.chat :refer [chat-screen]]
-            [jirgee.screens.search :refer [search-screen]]
-            [jirgee.screens.trending :refer [trending-screen]]
-            [jirgee.screens.lists :refer [lists-screen]]
-            [jirgee.screens.report :refer [report-screen]]
-            [jirgee.screens.bookmarks :refer [bookmarks-screen]]
-            [jirgee.screens.mentions :refer [mentions-screen]]
-            [jirgee.screens.groups :refer [groups-screen]]
-            [jirgee.screens.notifications :refer [notifications-screen]]
-            [jirgee.screens.hashtag :refer [hashtag-screen]]
-            [jirgee.screens.register :refer [register-screen]]
             [jirgee.services.search :as search-service]
             [jirgee.services.trending :as trending-service]
             [jirgee.services.hashtag :as hashtag-service]
@@ -259,3 +248,7 @@
 ;; Navigate to register page
 (defn push-to-register [ctx]
   (.pushNamed (.currentState navigator-key) "/register"))
+
+;; Navigate to create post page
+(defn push-to-create-post [ctx]
+  (.pushNamed (.currentState navigator-key) "/create-post"))

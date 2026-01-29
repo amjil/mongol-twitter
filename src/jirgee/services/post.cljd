@@ -43,13 +43,17 @@
 (defn create [{:keys [content image-url]} on-success on-error]
   (let [^db/AppDatabase sqlite @database
         now (.toIso8601String (dc/DateTime.now))
+        ^String image-url* (or image-url "")
+        image-url (if (empty? image-url*) (d/Value.absent) (d/Value ^String image-url*))
         ;; Build local post entry
+        ;; For required fields, pass raw values instead of wrapped `d/Value`
         post-comp (db/PostsCompanion.insert
-                   .nickname (d/Value "ᠬᠡᠷᠡᠭᠯᠡᠭᠴᠢ") ;; TODO: Should get current user nickname from user state/auth service
-                   .content (d/Value content)
-                   .imageUrl (d/Value image-url)
-                   .createdAt (d/Value now)
-                   .isSynced (d/Value false))
+                   .nickname "ᠬᠡᠷᠡᠭᠯᠡᠭᠴᠢ" ;; TODO: Should get current user nickname from user state/auth service
+                   .content content
+                   ;; Optional / nullable fields can still use `d/Value`
+                   .imageUrl image-url
+                   .createdAt now
+                   .isSynced false)
         query (.into sqlite (.-posts sqlite))]
 
     ;; 1. Insert locally first, trigger UI auto-refresh (Optimistic UI)

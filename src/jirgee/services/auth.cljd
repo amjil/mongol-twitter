@@ -6,15 +6,15 @@
 
 ;; Login
 (defn login [{:keys [email password]} on-success on-error]
-  (println "[Auth] login 被调用, email:" (pr-str email))
+  (println "[Auth] login called, email:" (pr-str email))
   (-> (.post client "/auth/login"
              .data {"email" email "password" password})
       (.then (fn [resp]
-               (println "[Auth] 登录请求成功, resp.data:" (pr-str (.-data resp)))
+               (println "[Auth] login request success, resp.data:" (pr-str (.-data resp)))
                (let [data (.-data resp)
                      token (get data "token")
                      user (get data "user")]
-                 (println "[Auth] 提取 token:" (pr-str token) "user:" (pr-str user))
+                 (println "[Auth] extracted token:" (pr-str token) "user:" (pr-str user))
                  ;; 1. Inject Token into Dio global config
                  (set-auth-header! token)
                  ;; 2. Save Token and user info to SharedPreferences
@@ -22,25 +22,25 @@
                  ;; 3. Execute success callback, return user info
                  (on-success data))))
       (.catchError (fn [err]
-                     (println "[Auth] 登录请求失败 err:" (pr-str err))
+                     (println "[Auth] login request failed err:" (pr-str err))
                      (when-let [resp (safe-get-response err)]
-                       (println "[Auth] 响应状态码:" (.-statusCode resp))
-                       (println "[Auth] 响应数据:" (pr-str (.-data resp))))
+                       (println "[Auth] response status:" (.-statusCode resp))
+                       (println "[Auth] response data:" (pr-str (.-data resp))))
                      ;; Possible errors: 401 (wrong password), 404 (user not found)
                      (on-error err)))))
 
-;; Register: API 要求 user 含 email, username, password, display_name（见 API.md）
+;; Register: API expects user with email, username, password, display_name (see API.md)
 (defn register [user-params on-success on-error]
-  (println "[Auth] register 被调用, user-params:" (pr-str user-params))
+  (println "[Auth] register called, user-params:" (pr-str user-params))
   (let [nickname (or (get user-params "nickname") (get user-params "username") "")
         api-user (-> user-params
                      (dissoc "nickname")
                      (assoc "username" nickname "display_name" nickname))
         payload {"user" api-user}]
-    (println "[Auth] 请求 payload:" (pr-str payload))
+    (println "[Auth] request payload:" (pr-str payload))
     (-> (.post client "/auth/register" .data payload)
         (.then (fn [resp]
-                 (println "[Auth] 注册请求成功, resp.data:" (pr-str (.-data resp)))
+                 (println "[Auth] register request success, resp.data:" (pr-str (.-data resp)))
                  (let [data (.-data resp)
                        token (get data "token")
                        user (get data "user")]
@@ -51,10 +51,10 @@
                    ;; 3. Execute success callback
                    (on-success data))))
         (.catchError (fn [err]
-                       (println "[Auth] 注册请求失败 err:" (pr-str err))
+                       (println "[Auth] register request failed err:" (pr-str err))
                        (when-let [resp (safe-get-response err)]
-                         (println "[Auth] 响应状态码:" (.-statusCode resp))
-                         (println "[Auth] 响应数据:" (pr-str (.-data resp))))
+                         (println "[Auth] response status:" (.-statusCode resp))
+                         (println "[Auth] response data:" (pr-str (.-data resp))))
                        (on-error err))))))
 
 ;; Logout

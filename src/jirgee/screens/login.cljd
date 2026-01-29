@@ -87,10 +87,10 @@
                         (fn []
                           (let [email (.-text email-ctrl)
                                 pass (.-text pass-ctrl)]
-                            (println "[Login] 点击登录, email:" (pr-str email))
+                            (println "[Login] login clicked, email:" (pr-str email))
                             (auth/login {:email email :password pass}
                                         (fn [_data]
-                                          (println "[Login] 登录成功，跳转主界面")
+                                          (println "[Login] login success, navigating to main")
                                           ;; Navigate to main layout on successful login
                                           (m/Navigator.pushReplacement
                                            ctx
@@ -98,8 +98,8 @@
                                             .builder (fn [_] (main-layout))))
                                           nil)
                                         (fn [err]
-                                          (println "[Login] 登录错误回调 err:" (pr-str err))
-                                          ;; 与注册页一致：安全取 response，直接使用 get 获取值
+                                          (println "[Login] login error callback err:" (pr-str err))
+                                          ;; Same as register: safely get response, use get for values
                                           (let [resp (safe-get-response err)
                                                 status (when resp (.-statusCode resp))
                                                 data (when resp (.-data resp))
@@ -115,7 +115,7 @@
                                                              404 "User not found"
                                                              "Login failed")
                                                            :else "Login failed")]
-                                            (println "[Login] 解析后 status:" (pr-str status) "data:" (pr-str data) "error-msg:" (pr-str error-msg))
+                                            (println "[Login] parsed status:" (pr-str status) "data:" (pr-str data) "error-msg:" (pr-str error-msg))
                                             (toast/error ctx error-msg))))))
                         .child (mgl/MongolText "Login" .style labelLarge)) ;; Login button
 

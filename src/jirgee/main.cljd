@@ -19,7 +19,8 @@
             [jirgee.screens.mentions :refer [mentions-screen]]
             [jirgee.screens.groups :refer [groups-screen]]
             [jirgee.screens.notifications :refer [notifications-screen]]
-            [jirgee.screens.hashtag :refer [hashtag-screen]]))
+            [jirgee.screens.hashtag :refer [hashtag-screen]]
+            [jirgee.screens.create-post :refer [create-post-screen]]))
 
 (defn- start-app [initial-route]
   "Start app, only call runApp once"
@@ -29,7 +30,7 @@
                       {:keyboard/key-cap-border-radius 6
                        :keyboard/font-size 18
                        :keyboard/key-container-color m/Colors.grey.shade500
-                       :keyboard/mongol-font-family "OnonSoninSans"})]
+                       :keyboard/mongol-font-family "OyunQaganTig"})]
     :bind {:info info}
     (m/MaterialApp
      .navigatorKey navigator-key
@@ -37,6 +38,7 @@
      .debugShowCheckedModeBanner false
      .theme (m/ThemeData .useMaterial3 true
                          .brightness m/Brightness.dark
+                         .fontFamily "OyunQaganTig"
                          .colorSchemeSeed m/Colors.blue)
      .initialRoute initial-route
      .routes {"/home" (fn [_] ^m/Widget (main-layout))
@@ -51,7 +53,8 @@
               "/groups" (fn [_] ^m/Widget (groups-screen))
               "/notifications" (fn [_] ^m/Widget (notifications-screen))
               "/hashtag" (fn [_] ^m/Widget (hashtag-screen))
-              "/chat" (fn [_] ^m/Widget (chat-screen))}))))
+              "/chat" (fn [_] ^m/Widget (chat-screen))
+              "/create-post" (fn [_] ^m/Widget (create-post-screen))}))))
 
 (defn- init-and-start []
   "Initialize and start app"

@@ -94,13 +94,18 @@
 ;; --- 2. Main page: Clean horizontal scroll ---
 (defn timeline-screen []
   (f/widget
+   :context ctx
    :watch [posts timeline-posts-state-atom
            is-loading? timeline-loading?-atom]
-   :get {{{:flds [surface onSurface]} .-colorScheme} m/Theme}
+   :get {{{:flds [surface onSurface primary]} .-colorScheme} m/Theme}
    :let [load-data! post-service/load-timeline-data!]
 
     (m/Scaffold
     .backgroundColor surface
+    .floatingActionButton (m/FloatingActionButton
+                           .onPressed #(do (m/Navigator.pushNamed ctx "/create-post") nil)
+                           .backgroundColor primary
+                           .child (m/Icon m/Icons.edit .color m/Colors.white))
     .appBar (m/AppBar
              .backgroundColor surface
              .elevation 0
