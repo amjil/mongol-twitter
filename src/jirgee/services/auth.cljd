@@ -1,6 +1,7 @@
 (ns jirgee.services.auth
   (:require [jirgee.services.base :refer [client set-auth-header! safe-get-response]]
-            [jirgee.services.storage :as storage]))
+            [jirgee.services.storage :as storage]
+            [jirgee.state :refer [set-current-user!]]))
 
 ;; --- Authentication Operations ---
 
@@ -19,7 +20,9 @@
                  (set-auth-header! token)
                  ;; 2. Save Token and user info to SharedPreferences
                  (storage/save-auth-data! token user)
-                 ;; 3. Execute success callback, return user info
+                 ;; 3. Put user into atom for app-wide use
+                 (set-current-user! (into {} user))
+                 ;; 4. Execute success callback, return user info
                  (on-success data))))
       (.catchError (fn [err]
                      (println "[Auth] login request failed err:" (pr-str err))
@@ -48,7 +51,9 @@
                    (set-auth-header! token)
                    ;; 2. Save Token and user info to SharedPreferences
                    (storage/save-auth-data! token user)
-                   ;; 3. Execute success callback
+                   ;; 3. Put user into atom for app-wide use
+                   (set-current-user! (into {} user))
+                   ;; 4. Execute success callback
                    (on-success data))))
         (.catchError (fn [err]
                        (println "[Auth] register request failed err:" (pr-str err))
@@ -61,7 +66,9 @@
 (defn logout [on-success]
   ;; 1. Clear token from Dio Header
   (set-auth-header! nil)
-  ;; 2. Clear locally persisted token and user info from SharedPreferences
+  ;; 2. Clear current user from atom
+  (set-current-user! nil)
+  ;; 3. Clear locally persisted token and user info from SharedPreferences
   (-> (storage/clear-auth-data!)
       (.then (fn [_] (on-success true)))
       (.catchError (fn [err]

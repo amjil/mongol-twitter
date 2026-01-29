@@ -5,6 +5,7 @@
             [virtual-keyboard.options :as keyboard-options]
             [jirgee.main-layout :refer [main-layout]]
             [jirgee.router :refer [navigator-key]]
+            [jirgee.state :refer [set-current-user!]]
             [jirgee.services.base :as base]
             [jirgee.services.network :as network]
             [jirgee.services.storage :as storage]
@@ -56,15 +57,17 @@
               "/chat" (fn [_] ^m/Widget (chat-screen))
               "/create-post" (fn [_] ^m/Widget (create-post-screen))}))))
 
-(defn- init-and-start []
+(defn- init-and-start 
   "Initialize and start app"
+  []
   (-> (storage/get-auth-data)
       (.then (fn [auth-data]
-              (let [initial-route (if auth-data
+                (let [initial-route (if auth-data
                                     (do
                                       (println "✅ User is logged in, restoring session")
-                                      (let [token (:token auth-data)]
-                                        (base/set-auth-header! token))
+                                      (base/set-auth-header! (:token auth-data))
+                                      (when-let [u (:user auth-data)]
+                                        (set-current-user! (into {} u)))
                                       "/home")
                                     (do
                                       (println "ℹ️ User is not logged in, showing login screen")

@@ -10,6 +10,9 @@
 (defonce ^:private main-layout-theme-mode (atom :light))
 (defonce ^:private main-layout-is-pinned (atom false))
 
+;; Current logged-in user (from login/register or restored from SharedPreferences)
+(defonce ^:private current-user (atom nil))
+
 ;; ============================================
 ;; Screen State - Lists
 ;; ============================================
@@ -138,6 +141,12 @@
 ;; Service State - Network
 ;; ============================================
 (defonce ^:private network-subscription (atom nil))
+
+;; ============================================
+;; Export Functions - Current User (Auth)
+;; ============================================
+(defn get-current-user [] @current-user)
+(defn set-current-user! [v] (reset! current-user v))
 
 ;; ============================================
 ;; Export Functions - Main Layout
@@ -315,6 +324,9 @@
 ;; ============================================
 ;; Directly export atoms (for :watch)
 ;; ============================================
+
+;; Current user (auth)
+(def current-user-atom current-user)
 
 ;; Main layout
 (def main-layout-current-tab-atom main-layout-current-tab)
