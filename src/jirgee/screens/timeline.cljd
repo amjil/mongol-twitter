@@ -20,6 +20,7 @@
      :image-urls (or (get post "image_urls") (when-let [url (get post "image_url")] [url]) [])
      :video-url (get post "video_url")
      :cover-url (get post "cover_url")
+     :author-id (str (or (get user "id") ""))
      :author-name (or (get user "display_name") (get user "username") (get post "nickname") nickname)
      :author-avatar (or (get user "avatar_url") "")
      :likes (get post "likes_count" 0)

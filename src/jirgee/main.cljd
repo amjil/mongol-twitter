@@ -23,6 +23,7 @@
             [jirgee.screens.hashtag :refer [hashtag-screen]]
             [jirgee.screens.create-post :refer [create-post-screen]]
             [jirgee.screens.post-detail :refer [post-detail-screen]]
+            [jirgee.screens.profile :refer [profile-screen]]
             [jirgee.screens.new-chat :refer [new-chat-screen]]))
 
 (defn- start-app [initial-route]
@@ -59,7 +60,8 @@
               "/chat" (fn [_] ^m/Widget (chat-screen))
               "/new-chat" (fn [_] ^m/Widget (new-chat-screen))
               "/create-post" (fn [_] ^m/Widget (create-post-screen))
-              "/post-detail" (fn [_] ^m/Widget (post-detail-screen))}))))
+              "/post-detail" (fn [_] ^m/Widget (post-detail-screen))
+              "/user-profile" (fn [_] ^m/Widget (profile-screen {:is-me? false}))}))))
 
 (defn- init-and-start 
   "Initialize and start app"

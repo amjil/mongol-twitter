@@ -1,5 +1,5 @@
 (ns jirgee.services.user
-  (:require [jirgee.services.base :refer [client]]
+  (:require [jirgee.services.base :refer [client get-with-auth]]
             [jirgee.state :refer [set-profile-state!
                                   set-profile-user-posts-state!]]))
 
@@ -7,19 +7,19 @@
 
 ;; Get current logged-in user's own information
 (defn get-me [on-success on-error]
-  (-> (.get client "/users/me")
+  (-> (get-with-auth "/users/me")
       (.then (fn [resp] (on-success (.-data resp))))
       (.catchError on-error)))
 
 ;; Get specified user's information (for viewing other users' profiles)
 (defn get-profile [user-id on-success on-error]
-  (-> (.get client (str "/users/" user-id))
+  (-> (get-with-auth (str "/users/" user-id))
       (.then (fn [resp] (on-success (.-data resp))))
       (.catchError on-error)))
 
 ;; Get user's posts (fully from backend API)
 (defn get-user-posts [user-id on-success on-error]
-  (-> (.get client (str "/users/" user-id "/posts"))
+  (-> (get-with-auth (str "/users/" user-id "/posts"))
       (.then (fn [resp] (on-success (or (get (.-data resp) "posts") []))))
       (.catchError (fn [err]
                      (when on-error (on-error err))

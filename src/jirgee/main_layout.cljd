@@ -58,8 +58,7 @@
                     (-> (msg-service/get-recent-chats identity)
                         (.then set-conversations-chats-state!)
                         (.catchError set-conversations-error-state!)))
-                2 (when (nil? @profile-state-atom)
-                    (user-service/load-profile-data! "me"))
+                2 (user-service/load-profile-data! "me")
                 nil))
      .items
      [(m/BottomNavigationBarItem

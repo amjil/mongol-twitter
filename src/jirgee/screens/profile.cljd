@@ -7,6 +7,7 @@
             [jirgee.state :refer [profile-state-atom
                                   profile-user-posts-state-atom]]))
 
+;; --- Stat Item Component (Vertical value and label) ---
 (defn- stat-item [label value]
   (f/widget
     :get {{{:flds [primary]} .-colorScheme
@@ -17,127 +18,153 @@
       (m/Column
         .mainAxisSize m/MainAxisSize.min
         .children
-        [(m/Text (str value) .style (.copyWith titleMedium .fontWeight m/FontWeight.bold .color primary))
+        [(m/Text (str value) 
+                 .style (.copyWith titleMedium .fontWeight m/FontWeight.bold .color primary))
          (m/SizedBox .height 4.0)
          (mgl/MongolText label .style bodySmall)]))))
 
+;; --- Post Gallery Item Component ---
+(defn- post-gallery-item [post surface-variant]
+  (m/Container
+    .width 200.0
+    .margin (m/EdgeInsets.only .right 16.0 .top 10.0 .bottom 40.0)
+    .decoration (m/BoxDecoration
+                  .color surface-variant
+                  .borderRadius (m/BorderRadius.circular 20.0)
+                  .boxShadow [(m/BoxShadow .color (-> (.-black m/Colors) (.withOpacity 0.05))
+                                           .blurRadius 10.0 .offset (m/Offset 4 4))]
+                  .image (let [img (get post "image_url")]
+                           (when (and img (not-empty img))
+                             (m/DecorationImage .image (m/NetworkImage img) .fit m/BoxFit.cover))))
+    .child (m/Stack
+             .children
+             [(m/Positioned.fill
+                .child (m/Container
+                         .decoration (m/BoxDecoration
+                                       .borderRadius (m/BorderRadius.circular 20.0)
+                                       .gradient (m/LinearGradient
+                                                   .begin m/Alignment.topCenter
+                                                   .end m/Alignment.bottomCenter
+                                                   .colors [(m/Colors.transparent) (-> (.-black m/Colors) (.withOpacity 0.8))]))))
+              (m/Padding
+                .padding (m/EdgeInsets.all 16.0)
+                .child
+                (m/Align
+                  .alignment m/Alignment.bottomLeft
+                  .child (mgl/MongolText (get post "content" "")
+                                         .style (m/TextStyle .color m/Colors.white .fontSize 14.0)
+                                         .maxLines 2
+                                         .overflow m/TextOverflow.ellipsis)))])))
+
+;; --- Main Page ---
 (defn profile-screen [{:keys [user-id is-me?]}]
   (f/widget
    :context ctx
    :watch [profile profile-state-atom
            posts profile-user-posts-state-atom]
    :get {{{:flds [surface surfaceVariant onSurface primary]} .-colorScheme
-          {:flds [headlineSmall bodyMedium]} .-textTheme} m/Theme}
+          {:flds [headlineSmall bodyMedium]} .-textTheme} m/Theme
+         {:keys [height]} m/MediaQuery}
 
-   (mongol-side-layout
-    {:title (if is-me? "Me" "User")
-     :min-width 70.0
-     :actions [{:icon m/Icons.settings :on-tap #(println "Settings")}]
-     :body
-     (m/Scaffold
-      .backgroundColor surface
-      .body
-      (if (nil? profile)
-        (m/Center .child (m/CircularProgressIndicator))
-        (m/CustomScrollView
-         .slivers
-         [(m/SliverToBoxAdapter
-           .child
-           (m/Padding
-            .padding (m/EdgeInsets.all 24.0)
+   (m/Scaffold
+    .backgroundColor surface
+    .body 
+    (m/SafeArea
+     .child
+     (mongol-side-layout
+      {:title (if is-me? "Me" "User") 
+       :min-width 48.0
+       :actions [{:icon m/Icons.settings :on-tap #(println "Settings")}]
+       :body
+       (if (nil? profile)
+         (m/Center .child (m/CircularProgressIndicator))
+         (m/Column
+          .children
+          [(m/SizedBox
+            .height 320.0 ;; Fixed height for user profile section
             .child
-            (m/Column
-             .children
-             [(m/Row
-               .children
-               [(m/CircleAvatar
-                 .radius 45.0
-                 .backgroundColor surfaceVariant
-                 .backgroundImage (when-let [url (get profile "avatar_url")] (m/NetworkImage url)))
-                (m/SizedBox .width 24.0)
-                (m/Expanded
-                 .child
-                 (m/Row
-                  .mainAxisAlignment m/MainAxisAlignment.spaceAround
-                  .children
-                  [(stat-item "Followers" (get profile "followers_count" 0))
-                   (stat-item "Following" (get profile "following_count" 0))
-                   (stat-item "Posts" (get profile "posts_count" 0))]))])
-
-              (m/SizedBox .height 20.0)
-
-              (m/Align
-               .alignment m/Alignment.centerLeft
-               .child
-               (m/Column
-                .crossAxisAlignment m/CrossAxisAlignment.start
-                .children
-                [(mgl/MongolText (get profile "nickname" "User")
-                                 .style (.copyWith headlineSmall .fontWeight m/FontWeight.bold))
-                 (m/SizedBox .height 12.0)
-                 (m/SizedBox
-                  .height 120.0
-                  .child (mgl/MongolText (get profile "bio" "...")
-                                         .style bodyMedium))]))
-
-              (m/SizedBox .height 24.0)
-
+            (m/Padding
+             .padding (m/EdgeInsets.all 24.0)
+             .child
+             (m/SingleChildScrollView
+              .scrollDirection m/Axis.horizontal
+              .child
               (m/Row
+               .crossAxisAlignment m/CrossAxisAlignment.start
                .children
-               [(m/Expanded
-                 .child
-                 (m/FilledButton.tonal
-                  .onPressed #()
-                  .child (m/Text (if is-me? "Edit Profile" "Follow"))))])
-              (m/Divider .height 48.0 .thickness 1.0)])))
+               [;; 1. Avatar and Name
+                (m/Column
+                 .crossAxisAlignment m/CrossAxisAlignment.start
+                 .children
+                 [(m/CircleAvatar
+                   .radius 45.0
+                   .backgroundColor surfaceVariant
+                   .backgroundImage (let [url (get profile "avatar_url")]
+                                      (when (and url (not-empty url)) (m/NetworkImage url))))
+                  (m/SizedBox .height 12.0)
+                  (mgl/MongolText (get profile "nickname" "User")
+                                  .style (.copyWith headlineSmall .fontWeight m/FontWeight.bold))])
 
-          ;; Posts list header
-          (m/SliverToBoxAdapter
-           .child
-           (m/Padding
-            .padding (m/EdgeInsets.only .left 24.0 .bottom 16.0)
-            .child
-            (mgl/MongolText "Posts" .style headlineSmall)))
+                (m/SizedBox .width 24.0)
 
-          ;; Horizontally scrolling posts gallery
-          (m/SliverFillRemaining
-           .hasScrollBody false
-           .child
-           (m/SizedBox
-            .height 320.0
+                ;; 2. Bio
+                (m/SizedBox
+                 .height 200.0
+                 .child (mgl/MongolText (get profile "bio" "...") .style bodyMedium))
+
+                (m/SizedBox .width 24.0)
+
+                ;; 3. Buttons
+                (m/Column
+                 .mainAxisSize m/MainAxisSize.min
+                 .children
+                 [(mgl/MongolElevatedButton
+                   .onPressed #()
+                   .child (m/Padding
+                           .padding (m/EdgeInsets.symmetric .vertical 4.0)
+                           .child (mgl/MongolText
+                                   (if is-me? "Edit Profile" "Follow")
+                                   .style (m/TextStyle .fontSize 15.0 .fontWeight m/FontWeight.w500))))
+                  (m/SizedBox .height 12.0)
+                  (mgl/MongolElevatedButton
+                   .style (m/ElevatedButton.styleFrom
+                           .backgroundColor surfaceVariant
+                           .foregroundColor onSurface)
+                   .onPressed #()
+                   .child (m/Padding
+                           .padding (m/EdgeInsets.symmetric .vertical 4.0)
+                           .child (mgl/MongolText "Chat"
+                                                  .style (m/TextStyle .fontSize 15.0 .fontWeight m/FontWeight.w500))))])
+
+                (m/SizedBox .width 32.0)
+
+                ;; 4. Statistics
+                (m/Row
+                 .children
+                 [(stat-item "Followers" (get profile "followers_count" 0))
+                  (stat-item "Following" (get profile "following_count" 0))
+                  (stat-item "Posts" (get profile "posts_count" 0))])]))))
+           
+           ;; Divider (Horizontal)
+           (m/Divider .height 1.0 .thickness 1.0 .color (-> onSurface (.withOpacity 0.1)))
+
+           ;; Bottom Scrollable Part
+           (m/Expanded
             .child
-            (m/ListView.builder
+            (m/CustomScrollView
              .scrollDirection m/Axis.horizontal
-             .padding (m/EdgeInsets.symmetric .horizontal 20.0)
-             .itemCount (count posts)
-             .itemBuilder (fn [_ idx]
-                            (let [post (nth posts idx)]
-                              (m/Container
-                               .width 180.0
-                               .margin (m/EdgeInsets.only .right 16.0 .bottom 24.0)
-                               .decoration (m/BoxDecoration
-                                            .color surfaceVariant
-                                            .borderRadius (m/BorderRadius.circular 16.0)
-                                            .boxShadow [(m/BoxShadow .color (-> (.-black m/Colors) (.withOpacity 0.05))
-                                                                     .blurRadius 8.0 .offset (m/Offset 0 4))]
-                                            .image (when-let [img (get post "image_url")]
-                                                     (m/DecorationImage .image (m/NetworkImage img) .fit m/BoxFit.cover)))
-                               .child (m/Stack
-                                       .children
-                                       [(m/Positioned.fill
-                                         .child (m/Container
-                                                 .decoration (m/BoxDecoration
-                                                              .borderRadius (m/BorderRadius.circular 16.0)
-                                                              .gradient (m/LinearGradient
-                                                                         .begin m/Alignment.topCenter
-                                                                         .end m/Alignment.bottomCenter
-                                                                         .colors [(m/Colors.transparent) (-> (.-black m/Colors) (.withOpacity 0.6))]))))
-                                        (m/Padding
-                                         .padding (m/EdgeInsets.all 12.0)
-                                         .child
-                                         (m/Align
-                                          .alignment m/Alignment.bottomLeft
-                                          .child (mgl/MongolText (get post "content" "")
-                                                                 .style (m/TextStyle .color m/Colors.white .fontSize 14.0)
-                                                                 .maxLines 3
-                                                                 .overflow m/TextOverflow.ellipsis)))])))))))])))})))
+             .slivers
+             [;; 2. Section Title (Vertical Title)
+              (m/SliverToBoxAdapter
+               .child
+               (m/Padding
+                .padding (m/EdgeInsets.only .top 32.0 .right 32.0 .left 24.0)
+                .child (mgl/MongolText "Posts" .style headlineSmall)))
+
+              ;; 3. Horizontal Post Stream
+              (m/SliverList
+               .delegate
+               (m/SliverChildBuilderDelegate.
+                (fn [ctx idx]
+                  (post-gallery-item (nth posts idx) surfaceVariant))
+                .childCount (count posts)))]))]))})))))

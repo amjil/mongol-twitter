@@ -4,6 +4,7 @@
             ["dart:core" :as dc]
             ["package:mongol/mongol.dart" :as mgl]
             [jirgee.state :refer [post-detail-state-atom]]
+            [jirgee.services.user :as user-service]
             [jirgee.components.post-image-gallery :refer [post-image-gallery]]
             [jirgee.components.post-actions :refer [post-action-bar-vertical]]
             [jirgee.components.actual-video-player :refer [actual-video-player]]))
@@ -31,7 +32,7 @@
 
 (defn post-detail-page [{:keys [post]}]
   (let [{:keys [id content image-urls video-url cover-url
-                author-name author-avatar likes comments forwards is-liked]} post
+                author-id author-name author-avatar likes comments forwards is-liked]} post
         progress-atom (atom 0.0)]
     (f/widget
      :context ctx
@@ -82,21 +83,26 @@
                             .position slide-anim
                             .child (m/Padding
                                     .padding (m/EdgeInsets.only .top 12.0)
-                                    .child (m/Column
-                                            .mainAxisSize m/MainAxisSize.min
-                                            .children
-                                            [(if (and author-avatar (not-empty author-avatar))
-                                               (m/CircleAvatar
-                                                .radius 28.0
-                                                .backgroundImage (m/NetworkImage author-avatar))
-                                               (m/CircleAvatar
-                                                .radius 28.0
-                                                .child (m/Icon m/Icons.person .size 28.0)))
-                                             (m/SizedBox .height 16.0)
-                                             (mgl/MongolText author-name
-                                                             .style (m/TextStyle .fontSize 18.0
-                                                                                 .fontWeight m/FontWeight.w700
-                                                                                 .color onSurface))]))))
+                                    .child (m/GestureDetector
+                                            .onTap #(when (and author-id (not-empty author-id))
+                                                     (do (user-service/load-profile-data! author-id)
+                                                         (m/Navigator.pushNamed ctx "/user-profile")
+                                                         nil))
+                                            .child (m/Column
+                                                    .mainAxisSize m/MainAxisSize.min
+                                                    .children
+                                                    [(if (and author-avatar (not-empty author-avatar))
+                                                       (m/CircleAvatar
+                                                        .radius 28.0
+                                                        .backgroundImage (m/NetworkImage author-avatar))
+                                                       (m/CircleAvatar
+                                                        .radius 28.0
+                                                        .child (m/Icon m/Icons.person .size 28.0)))
+                                                     (m/SizedBox .height 16.0)
+                                                     (mgl/MongolText author-name
+                                                                     .style (m/TextStyle .fontSize 18.0
+                                                                                     .fontWeight m/FontWeight.w700
+                                                                                     .color onSurface))])))))
 
                    (m/SizedBox .width 48.0)
 
