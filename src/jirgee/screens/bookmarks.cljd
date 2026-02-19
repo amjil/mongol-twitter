@@ -10,8 +10,7 @@
 
 (defn- bookmark-item [bookmark]
   (f/widget
-   :context ctx
-   :get {{{:flds [surfaceVariant onSurface primary]} .-colorScheme
+   :get {{{:flds [surfaceVariant primary]} .-colorScheme
           {:flds [bodyMedium titleSmall]} .-textTheme} m/Theme}
    :let [post (get bookmark "post" {})
          content (get post "content" "")
@@ -54,7 +53,6 @@
 
 (defn bookmarks-screen []
   (f/widget
-   :context ctx
    :watch [bookmarks bookmarks-state-atom
            is-loading? bookmarks-loading?-atom]
    :get {{{:flds [surface]} .-colorScheme} m/Theme}

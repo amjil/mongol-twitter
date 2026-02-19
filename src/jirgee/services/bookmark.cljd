@@ -6,6 +6,7 @@
 ;; =============================================================================
 ;; Bookmark Service
 ;; =============================================================================
+(declare load-bookmarks!)
 
 ;; Get bookmarks list
 (defn get-bookmarks [{:keys [limit offset]
@@ -27,7 +28,9 @@
 ;; Delete bookmark
 (defn delete-bookmark [post-id]
   (-> (.delete client (str "/posts/" post-id "/bookmark"))
-      (.then (fn [resp] (.-data resp)))
+      (.then (fn [resp]
+               (load-bookmarks!)
+               (.-data resp)))
       (.catchError (fn [err] (println "Delete bookmark failed:" err)))))
 
 ;; Check if already bookmarked
