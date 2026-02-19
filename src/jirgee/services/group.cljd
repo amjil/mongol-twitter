@@ -1,0 +1,89 @@
+(ns jirgee.services.group
+  (:require [jirgee.services.base :refer [client]]))
+
+;; =============================================================================
+;; Group Service
+;; =============================================================================
+
+;; Get groups list
+(defn get-groups [{:keys [is-public]}]
+  (-> (.get client "/groups"
+            .queryParameters (when is-public {"is_public" true}))
+      (.then (fn [resp] (get (.-data resp) "groups" [])))
+      (.catchError (fn [err]
+                     (println "Get groups failed:" err)
+                     []))))
+
+;; Get group details
+(defn get-group [group-id]
+  (-> (.get client (str "/groups/" group-id))
+      (.then (fn [resp] (get (.-data resp) "group")))
+      (.catchError (fn [err]
+                     (println "Get group failed:" err)
+                     nil))))
+
+;; Create group
+(defn create-group [group-params]
+  (-> (.post client "/groups" .data {"group" group-params})
+      (.then (fn [resp] (get (.-data resp) "group")))
+      (.catchError (fn [err] (println "Create group failed:" err)))))
+
+;; Update group
+(defn update-group [group-id group-params]
+  (-> (.put client (str "/groups/" group-id) .data {"group" group-params})
+      (.then (fn [resp] (get (.-data resp) "group")))
+      (.catchError (fn [err] (println "Update group failed:" err)))))
+
+;; Delete group
+(defn delete-group [group-id]
+  (-> (.delete client (str "/groups/" group-id))
+      (.then (fn [resp] (.-data resp)))
+      (.catchError (fn [err] (println "Delete group failed:" err)))))
+
+;; Get group members list
+(defn get-group-members [group-id]
+  (-> (.get client (str "/groups/" group-id "/members"))
+      (.then (fn [resp] (get (.-data resp) "members" [])))
+      (.catchError (fn [err]
+                     (println "Get group members failed:" err)
+                     []))))
+
+;; Invite user to group
+(defn invite-user [group-id user-id]
+  (-> (.post client (str "/groups/" group-id "/invite")
+             .data {"user_id" user-id})
+      (.then (fn [resp] (.-data resp)))
+      (.catchError (fn [err] (println "Invite user failed:" err)))))
+
+;; Approve invitation
+(defn approve-invitation [group-id user-id]
+  (-> (.post client (str "/groups/" group-id "/invitations/" user-id "/approve"))
+      (.then (fn [resp] (.-data resp)))
+      (.catchError (fn [err] (println "Approve invitation failed:" err)))))
+
+;; Reject invitation
+(defn reject-invitation [group-id user-id]
+  (-> (.post client (str "/groups/" group-id "/invitations/" user-id "/reject"))
+      (.then (fn [resp] (.-data resp)))
+      (.catchError (fn [err] (println "Reject invitation failed:" err)))))
+
+;; Remove member
+(defn remove-member [group-id user-id]
+  (-> (.delete client (str "/groups/" group-id "/members/" user-id))
+      (.then (fn [resp] (.-data resp)))
+      (.catchError (fn [err] (println "Remove member failed:" err)))))
+
+;; Get group messages
+(defn get-group-messages [group-id]
+  (-> (.get client (str "/groups/" group-id "/messages"))
+      (.then (fn [resp] (get (.-data resp) "messages" [])))
+      (.catchError (fn [err]
+                     (println "Get group messages failed:" err)
+                     []))))
+
+;; Send group message
+(defn send-group-message [group-id message-params]
+  (-> (.post client (str "/groups/" group-id "/messages")
+             .data {"message" message-params})
+      (.then (fn [resp] (get (.-data resp) "message")))
+      (.catchError (fn [err] (println "Send group message failed:" err)))))

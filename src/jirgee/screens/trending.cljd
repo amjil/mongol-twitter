@@ -1,0 +1,176 @@
+(ns jirgee.screens.trending
+  (:require [cljd.flutter :as f]
+            ["package:flutter/material.dart" :as m]
+            ["package:mongol/mongol.dart" :as mgl]
+            [components.app-bar :refer [mongol-side-layout]]
+            [components.chip :refer [filter-chip]]
+            [jirgee.services.trending :as trending-service]
+            [jirgee.state :refer [trending-posts-state-atom
+                                  trending-users-state-atom
+                                  trending-hashtags-state-atom
+                                  trending-loading?-atom
+                                  trending-current-tab-atom
+                                  trending-filter-chips-atom
+                                  set-trending-current-tab!]]
+            [pull-to-refresh.refresh :refer [horizontal-refresh]]))
+
+(defn- post-item [post]
+  (f/widget
+   :context ctx
+   :get {{{:flds [surfaceVariant onSurface]} .-colorScheme
+          {:flds [bodySmall bodyMedium titleSmall]} .-textTheme} m/Theme}
+   :let [content (get post "content" "")
+         user (get post "user" {})
+         username (get user "username" "")
+         avatar-url (get user "avatar_url")
+         likes-count (get post "likes_count" 0)
+         reposts-count (get post "reposts_count" 0)]
+   (m/Card
+    .margin (m/EdgeInsets.symmetric .vertical 4.0 .horizontal 12.0)
+    .child
+    (m/Padding
+     .padding (m/EdgeInsets.all 12.0)
+     .child
+     (m/Row
+      .crossAxisAlignment m/CrossAxisAlignment.start
+      .children
+      [(m/CircleAvatar
+        .backgroundImage (when avatar-url (m/NetworkImage avatar-url))
+        .child (if-not avatar-url (m/Icon m/Icons.person) (m/SizedBox)))
+       (m/SizedBox .width 12.0)
+       (m/Expanded
+        .child
+        (m/Column
+         .crossAxisAlignment m/CrossAxisAlignment.start
+         .children
+         [(mgl/MongolText username .style (.copyWith titleSmall .fontWeight m/FontWeight.bold))
+          (m/SizedBox .height 8.0)
+          (mgl/MongolText content .style bodyMedium .maxLines 3)
+          (m/SizedBox .height 8.0)
+          (m/Row
+           .children
+           [(m/Icon m/Icons.favorite .size 16.0)
+            (m/SizedBox .width 4.0)
+            (m/Text (str likes-count) .style bodySmall)
+            (m/SizedBox .width 16.0)
+            (m/Icon m/Icons.repeat .size 16.0)
+            (m/SizedBox .width 4.0)
+            (m/Text (str reposts-count) .style bodySmall)])]))])))))
+
+(defn- user-item [user]
+  (f/widget
+   :context ctx
+   :get {{{:flds [surfaceVariant onSurface]} .-colorScheme
+          {:flds [titleMedium bodySmall]} .-textTheme} m/Theme}
+   :let [username (get user "username" "")
+         display-name (get user "display_name" "")
+         avatar-url (get user "avatar_url")
+         followers-count (get user "followers_count" 0)
+         posts-count (get user "posts_count" 0)]
+   (m/ListTile
+    .leading (m/CircleAvatar
+              .backgroundImage (when avatar-url (m/NetworkImage avatar-url))
+              .child (if-not avatar-url (m/Icon m/Icons.person) (m/SizedBox)))
+    .title (mgl/MongolText (or display-name username) .style titleMedium)
+    .subtitle (mgl/MongolText (str followers-count " followers · " posts-count " posts") .style bodySmall)
+    .trailing (m/IconButton
+               .icon (m/Icon m/Icons.arrow_forward_ios .size 16.0)
+               .onPressed #(println "Navigate to user profile")))))
+
+(defn- hashtag-item [hashtag]
+  (f/widget
+   :context ctx
+   :get {{{:flds [surfaceVariant onSurface primary]} .-colorScheme
+          {:flds [titleMedium bodySmall]} .-textTheme} m/Theme}
+   :let [name (get hashtag "name" "")
+         posts-count (get hashtag "posts_count" 0)]
+   (mgl/MongolListTile
+    .leading (m/Icon m/Icons.tag .color primary)
+    .title (mgl/MongolText (str "#" name) .style titleMedium)
+    .subtitle (mgl/MongolText (str posts-count " posts") .style bodySmall)
+    .trailing (m/IconButton
+               .icon (m/Icon m/Icons.arrow_forward_ios .size 16.0)
+               .onPressed #(println "Navigate to hashtag:" name)))))
+
+(defn trending-screen []
+  (f/widget
+   :context ctx
+   :watch [posts trending-posts-state-atom
+           users trending-users-state-atom
+           hashtags trending-hashtags-state-atom
+           is-loading? trending-loading?-atom
+           tab trending-current-tab-atom
+           filter-chips trending-filter-chips-atom]
+   :get {{{:flds [surface]} .-colorScheme} m/Theme}
+   :let [load-data! trending-service/load-trending-data!
+         _ (when-let [selected-tab (first (keep (fn [[k v]] (when v k)) filter-chips))]
+             (when (not= tab selected-tab)
+               (set-trending-current-tab! selected-tab)))]
+
+   (mongol-side-layout
+    {:title "Trending"
+     :min-width 70.0
+     :body
+     (m/Scaffold
+      .backgroundColor surface
+      .body
+      (m/Column
+       .children
+       [;; Tab selection
+        (m/SingleChildScrollView
+         .scrollDirection m/Axis.horizontal
+         .padding (m/EdgeInsets.all 16.0)
+         .child
+         (m/Row
+          .children
+          [(filter-chip 0 "Posts" trending-filter-chips-atom
+                        :max-select 1
+                        :haptic? true)
+           (m/SizedBox .width 8.0)
+           (filter-chip 1 "Users" trending-filter-chips-atom
+                        :max-select 1
+                        :haptic? true)
+           (m/SizedBox .width 8.0)
+           (filter-chip 2 "Search" trending-filter-chips-atom
+                        :max-select 1
+                        :haptic? true)]))
+
+        ;; Content
+        (m/Expanded
+         .child
+         (cond
+           is-loading?
+           (m/Center .child (m/CircularProgressIndicator))
+
+           (= tab 0)
+           (if (empty? posts)
+             (m/Center .child (mgl/MongolText "Empty"))
+             (horizontal-refresh
+              {:on-refresh (fn [] (load-data!))
+               :item-count (count posts)
+               :item-builder (fn [_ idx]
+                               (post-item (nth posts idx)))
+               :background-color surface
+               :reverse false}))
+
+           (= tab 1)
+           (if (empty? users)
+             (m/Center .child (mgl/MongolText "Empty"))
+             (horizontal-refresh
+              {:on-refresh (fn [] (load-data!))
+               :item-count (count users)
+               :item-builder (fn [_ idx]
+                               (user-item (nth users idx)))
+               :background-color surface
+               :reverse false}))
+
+           (= tab 2)
+           (if (empty? hashtags)
+             (m/Center .child (mgl/MongolText "Empty"))
+             (horizontal-refresh
+              {:on-refresh (fn [] (load-data!))
+               :item-count (count hashtags)
+               :item-builder (fn [_ idx]
+                               (hashtag-item (nth hashtags idx)))
+               :background-color surface
+               :reverse false}))))]))})))

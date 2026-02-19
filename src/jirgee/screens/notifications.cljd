@@ -1,0 +1,171 @@
+(ns jirgee.screens.notifications
+  (:require [cljd.flutter :as f]
+            ["package:flutter/material.dart" :as m]
+            ["package:mongol/mongol.dart" :as mgl]
+            [components.app-bar :refer [mongol-side-layout]]
+            [components.chip :refer [filter-chip]]
+            [jirgee.services.base :refer [client response-data]]
+            [jirgee.state :refer [notifications-state-atom
+                                  notifications-loading?-atom
+                                  notifications-unread-count-atom
+                                  notifications-filter-read?-atom
+                                  notifications-filter-chips-atom
+                                  set-notifications-state!
+                                  swap-notifications-state!
+                                  set-notifications-loading?!
+                                  set-notifications-unread-count!
+                                  set-notifications-filter-read?!]]
+            [pull-to-refresh.refresh :refer [horizontal-refresh]]))
+
+(defn- notification-item [notification]
+  (f/widget
+   :context ctx
+   :get {{{:flds [surfaceVariant onSurface primary]} .-colorScheme
+          {:flds [titleMedium bodySmall]} .-textTheme} m/Theme}
+   :let [type (get notification "type" "")
+         actor (get notification "actor" {})
+         actor-name (get actor "display_name" (get actor "username" ""))
+         actor-avatar (get actor "avatar_url")
+         is-read (get notification "read" false)
+         post (get notification "post" {})]
+   (mgl/MongolListTile
+    .leading (m/Stack
+              .children
+              [(m/CircleAvatar
+                .backgroundImage (when actor-avatar (m/NetworkImage actor-avatar))
+                .child (if-not actor-avatar (m/Icon m/Icons.person) (m/SizedBox)))
+               (when-not is-read
+                 (m/Positioned
+                  .right 0 .top 0
+                  .child (m/Container
+                          .width 12.0 .height 12.0
+                          .decoration (m/BoxDecoration
+                                      .color primary
+                                      .shape m/BoxShape.circle))))])
+    .title (mgl/MongolText
+            (case type
+              "like" (str actor-name " liked post")
+              "follow" (str actor-name " followed")
+              "reply" (str actor-name " replied")
+              "repost" (str actor-name " reposted")
+              "mention" (str actor-name " mentioned")
+              "direct_message" (str actor-name " message")
+              "group_invitation" (str actor-name " group invite")
+              "group_message" (str actor-name " group message")
+              (str actor-name " notification"))
+            .style (.copyWith titleMedium
+                            .fontWeight (if is-read m/FontWeight.normal m/FontWeight.bold)))
+    .subtitle (mgl/MongolText
+               (get post "content" "")
+               .style bodySmall
+               .maxLines 2)
+    .trailing (m/Text
+               (let [time-str (get notification "inserted_at" "")]
+                 (if (empty? time-str) "" "ago"))
+               .style bodySmall)
+    .onTap (fn []
+             (when-not is-read
+               (-> (.put client (str "/notifications/" (get notification "id") "/read"))
+                   (.then (fn [resp]
+                           (swap-notifications-state!
+                            (fn [notifs]
+                             (mapv (fn [n]
+                                    (if (= (get n "id") (get notification "id"))
+                                      (assoc n "read" true)
+                                      n))
+                                  notifs)))))))
+             (when-let [post-id (get post "id")]
+               (println "Navigate to post:" post-id))))))
+
+(defn notifications-screen []
+  (f/widget
+   :context ctx
+   :watch [notifications notifications-state-atom
+           is-loading? notifications-loading?-atom
+           unread notifications-unread-count-atom
+           filter-read notifications-filter-read?-atom
+           filter-chips notifications-filter-chips-atom]
+   :get {{{:flds [surface primary]} .-colorScheme} m/Theme}
+   :let [load-notifications! (fn []
+                               (set-notifications-loading?! true)
+                               (-> (.get client "/notifications"
+                                         .queryParameters (when filter-read {"read" filter-read}))
+                                   (.then (fn [resp]
+                                            (let [data (response-data resp)
+                                                  notifs (get data "notifications" [])]
+                                              (set-notifications-state! (mapv #(into {} %) (into [] (or notifs []))))
+                                              (set-notifications-loading?! false))))
+                                   (.catchError (fn [err]
+                                                  (println "Load notifications failed:" err)
+                                                  (set-notifications-loading?! false)))))
+         load-unread-count! (fn []
+                              (-> (.get client "/notifications/unread_count")
+                                  (.then (fn [resp]
+                                           (set-notifications-unread-count! (get (response-data resp) "unread_count" 0))))
+                                  (.catchError (fn [err] (println "Load unread count failed:" err)))))
+         mark-all-read! (fn []
+                          (-> (.put client "/notifications/read_all")
+                              (.then (fn [resp]
+                                       (set-notifications-unread-count! 0)
+                                       (swap-notifications-state!
+                                        (fn [notifs]
+                                          (mapv #(assoc % "read" true) notifs)))))
+                              (.catchError (fn [err] (println "Mark all read failed:" err)))))
+         _ (let [selected-filter (first (keep (fn [[k v]] (when v k)) filter-chips))]
+             (when selected-filter
+               (let [new-filter-read (case selected-filter
+                                       "all" nil
+                                       "unread" false
+                                       "read" true
+                                       nil)]
+                 (when (not= filter-read new-filter-read)
+                   (set-notifications-filter-read?! new-filter-read)))))]
+
+   (mongol-side-layout
+    {:title "Notifications"
+     :min-width 70.0
+     :actions [{:icon m/Icons.done_all
+                :on-tap mark-all-read!}]
+     :body
+     (m/Scaffold
+      .backgroundColor surface
+      .body
+      (m/Column
+       .children
+       [;; Filter
+        (m/SingleChildScrollView
+         .scrollDirection m/Axis.horizontal
+         .padding (m/EdgeInsets.all 16.0)
+         .child
+         (m/Row
+          .children
+          [(filter-chip "all" "All" notifications-filter-chips-atom
+                        :max-select 1
+                        :haptic? true)
+           (m/SizedBox .width 8.0)
+           (filter-chip "unread" "Unread" notifications-filter-chips-atom
+                        :max-select 1
+                        :haptic? true)
+           (m/SizedBox .width 8.0)
+           (filter-chip "read" "Read" notifications-filter-chips-atom
+                        :max-select 1
+                        :haptic? true)]))
+
+        ;; Notification list
+        (m/Expanded
+         .child
+         (cond
+           is-loading?
+           (m/Center .child (m/CircularProgressIndicator))
+
+           (empty? notifications)
+           (m/Center .child (mgl/MongolText "Empty"))
+
+           :else
+           (horizontal-refresh
+            {:on-refresh (fn [] (load-notifications!))
+             :item-count (count notifications)
+             :item-builder (fn [_ idx]
+                             (notification-item (nth notifications idx)))
+             :background-color surface
+             :reverse false})))]))})))

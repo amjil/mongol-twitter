@@ -1,50 +1,130 @@
 (ns jirgee.screens.login
-  (:require
-   ["package:flutter/material.dart" :as m]
-   ["package:mongol/mongol.dart" :as mgl]
-   [cljd.flutter.alpha2 :as f]
-   [jirgee.common.theme :as theme]
-   [jirgee.services.auth :as auth-service]
-   [jirgee.common.utils :as utils]
-   [jirgee.widgets.auth :as auth-widgets]))
+  (:require [cljd.flutter :as f]
+            ["package:flutter/material.dart" :as m]
+            ["package:mongol/mongol.dart" :as mgl]
+            [virtual-keyboard.keyboard :as keyboard]
+            [jirgee.services.auth :as auth]
+            [jirgee.services.base :refer [safe-get-response]]
+            [jirgee.main-layout :refer [main-layout]]
+            [jirgee.router :refer [push-to-register]]
+            [components.toast :as toast]
+            [components.text-field :refer [text-field]]))
 
-(defn ^m/Widget login-screen [ctx]
+(defn login-screen []
   (f/widget
-   :get [m/Navigator]
-   :managed [email-controller (m/TextEditingController)
-             password-controller (m/TextEditingController)]
-   (m/Scaffold)
-   .body
-   (m/SafeArea)
-   (m/Center)
-   (m/Padding
-    .padding (.all m/EdgeInsets 20))
-   (m/Column
-    .children
-    [(auth-widgets/auth-form-field email-controller "Email")
-     (m/SizedBox .height 25)
-     (auth-widgets/auth-form-field password-controller "Password")
-     (m/SizedBox .height 40)
-     (m/Row
-      .mainAxisAlignment m.MainAxisAlignment/spaceAround
+   :context ctx
+   ;; 1. Lifecycle management: Auto dispose controllers
+   :managed [email-ctrl (m/TextEditingController)
+             pass-ctrl (m/TextEditingController)]
+   ;; 2. Nested theme destructuring: Extract colors and fonts at once
+   :get {{{:flds [primary onPrimaryContainer surface]} .-colorScheme
+          {:flds [headlineMedium labelLarge]} .-textTheme} m/Theme}
+
+   (m/Scaffold
+    .backgroundColor surface
+    .body
+    (m/SafeArea
+     .child
+     (m/Column
       .children
-      [(m/SizedBox .height 100
+      [(m/Expanded
+        .child
+        (m/Stack
+         .children
+         [(m/Center
+           .child (m/SingleChildScrollView
+                   .scrollDirection m/Axis.horizontal
+                   .padding (m/EdgeInsets.symmetric .horizontal 40.0)
                    .child
-                   (m/GestureDetector
-                    .onTap (fn []
-                             (.pushNamed navigator "/signup")
-                             nil)
-                    .child
-                    (mgl/MongolRichText
-                     .text (m/TextSpan
-                            .text "Don't have an account?"
-                            .style (m/TextStyle .fontSize 16)
-                            .children [(m/TextSpan .text " Sign up"
-                                                   .style (m/TextStyle .color theme/blue-color
-                                                                       .fontSize 16))]))))
-       (auth-widgets/rounded-button (fn [] (auth-service/login ctx
-                                                               navigator
-                                                               {"email" (.-text email-controller)
-                                                                "password" (.-text password-controller)}
-                                                               #(utils/show-toast ctx "yessss")))
-                                    "Done" nil nil)])])))
+                   (m/Row
+                    .mainAxisAlignment m/MainAxisAlignment.center
+                    .crossAxisAlignment m/CrossAxisAlignment.center
+                    .children
+                    [;; --- Title decoration ---
+                     (mgl/MongolText "Welcome to login" ;; "Welcome to login"
+                                     .style (.copyWith headlineMedium .color primary .fontWeight m/FontWeight.bold))
+
+                     (m/SizedBox .width 60.0)
+
+                     ;; --- Form input area ---
+                     ;; Each text-field should be given a height (vertical length)
+                     (m/SizedBox
+                      .height 300.0
+                      .child
+                      (text-field {:controller email-ctrl
+                                   :hint "Email address" ;; Email
+                                   :autofocus true
+                                   :max-lines 1
+                                   :decoration (m/InputDecoration
+                                                .labelText "Email address" ;; Email
+                                                .border (m/OutlineInputBorder))}))
+
+                     (m/SizedBox .width 24.0)
+
+                     (m/SizedBox
+                      .height 300.0
+                      .child
+                      (text-field {:controller pass-ctrl
+                                   :hint "Password" ;; Password
+                                   :max-lines 1
+                                   :obscure-text true
+                                   :decoration (m/InputDecoration
+                                                .labelText "Password" ;; Password
+                                                .border (m/OutlineInputBorder))}))
+
+                     (m/SizedBox .width 48.0)
+
+                     ;; --- Action buttons area ---
+                     (m/Column
+                      .mainAxisSize m/MainAxisSize.min
+                      .children
+                      [(mgl/MongolElevatedButton
+                        .style (m/ElevatedButton.styleFrom
+                                .backgroundColor primary
+                                .foregroundColor onPrimaryContainer
+                                .padding (m/EdgeInsets.symmetric .vertical 20.0))
+                        .onPressed
+                        (fn []
+                          (let [email (.-text email-ctrl)
+                                pass (.-text pass-ctrl)]
+                            (println "[Login] login clicked, email:" (pr-str email))
+                            (auth/login {:email email :password pass}
+                                        (fn [_data]
+                                          (println "[Login] login success, navigating to main")
+                                          ;; Navigate to main layout on successful login
+                                          (m/Navigator.pushReplacement
+                                           ctx
+                                           (m/MaterialPageRoute.
+                                            .builder (fn [_] (main-layout))))
+                                          nil)
+                                        (fn [err]
+                                          (println "[Login] login error callback err:" (pr-str err))
+                                          ;; Same as register: safely get response, use get for values
+                                          (let [resp (safe-get-response err)
+                                                status (when resp (.-statusCode resp))
+                                                data (when resp (.-data resp))
+                                                message (when data (get data "message"))
+                                                error-msg (cond
+                                                           (= status 429)
+                                                           (or message "Too many requests. Please try again later (limit: 3 per hour)")
+                                                           (= status 422)
+                                                           (or message "Validation failed")
+                                                           status
+                                                           (case status
+                                                             401 "Password is incorrect"
+                                                             404 "User not found"
+                                                             "Login failed")
+                                                           :else "Login failed")]
+                                            (println "[Login] parsed status:" (pr-str status) "data:" (pr-str data) "error-msg:" (pr-str error-msg))
+                                            (toast/error ctx error-msg))))))
+                        .child (mgl/MongolText "Login" .style labelLarge)) ;; Login button
+
+                       (m/SizedBox .height 20.0)
+
+                       (mgl/MongolTextButton
+                        .onPressed (fn [] (push-to-register ctx))
+                        .child (mgl/MongolText "Register" ;; Register button
+                                               .style (.copyWith labelLarge .color primary)))])])))
+          (keyboard/candidates nil)]))
+
+       (keyboard/keyboard {:custom-fns {}})])))))

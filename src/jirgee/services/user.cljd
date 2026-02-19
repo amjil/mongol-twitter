@@ -1,113 +1,87 @@
 (ns jirgee.services.user
-  (:require
-   [jirgee.services.shared-preferences :as sp]
-   [jirgee.states.global :as gs]
-   [jirgee.common.utils :as utils]
-   [jirgee.common.response :as response]
-   ["package:http/http.dart" :as http]
-   ["dart:convert" :as convert]))
+  (:require [jirgee.services.base :refer [client get-with-auth]]
+            [jirgee.state :refer [set-profile-state!
+                                  set-profile-user-posts-state!]]))
 
-(defn get-token [ctx]
-  (stream
-   (map (fn [result]
-          (swap! gs/state assoc :user-token result)
-          :ok-token))
-   (map (fn [[er st]]
-          (utils/show-toast ctx "error get user-id")
-          :error-token))
-   :as-values
-   (.asStream (sp/get-value {:type :string :key "user-token"}))))
+;; --- User Information ---
 
-(defn save-token [token]
-  (sp/set-value {:type :string :key "user-token"
-                 :value token})
-  (swap! gs/state assoc :user-token token))
+;; Get current logged-in user's own information
+(defn get-me [on-success on-error]
+  (-> (get-with-auth "/users/me")
+      (.then (fn [resp] (on-success (.-data resp))))
+      (.catchError on-error)))
 
-(defn delete-token []
-  (sp/remove-value "user-token")
-  (swap! gs/state assoc :user-token nil))
+;; Get specified user's information (for viewing other users' profiles)
+(defn get-profile [user-id on-success on-error]
+  (-> (get-with-auth (str "/users/" user-id))
+      (.then (fn [resp] (on-success (.-data resp))))
+      (.catchError on-error)))
 
-(defn save-info [info]
-  (sp/set-value {:type :string :key "user-info"
-                 :value (convert/jsonEncode info)})
-  (swap! gs/state assoc :user-info info))
+;; Get user's posts (fully from backend API)
+(defn get-user-posts [user-id on-success on-error]
+  (-> (get-with-auth (str "/users/" user-id "/posts"))
+      (.then (fn [resp] (on-success (or (get (.-data resp) "posts") []))))
+      (.catchError (fn [err]
+                     (when on-error (on-error err))
+                     (on-success [])))))
 
-(defn delete-info []
-  (sp/remove-value "user-info")
-  (swap! gs/state assoc :user-info nil))
+;; Update profile (nickname, bio, avatar URL, etc.)
+(defn update-profile [user-params on-success on-error]
+  (-> (.put client "/users/me" .data {"user" user-params})
+      (.then (fn [resp] (on-success (.-data resp))))
+      (.catchError on-error)))
 
-(defn get-token-and-info []
-  (let [token (sp/get-value {:type :string :key "user-token"})
-        info (sp/get-value {:type :string :key "user-info"})]
-    (swap! gs/state assoc :user-token token)
-    (swap! gs/state assoc :user-info token)))
+;; --- Social Relationships (Following) ---
 
-;;;;;;;;;;
-(defn ^:async user-profile [ctx navigator info]
-  (let [result (await
-                (http/get (Uri/http utils/base-url "/api/profile/user_info" info)
-                          .headers {"Content-Type" "application/json; charset=UTF-8"
-                                    "Authorization" (str "Token " (get @gs/state :user-token))}))]
-    (response/response-message
-     ctx
-     result
-     (fn [x]
-       (swap! gs/state assoc-in [:user :info] x)))
-    true))
+;; Follow user
+(defn follow [user-id on-success on-error]
+  (-> (.post client (str "/users/" user-id "/follow"))
+      (.then (fn [resp] (on-success (.-data resp))))
+      (.catchError on-error)))
 
-(defn ^:async get-users [ctx navigator info]
-  (let [result (await
-                (http/get (Uri/http utils/base-url "/api/explore" info)
-                          .headers {"Content-Type" "application/json; charset=UTF-8"
-                                    "Authorization" (str "Token " (get @gs/state :user-token))}))]
-    (response/response-message
-     ctx
-     result
-     (fn [x]
-       (let [limit (:limit info)
-             offset (:offset info)
-             has-more? (if (empty? limit)
-                         (>= (count x) 20)
-                         (>= (count x) limit))]
-         (swap! gs/state assoc :users {:has-more? has-more?
-                                       :list
-                                       (if (or (empty? offset) (zero? offset))
-                                         x
-                                         (concat (get-in @gs/state [:users :list])
-                                                 x))}))))
-    nil))
+;; Unfollow
+(defn unfollow [user-id on-success on-error]
+  (-> (.delete client (str "/users/" user-id "/follow"))
+      (.then (fn [resp] (on-success (.-data resp))))
+      (.catchError on-error)))
 
+;; Get following list
+(defn get-following [user-id on-success on-error]
+  (-> (.get client (str "/users/" user-id "/following"))
+      (.then (fn [resp] (on-success (get (.-data resp) "following"))))
+      (.catchError on-error)))
 
-(defn ^:async user-follow [ctx navigator info]
-  (let [result (await
-                (http/post (Uri/http utils/base-url "/api/users/follow")
-                           .headers {"Content-Type" "application/json; charset=UTF-8"
-                                     "Authorization" (str "Token " (get @gs/state :user-token))}
-                           .body
-                           (convert/jsonEncode
-                            info)))]
-    (response/response-message
-     ctx
-     result
-     (fn [x]
-       (let [user (->> (get-in @gs/state [:user :info])
-                       (into {}))]
-         (swap! gs/state assoc-in [:user :info] (assoc user "following" 1)))))
-    true))
+;; Get followers list
+(defn get-followers [user-id on-success on-error]
+  (-> (.get client (str "/users/" user-id "/followers"))
+      (.then (fn [resp] (on-success (get (.-data resp) "followers"))))
+      (.catchError on-error)))
 
-(defn ^:async user-unfollow [ctx navigator info]
-  (let [result (await
-                (http/post (Uri/http utils/base-url "/api/users/unfollow")
-                           .headers {"Content-Type" "application/json; charset=UTF-8"
-                                     "Authorization" (str "Token " (get @gs/state :user-token))}
-                           .body
-                           (convert/jsonEncode
-                            info)))]
-    (response/response-message
-     ctx
-     result
-     (fn [x]
-       (let [user (->> (get-in @gs/state [:user :info])
-                       (into {}))]
-         (swap! gs/state assoc-in [:user :info] (assoc user "following" 0)))))
-    true))
+;; --- Blocking & Security ---
+
+;; Block user
+(defn block [user-id on-success on-error]
+  (-> (.post client (str "/blocks/" user-id))
+      (.then (fn [resp] (on-success (.-data resp))))
+      (.catchError on-error)))
+
+;; Get block list
+(defn get-blocks [on-success on-error]
+  (-> (.get client "/blocks")
+      (.then (fn [resp] (on-success (get (.-data resp) "blocks"))))
+      (.catchError on-error)))
+
+;; --- Search ---
+
+;; Search users (supports Mongolian nickname search)
+(defn search [query on-success on-error]
+  (-> (.get client "/search" .queryParameters {"q" query "type" "users"})
+      (.then (fn [resp] (on-success (get (.-data resp) "users"))))
+      (.catchError on-error)))
+
+;; Load profile data (user information and post list; both from backend API)
+(defn load-profile-data! [user-id]
+  (get-profile user-id #(set-profile-state! %) (fn [err] (println "Get profile failed:" err)))
+  (get-user-posts user-id
+                  #(set-profile-user-posts-state! %)
+                  (fn [_] (set-profile-user-posts-state! []))))

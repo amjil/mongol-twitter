@@ -1,0 +1,50 @@
+(ns jirgee.services.background-manager
+  (:require [cljd.flutter :as f]
+            ["package:flutter_background_service/flutter_background_service.dart" :as fbs]
+            ["package:flutter_local_notifications/flutter_local_notifications.dart" :as lnc]
+            [jirgee.services.websocket :as ws]
+            [jirgee.services.chat :as chat-service]
+            [jirgee.services.notification :as notify]
+            ["dart:io" :refer [Platform]]
+            ["dart:ui" :as ui]))
+
+;; Background Isolates entry function
+(defn on-start [^fbs/ServiceInstance service]
+  (ui/DartPluginRegistrant.ensureInitialized)
+
+  ;; Only Android will enter this logic
+  (when (instance? fbs/AndroidServiceInstance service)
+    (.setAsForegroundService ^fbs/AndroidServiceInstance service)
+
+    ;; 1. Maintain background WebSocket connection
+    (ws/connect!
+     {:on-message (fn [msg]
+                    ;; A. Write to local database
+                    (chat-service/save-message-to-db! msg)
+                    ;; B. Show local notification (ensure Mongolian text displays correctly)
+                    (notify/show-local-notification
+                     (get msg "sender_name")
+                     (get msg "content")
+                     msg))
+      :on-close (fn [] (println "Background WS Closed. Retrying..."))})
+
+    ;; 2. Listen to service commands
+    (.on service "stopService")
+    (.listen (fn [_] (.stopSelf service)))))
+
+;; Initialization function
+(defn init! []
+  (if (.isAndroid Platform)
+    (let [service (fbs/FlutterBackgroundService.)]
+      (println "🚀 Android: Start background persistent service")
+      (.configure service
+                  .android (fbs/AndroidConfiguration.
+                            .onStart on-start
+                            .autoStart true
+                            .isForegroundMode true
+                            .foregroundServiceNotificationId 888)
+                  ;; iOS only configures basic parameters, doesn't start persistent service
+                  .ios (fbs/IosConfiguration.
+                        .onForeground (fn [_] nil)
+                        .onBackground (fn [_] true))))
+    (println "🍏 iOS: Skip persistent background service, rely on system-level FCM")))

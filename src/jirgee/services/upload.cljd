@@ -1,0 +1,43 @@
+(ns jirgee.services.upload
+  (:require [cljd.flutter :as f]
+            ["package:image_picker/image_picker.dart" :as picker]
+            ["package:dio/dio.dart" :as dio]
+            ["package:http_parser/http_parser.dart" :as hp]
+            [jirgee.services.base :refer [client]]
+            [clojure.string :as str]))
+
+;; 1. Define image picker instance
+(defonce ^:private image-picker (picker/ImagePicker.))
+
+;; 2. Pick image function
+(defn pick-image
+  "Pick image from gallery or camera"
+  [source] ;; source can be picker/ImageSource.gallery or .camera
+  (-> (.pickImage image-picker .source source .imageQuality 80)
+      (.then (fn [^picker/XFile? file]
+               (if file (.-path file) nil)))))
+
+;; 3. Execute upload logic
+(defn upload-file
+  "Upload image to server, supports progress callback"
+  [{:keys [file-path on-progress]} on-success on-error]
+  (let [file-name (last (str/split file-path #"/"))
+        ;; Construct Dio Multipart data
+        form-data (dio/FormData.fromMap
+                   {"file" (dio/MultipartFile.fromFileSync
+                            file-path
+                            .filename file-name
+                            .contentType (hp/MediaType "image" "jpeg"))})]
+
+    (-> (.post client "/upload"
+               .data form-data
+               .onSendProgress (fn [sent total]
+                                 (when on-progress
+                                   (on-progress (/ sent total)))))
+        (.then (fn [resp]
+                 ;; Assume server returns {"url": "https://..."}
+                 (let [url (get (.-data resp) "url")]
+                   (on-success url))))
+        (.catchError (fn [e]
+                       (println "Upload failed:" e)
+                       (on-error e))))))

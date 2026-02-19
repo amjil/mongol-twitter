@@ -1,0 +1,53 @@
+(ns jirgee.services.bookmark
+  (:require [jirgee.services.base :refer [client]]
+            [jirgee.state :refer [set-bookmarks-state!
+                                  set-bookmarks-loading?!]]))
+
+;; =============================================================================
+;; Bookmark Service
+;; =============================================================================
+(declare load-bookmarks!)
+
+;; Get bookmarks list
+(defn get-bookmarks [{:keys [limit offset]
+                      :or {limit 20 offset 0}}]
+  (-> (.get client "/bookmarks"
+            .queryParameters {"limit" limit "offset" offset})
+      (.then (fn [resp] (.-data resp)))
+      (.catchError (fn [err]
+                     (println "Get bookmarks failed:" err)
+                     {"bookmarks" [] "meta" {"count" 0}}))))
+
+;; Add bookmark
+(defn add-bookmark [post-id notes]
+  (-> (.post client (str "/posts/" post-id "/bookmark")
+             .data (when notes {"notes" notes}))
+      (.then (fn [resp] (.-data resp)))
+      (.catchError (fn [err] (println "Add bookmark failed:" err)))))
+
+;; Delete bookmark
+(defn delete-bookmark [post-id]
+  (-> (.delete client (str "/posts/" post-id "/bookmark"))
+      (.then (fn [resp]
+               (load-bookmarks!)
+               (.-data resp)))
+      (.catchError (fn [err] (println "Delete bookmark failed:" err)))))
+
+;; Check if already bookmarked
+(defn is-bookmarked [post-id]
+  (-> (.get client (str "/posts/" post-id "/is_bookmarked"))
+      (.then (fn [resp] (get (.-data resp) "is_bookmarked" false)))
+      (.catchError (fn [err]
+                     (println "Check bookmark status failed:" err)
+                     false))))
+
+;; Load bookmarks list
+(defn load-bookmarks! []
+  (set-bookmarks-loading?! true)
+  (-> (get-bookmarks {})
+      (.then (fn [data]
+               (set-bookmarks-state! (get data "bookmarks" []))
+               (set-bookmarks-loading?! false)))
+      (.catchError (fn [err]
+                     (println "Load bookmarks failed:" err)
+                     (set-bookmarks-loading?! false)))))

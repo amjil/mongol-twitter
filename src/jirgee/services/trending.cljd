@@ -1,0 +1,54 @@
+(ns jirgee.services.trending
+  (:require [jirgee.services.base :refer [client]]
+            [jirgee.services.hashtag :as hashtag-service]
+            [jirgee.state :refer [set-trending-posts-state!
+                                  set-trending-users-state!
+                                  set-trending-hashtags-state!
+                                  set-trending-loading?!]]))
+
+;; =============================================================================
+;; Trending Service
+;; =============================================================================
+
+;; Get trending posts
+(defn get-trending-posts [{:keys [limit]
+                          :or {limit 20}}]
+  (-> (.get client "/trending/posts"
+            .queryParameters {"limit" limit})
+      (.then (fn [resp] (get (.-data resp) "posts" [])))
+      (.catchError (fn [err]
+                     (println "Get trending posts failed:" err)
+                     []))))
+
+;; Get trending users
+(defn get-trending-users [{:keys [limit]
+                          :or {limit 20}}]
+  (-> (.get client "/trending/users"
+            .queryParameters {"limit" limit})
+      (.then (fn [resp] (get (.-data resp) "users" [])))
+      (.catchError (fn [err]
+                     (println "Get trending users failed:" err)
+                     []))))
+
+;; Load all trending data (posts, users, hashtags)
+(defn load-trending-data! []
+  (set-trending-loading?! true)
+  (-> (get-trending-posts {})
+      (.then (fn [data]
+               (set-trending-posts-state! data)
+               (-> (get-trending-users {})
+                   (.then (fn [user-data]
+                            (set-trending-users-state! user-data)
+                            (-> (hashtag-service/get-trending {})
+                                (.then (fn [hashtag-data]
+                                         (set-trending-hashtags-state! (get hashtag-data "hashtags" []))
+                                         (set-trending-loading?! false)))
+                                (.catchError (fn [err]
+                                              (println "Load hashtags failed:" err)
+                                              (set-trending-loading?! false))))))
+                   (.catchError (fn [err]
+                                 (println "Load users failed:" err)
+                                 (set-trending-loading?! false))))))
+      (.catchError (fn [err]
+                     (println "Load posts failed:" err)
+                     (set-trending-loading?! false)))))

@@ -1,0 +1,16 @@
+(ns jirgee.services.mention
+  (:require [jirgee.services.base :refer [client]]))
+
+;; =============================================================================
+;; Mention Service
+;; =============================================================================
+
+;; Get mentions list
+(defn get-mentions [{:keys [limit offset]
+                    :or {limit 20 offset 0}}]
+  (-> (.get client "/mentions"
+            .queryParameters {"limit" limit "offset" offset})
+      (.then (fn [resp] (get (.-data resp) "posts" [])))
+      (.catchError (fn [err]
+                     (println "Get mentions failed:" err)
+                     []))))

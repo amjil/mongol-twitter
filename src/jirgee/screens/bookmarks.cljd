@@ -1,0 +1,82 @@
+(ns jirgee.screens.bookmarks
+  (:require [cljd.flutter :as f]
+            ["package:flutter/material.dart" :as m]
+            ["package:mongol/mongol.dart" :as mgl]
+            [components.app-bar :refer [mongol-side-layout]]
+            [jirgee.services.bookmark :as bookmark-service]
+            [jirgee.state :refer [bookmarks-state-atom
+                                  bookmarks-loading?-atom]]
+            [pull-to-refresh.refresh :refer [horizontal-refresh]]))
+
+(defn- bookmark-item [bookmark]
+  (f/widget
+   :get {{{:flds [surfaceVariant primary]} .-colorScheme
+          {:flds [bodyMedium titleSmall]} .-textTheme} m/Theme}
+   :let [post (get bookmark "post" {})
+         content (get post "content" "")
+         user (get post "user" {})
+         username (get user "username" "")
+         avatar-url (get user "avatar_url")
+         notes (get bookmark "notes" "")]
+   (m/Card
+    .margin (m/EdgeInsets.symmetric .vertical 8.0 .horizontal 12.0)
+    .child
+    (m/Padding
+     .padding (m/EdgeInsets.all 12.0)
+     .child
+     (m/Row
+      .crossAxisAlignment m/CrossAxisAlignment.start
+      .children
+      [(m/CircleAvatar
+        .backgroundImage (when avatar-url (m/NetworkImage avatar-url))
+        .child (if-not avatar-url (m/Icon m/Icons.person) (m/SizedBox)))
+       (m/SizedBox .width 12.0)
+       (m/Expanded
+        .child
+        (m/Column
+         .crossAxisAlignment m/CrossAxisAlignment.start
+         .children
+         [(mgl/MongolText username .style (.copyWith titleSmall .fontWeight m/FontWeight.bold))
+          (m/SizedBox .height 8.0)
+          (mgl/MongolText content .style bodyMedium .maxLines 3)
+          (when (not (empty? notes))
+            [(m/SizedBox .height 8.0)
+             (m/Container
+              .padding (m/EdgeInsets.all 8.0)
+              .decoration (m/BoxDecoration
+                          .color surfaceVariant
+                          .borderRadius (m/BorderRadius.circular 8.0))
+              .child (mgl/MongolText notes .style bodyMedium))])]))
+       (m/IconButton
+        .icon (m/Icon m/Icons.bookmark .color primary)
+        .onPressed #(bookmark-service/delete-bookmark (get post "id")))])))))
+
+(defn bookmarks-screen []
+  (f/widget
+   :watch [bookmarks bookmarks-state-atom
+           is-loading? bookmarks-loading?-atom]
+   :get {{{:flds [surface]} .-colorScheme} m/Theme}
+   :let [load-bookmarks! bookmark-service/load-bookmarks!]
+
+   (mongol-side-layout
+    {:title "Bookmarks"
+     :min-width 70.0
+     :body
+     (m/Scaffold
+      .backgroundColor surface
+      .body
+      (cond
+        is-loading?
+        (m/Center .child (m/CircularProgressIndicator))
+
+        (empty? bookmarks)
+        (m/Center .child (mgl/MongolText "Empty"))
+
+        :else
+        (horizontal-refresh
+         {:on-refresh (fn [] (load-bookmarks!))
+          :item-count (count bookmarks)
+          :item-builder (fn [_ idx]
+                          (bookmark-item (nth bookmarks idx)))
+          :background-color surface
+          :reverse false})))})))

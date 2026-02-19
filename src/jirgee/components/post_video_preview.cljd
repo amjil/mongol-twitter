@@ -1,0 +1,42 @@
+(ns jirgee.components.post-video-preview
+  (:require [cljd.flutter :as f]
+            ["package:flutter/material.dart" :as m]))
+
+(defn post-video-preview [{:keys [video-url cover-url on-play]}]
+  (f/widget
+    :get {{{:keys [width]} .-size} m/MediaQuery}
+    :let [side-length (* width 0.5)] ;; Maintain 1:1 square
+    (m/GestureDetector
+      .onTap on-play ;; Callback after tap, parent decides whether to play in place or navigate
+      .child 
+      (m/Container
+        .width side-length
+        .height side-length
+        .margin (m/EdgeInsets.only .right 20.0)
+        .clipBehavior m/Clip.antiAlias
+        .decoration (m/BoxDecoration 
+                      .color (m/Color 0xFFF0F0F0)
+                      .borderRadius (m/BorderRadius.circular 8.0)
+                      .image (m/DecorationImage.
+                               .image (m/NetworkImage cover-url)
+                               .fit m/BoxFit.cover))
+        .child (m/Stack
+                 .alignment m/Alignment.center
+                 .children
+                 [;; Frosted play button
+                  (m/Container
+                    .padding (m/EdgeInsets.all 10.0)
+                    .decoration (m/BoxDecoration 
+                                  .color (m/Color 0x40000000) 
+                                  .shape m/BoxShape.circle)
+                    .child (m/Icon m/Icons.play_arrow 
+                                   .color m/Colors.white 
+                                   .size 32.0))
+                  
+                  ;; Bottom left video duration (optional, adds refinement)
+                  (m/Positioned
+                    .bottom 8.0 .left 8.0
+                    .child (m/Text "0:15" 
+                                   .style (m/TextStyle .color m/Colors.white 
+                                                       .fontSize 10.0 
+                                                       .fontWeight m/FontWeight.w500)))])))))

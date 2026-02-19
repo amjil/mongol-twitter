@@ -1,0 +1,69 @@
+(ns jirgee.services.message
+  (:require [jirgee.services.base :refer [client database]]
+            ["package:drift/drift.dart" :as d]
+            ["package:mongol_jirgee/database.dart" :as db]
+            ["dart:core" :as dc]))
+
+;; --- Data Fetching & Synchronization ---
+
+;; Fetch messages from server and sync to local database (for incremental local cache updates)
+(defn fetch-and-sync-messages [on-success on-error]
+  (-> (.get client "/direct_messages")
+      (.then (fn [resp]
+               (let [messages (get (.-data resp) "messages")
+                     ^db/AppDatabase sqlite @database]
+                 ;; Use batch processing to improve write efficiency and ensure transactional integrity
+                 (.batch sqlite
+                         (fn [batch]
+                           (doseq [m messages]
+                             (.insert batch (.-messages sqlite)
+                                      (db/MessagesCompanion.insert
+                                       .id (d/Value (get m "id"))
+                                       .senderId (d/Value (get m "sender_id"))
+                                       .receiverId (d/Value (get m "receiver_id"))
+                                       .content (d/Value (get m "content"))
+                                       .insertedAt (d/Value (get m "inserted_at"))
+                                       .isSynced (d/Value true))
+                                      .mode d/InsertMode.insertOrReplace))))
+                 (on-success messages))))
+      (.catchError on-error)))
+
+;; --- List Queries ---
+
+;; Get recent conversation list (based on local database, supports offline viewing)
+;; Logic: Group by receiver, get last message from each group
+(defn get-recent-chats [on-data]
+  (let [^db/AppDatabase sqlite @database
+        query (.customSelect sqlite
+                             "SELECT m.*, u.nickname, u.avatar_url 
+           FROM messages m 
+           LEFT JOIN users u ON (m.sender_id = u.id OR m.receiver_id = u.id)
+           WHERE u.id != 'me'
+           GROUP BY CASE WHEN sender_id = 'me' THEN receiver_id ELSE sender_id END
+           ORDER BY inserted_at DESC")]
+    (-> (.get query)
+        (.then on-data))))
+
+;; --- Unread Message Management ---
+
+;; Get total unread count (API call, requires high real-time performance)
+(defn get-unread-count [on-success on-error]
+  (-> (.get client "/direct_messages/unread_count")
+      (.then (fn [resp] (on-success (get (.-data resp) "unread_count"))))
+      (.catchError on-error)))
+
+;; Mark specific conversation as read
+(defn mark-as-read [other-user-id on-success on-error]
+  (-> (.post client (str "/direct_messages/" other-user-id "/read"))
+      (.then (fn [resp] (on-success (.-data resp))))
+      (.catchError on-error)))
+
+;; --- Statistics & Cleanup ---
+
+;; Clean up old local message cache (e.g., keep only last 30 days of messages to save space)
+(defn cleanup-old-messages [days]
+  (let [^db/AppDatabase sqlite @database
+        threshold (.subtract (dc/DateTime.now) (dc/Duration .days days))
+        query (doto (.delete sqlite (.-messages sqlite))
+                (.where (fn [^db/Messages tbl] (.isSmallerThan (.-insertedAt tbl) (d/Value (.toIso8601String threshold))))))]
+    (.go query)))

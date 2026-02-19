@@ -1,0 +1,64 @@
+(ns jirgee.services.search
+  (:require [jirgee.services.base :refer [client]]))
+
+;; =============================================================================
+;; Search Service
+;; =============================================================================
+
+;; Search (supports users, posts, groups)
+(defn search [{:keys [query type limit offset]
+               :or {type "all" limit 20 offset 0}}]
+  (-> (.get client "/search"
+            .queryParameters {"q" query
+                            "type" type
+                            "limit" limit
+                            "offset" offset})
+      (.then (fn [resp] (.-data resp)))
+      (.catchError (fn [err]
+                     (println "Search failed:" err)
+                     {"users" [] "posts" [] "groups" []}))))
+
+;; Get search history
+(defn get-search-history [{:keys [limit offset]
+                           :or {limit 20 offset 0}}]
+  (-> (.get client "/search/history"
+            .queryParameters {"limit" limit "offset" offset})
+      (.then (fn [resp] (.-data resp)))
+      (.catchError (fn [err]
+                     (println "Get search history failed:" err)
+                     {"history" [] "meta" {"count" 0}}))))
+
+;; Delete search history item
+(defn delete-search-history [history-id]
+  (-> (.delete client (str "/search/history/" history-id))
+      (.then (fn [resp] (.-data resp)))
+      (.catchError (fn [err] (println "Delete search history failed:" err)))))
+
+;; Clear search history
+(defn clear-search-history []
+  (-> (.delete client "/search/history")
+      (.then (fn [resp] (.-data resp)))
+      (.catchError (fn [err] (println "Clear search history failed:" err)))))
+
+;; =============================================================================
+;; Advanced search function (includes state management logic)
+;; =============================================================================
+
+;; Execute search (with state management)
+(defn perform-search! [{:keys [query type set-loading! set-results!]
+                        :or {type "all"}}]
+  (when (and query (not (empty? query)))
+    (set-loading! true)
+    (-> (search {:query query :type type})
+        (.then (fn [data]
+                (set-results! data)
+                (set-loading! false)))
+        (.catchError (fn [err]
+                      (println "Search error:" err)
+                      (set-loading! false))))))
+
+;; Load search history (with state management)
+(defn load-history! [{:keys [set-history!]}]
+  (-> (get-search-history {})
+      (.then (fn [data]
+              (set-history! (get data "history" []))))))

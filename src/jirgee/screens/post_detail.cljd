@@ -1,0 +1,152 @@
+(ns jirgee.screens.post-detail
+  (:require [cljd.flutter :as f]
+            ["package:flutter/material.dart" :as m]
+            ["dart:core" :as dc]
+            ["package:mongol/mongol.dart" :as mgl]
+            [jirgee.state :refer [post-detail-state-atom]]
+            [jirgee.services.user :as user-service]
+            [jirgee.components.post-image-gallery :refer [post-image-gallery]]
+            [jirgee.components.post-actions :refer [post-action-bar-vertical]]
+            [jirgee.components.actual-video-player :refer [actual-video-player]]))
+
+(declare post-detail-page)
+;; Entry widget: read current post from state, show loading when missing
+(defn post-detail-screen []
+  (f/widget
+   :context ctx
+   :watch [post post-detail-state-atom]
+   (cond
+     (nil? post)
+     (m/Scaffold
+      .backgroundColor m/Colors.white
+      .appBar (m/AppBar
+               .backgroundColor m/Colors.white
+               .elevation 0
+               .leading (m/IconButton
+                         .icon (m/Icon m/Icons.arrow_back_ios_new_rounded .color m/Colors.black)
+                         .onPressed #(m/Navigator.pop ctx)))
+      .body (m/Center .child (m/CircularProgressIndicator .strokeWidth 2.0)))
+
+     :else
+     (post-detail-page {:post post}))))
+
+(defn post-detail-page [{:keys [post]}]
+  (let [{:keys [id content image-urls video-url cover-url
+                author-id author-name author-avatar likes comments forwards is-liked]} post
+        progress-atom (atom 0.0)]
+    (f/widget
+     :context ctx
+     ;; 1. Use f/widget built-in :vsync binding
+     :vsync vsync
+     :get {{{:flds [width height]} .-size} m/MediaQuery
+           {{:flds [surface onSurface primary outlineVariant surfaceContainerHighest]} .-colorScheme} m/Theme}
+     ;; 2. Lifecycle and animation management (scroll progress via NotificationListener, no manual listener cleanup needed)
+     :managed [anim-ctrl (doto (m/AnimationController
+                                :vsync vsync
+                                .duration (dc/Duration .milliseconds 800))
+                           (.forward))]
+     :let [fade-anim (m/CurvedAnimation .parent anim-ctrl .curve m/Curves.easeOut)
+           slide-anim (-> (m/Tween .begin (m/Offset -0.2 0.0) .end m/Offset.zero)
+                          (.animate (m/CurvedAnimation .parent anim-ctrl .curve m/Curves.easeOutCirc)))]
+
+     :watch [p progress-atom]
+     (m/Scaffold
+      .backgroundColor surface
+      .appBar (m/AppBar
+               .backgroundColor surface
+               .elevation 0
+               .leading (m/IconButton
+                         .icon (m/Icon m/Icons.arrow_back_ios_new_rounded .color onSurface)
+                         .onPressed #(m/Navigator.pop ctx)))
+      .body
+      (m/NotificationListener
+       .onNotification (fn [notif]
+                         (let [metrics (.-metrics notif)
+                               pixels (.-pixels metrics)
+                               max-extent (.-maxScrollExtent metrics)
+                               p (if (> max-extent 0) (/ pixels max-extent) 0.0)]
+                           (reset! progress-atom (.clamp p 0.0 1.0)))
+                         false)
+       .child (m/Stack
+               .children
+               [(m/SingleChildScrollView
+                 .scrollDirection m/Axis.horizontal
+                 .padding (m/EdgeInsets.only .left 48.0 .top 10.0 .bottom 60.0)
+                 .child
+                 (m/Row
+                  .crossAxisAlignment m/CrossAxisAlignment.start
+                  .children
+                  [;; --- A. Author header area ---
+                   (m/FadeTransition
+                    .opacity fade-anim
+                    .child (m/SlideTransition
+                            .position slide-anim
+                            .child (m/Padding
+                                    .padding (m/EdgeInsets.only .top 12.0)
+                                    .child (m/GestureDetector
+                                            .onTap #(when (and author-id (not-empty author-id))
+                                                     (do (user-service/load-profile-data! author-id)
+                                                         (m/Navigator.pushNamed ctx "/user-profile")
+                                                         nil))
+                                            .child (m/Column
+                                                    .mainAxisSize m/MainAxisSize.min
+                                                    .children
+                                                    [(if (and author-avatar (not-empty author-avatar))
+                                                       (m/CircleAvatar
+                                                        .radius 28.0
+                                                        .backgroundImage (m/NetworkImage author-avatar))
+                                                       (m/CircleAvatar
+                                                        .radius 28.0
+                                                        .child (m/Icon m/Icons.person .size 28.0)))
+                                                     (m/SizedBox .height 16.0)
+                                                     (mgl/MongolText author-name
+                                                                     .style (m/TextStyle .fontSize 18.0
+                                                                                     .fontWeight m/FontWeight.w700
+                                                                                     .color onSurface))])))))
+
+                   (m/SizedBox .width 48.0)
+
+                   ;; --- B. Media area ---
+                   (if (or (seq image-urls) video-url)
+                     (m/SizedBox
+                      .width (* width 0.6)
+                      .height (* height 0.65)
+                      .child (m/Hero
+                              .tag id
+                              .child (m/ClipRRect
+                                      .borderRadius (m/BorderRadius.circular 24.0)
+                                      .child (cond
+                                               (seq image-urls)
+                                               (post-image-gallery image-urls)
+                                               video-url
+                                               (actual-video-player video-url cover-url)
+                                               :else (m/Container .color surfaceContainerHighest)))))
+                     (m/SizedBox.shrink))
+
+                   (m/SizedBox .width 48.0)
+
+                   ;; --- C. Content area ---
+                   (m/Padding
+                    .padding (m/EdgeInsets.only .top 12.0)
+                    .child (mgl/MongolText
+                            content
+                            .style (m/TextStyle .fontSize 22.0 .height 1.8 .color onSurface)))
+
+                   (m/SizedBox .width 80.0)
+
+                   ;; --- D. Interaction action bar ---
+                   (m/Padding
+                    .padding (m/EdgeInsets.only .top (* height 0.2))
+                    .child (post-action-bar-vertical
+                            {:likes likes :comments comments :forwards forwards :is-liked is-liked}))
+
+                   (m/SizedBox .width 160.0)]))
+                (m/Positioned
+                 .bottom 40.0 .left 48.0 .right 48.0
+                 .child (m/Stack
+                         .children
+                         [(m/Container .width width .height 1.0 .color outlineVariant)
+                          (m/AnimatedContainer
+                           .duration (dc/Duration .milliseconds 150)
+                           .width (* (- width 96.0) p) .height 1.5
+                           .decoration (m/BoxDecoration .color primary))]))]))))))

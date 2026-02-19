@@ -1,0 +1,189 @@
+(ns jirgee.services.chat
+  (:require [jirgee.services.base :refer [client database]]
+            ["package:drift/drift.dart" :as d]
+            ["package:mongol_jirgee/database.dart" :as db]
+            ["dart:convert" :as convert]
+            ["dart:core" :as dc]))
+
+;; =============================================================================
+;; 1. Query Logic (Queries)
+;; =============================================================================
+
+;; Watch chat messages stream with a user in real-time (Reactive Stream)
+;; UI uses StreamBuilder to call this function, enabling auto-refresh when local database updates
+(defn watch-messages [other-user-id]
+  (let [^db/AppDatabase sqlite @database
+        query (doto (.select sqlite (.-messages sqlite))
+                (.where (fn [^db/Messages tbl]
+                          (or (.equals (.-senderId tbl) other-user-id)
+                              (.equals (.-receiverId tbl) other-user-id))))
+                (.orderBy [(fn [^db/Messages tbl] (d/OrderingTerm. .expression (.-insertedAt tbl) .mode d/OrderingMode.desc))]))]
+    (.watch query)))
+
+;; Get single message snapshot (Future)
+(defn get-messages [other-user-id on-success on-error]
+  (let [^db/AppDatabase sqlite @database
+        query (doto (.select sqlite (.-messages sqlite))
+                (.where (fn [^db/Messages tbl]
+                          (or (.equals (.-senderId tbl) other-user-id)
+                              (.equals (.-receiverId tbl) other-user-id))))
+                (.orderBy [(fn [^db/Messages tbl] (d/OrderingTerm. .expression (.-insertedAt tbl) .mode d/OrderingMode.desc))]))]
+    (-> (.get query)
+        (.then on-success)
+        (.catchError on-error))))
+
+;; =============================================================================
+;; 2. Sending Logic (Sending & Offline-first)
+;; =============================================================================
+
+;; Private function: Update local record sync status and server ID
+(defn- update-local-msg-status! [local-id server-id synced?]
+  (let [^db/AppDatabase sqlite @database
+        query (doto (.update sqlite (.-messages sqlite))
+                (.where (fn [^db/Messages tbl] (.equals (.-localId tbl) local-id))))
+        companion (db/MessagesCompanion.
+                   .id (d/Value server-id)
+                   .isSynced (d/Value synced?))]
+    (.write query companion)))
+
+;; Core flow for sending messages
+(defn send-message [{:keys [receiver-id content]} on-success on-error]
+  (let [^db/AppDatabase sqlite @database
+        now (.toIso8601String (dc/DateTime.now))
+        ;; Build local message entry
+        msg-comp (db/MessagesCompanion.insert
+                  .senderId (d/Value "me") ;; TODO: Should get current user ID from auth service
+                  .receiverId (d/Value receiver-id)
+                  .content (d/Value content)
+                  .insertedAt (d/Value now)
+                  .isSynced (d/Value false))
+        query (.into sqlite (.-messages sqlite))]
+
+    ;; Step 1: Insert into local database (Optimistic UI)
+    ;; Since UI is watching messages, this will immediately show the message on screen
+    (-> (.insert query msg-comp)
+        (.then (fn [local-id]
+                 ;; Immediately callback to notify UI layer that local processing is done
+                 (on-success {:local-id local-id :status :pending})
+
+                 ;; Step 2: Try to push to server
+                 (-> (.post client "/direct_messages"
+                            .data {"receiver_id" receiver-id "content" content})
+                     (.then (fn [resp]
+                              ;; Step 3a: Server success, update sync status
+                              (let [server-id (get (.-data resp) "id")]
+                                (update-local-msg-status! local-id server-id true))))
+                     (.catchError (fn [err]
+                                    ;; Step 3b: Server failure or network disconnected, add to pending queue
+                                    (let [action-payload (convert/jsonEncode
+                                                          {"receiver_id" receiver-id
+                                                           "content" content
+                                                           "local_id" local-id})
+                                          pending-comp (db/PendingActionsCompanion.insert
+                                                        .actionType (d/Value "SEND_MESSAGE")
+                                                        .payload (d/Value action-payload))
+                                          query (.into sqlite (.-pendingActions sqlite))]
+                                      (-> (.insert query pending-comp)
+                                          (.then (fn [_] (println "Message queued for background sync"))))))))))
+        (.catchError on-error))))
+
+;; =============================================================================
+;; 3. Sync Logic (Syncing)
+;; =============================================================================
+
+;; Process offline tasks in pending queue
+(defn sync-pending-actions []
+  (let [^db/AppDatabase sqlite @database
+        query (doto (.select sqlite (.-pendingActions sqlite)))]
+    (-> (.get query)
+        (.then (fn [actions]
+                 (doseq [action actions]
+                   (let [data (convert/jsonDecode (.-payload action))
+                         action-id (.-id action)]
+                     ;; Retry sending offline task
+                     (-> (.post client "/direct_messages"
+                                .data {"receiver_id" (get data "receiver_id")
+                                       "content" (get data "content")})
+                         (.then (fn [resp]
+                                  (let [server-id (get (.-data resp) "id")
+                                        local-id (get data "local_id")
+                                        delete-query (doto (.delete sqlite (.-pendingActions sqlite))
+                                                       (.where (fn [^db/PendingActions tbl] (.equals (.-id tbl) action-id))))]
+                                    ;; Sync success: Update message status and remove task
+                                    (update-local-msg-status! local-id server-id true)
+                                    (.go delete-query))))
+                         (.catchError (fn [e] (println "Retrying sync later...")))))))))))
+
+;; =============================================================================
+;; 4. Save Message to Database (for background service)
+;; =============================================================================
+
+;; Receive message from WebSocket and save to local database
+(defn save-message-to-db! [msg-data]
+  (let [^db/AppDatabase sqlite @database
+        now (.toIso8601String (dc/DateTime.now))
+        ;; Extract fields from message data
+        sender-id (get msg-data "sender_id" "unknown")
+        receiver-id (get msg-data "receiver_id" "me")
+        content (get msg-data "content" "")
+        server-id (get msg-data "id")
+        msg-comp (db/MessagesCompanion.insert
+                  .id (d/Value server-id)
+                  .senderId (d/Value sender-id)
+                  .receiverId (d/Value receiver-id)
+                  .content (d/Value content)
+                  .insertedAt (d/Value (or (get msg-data "inserted_at") now))
+                  .isSynced (d/Value true))
+        query (.into sqlite (.-messages sqlite))]
+    (when sqlite
+      (-> (.insert query msg-comp .mode d/InsertMode.insertOrReplace)
+          (.then (fn [_] (println "Message saved to DB")))
+          (.catchError (fn [e] (println "Failed to save message:" e)))))))
+
+;; =============================================================================
+;; 5. Fetch Logic (Fetching)
+;; =============================================================================
+
+;; Fetch all new messages from server and sync to local SQLite
+(defn fetch-remote-messages [on-complete]
+  (-> (.get client "/direct_messages")
+      (.then (fn [resp]
+               (let [messages (get (.-data resp) "messages")
+                     ^db/AppDatabase sqlite @database]
+                 ;; Use batch processing to improve insert efficiency
+                 (.batch sqlite
+                         (fn [batch]
+                           (doseq [m messages]
+                             (.insert batch (.-messages sqlite)
+                                      (db/MessagesCompanion.insert
+                                       .id (d/Value (get m "id"))
+                                       .senderId (d/Value (get m "sender_id"))
+                                       .receiverId (d/Value (get m "receiver_id"))
+                                       .content (d/Value (get m "content"))
+                                       .insertedAt (d/Value (get m "inserted_at"))
+                                       .isSynced (d/Value true))
+                                      .mode d/InsertMode.insertOrReplace))))
+                 (when on-complete (on-complete messages)))))
+      (.catchError (fn [e] (println "Fetch failed:" e)))))
+      
+
+;; Get conversation list: Show only the last message for each contact
+(defn watch-conversations []
+  (let [^db/AppDatabase sqlite @database
+        query (.customSelect sqlite 
+                            "SELECT m.*, u.nickname, u.avatar_url 
+           FROM messages m
+           LEFT JOIN users u ON (u.id = CASE WHEN m.sender_id = 'me' THEN m.receiver_id ELSE m.sender_id END)
+           WHERE m.local_id IN (SELECT MAX(local_id) FROM messages GROUP BY sender_id, receiver_id)
+           ORDER BY m.inserted_at DESC"
+                            .readsFrom #{(.-messages sqlite) (.-users sqlite)})]
+    (.watch query)))
+        
+(defn watch-sessions []
+  (let [^db/AppDatabase sqlite @database
+        query (.customSelect sqlite 
+                             "SELECT * FROM messages 
+           GROUP BY CASE WHEN sender_id = 'me' THEN receiver_id ELSE sender_id END 
+           ORDER BY inserted_at DESC"
+                             .readsFrom #{(.-messages sqlite)})]
+    (.watch query)))

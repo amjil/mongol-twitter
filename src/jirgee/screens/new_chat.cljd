@@ -1,0 +1,174 @@
+(ns jirgee.screens.new-chat
+  (:require [cljd.flutter :as f]
+            ["package:flutter/material.dart" :as m]
+            ["package:mongol/mongol.dart" :as mgl]
+            [virtual-keyboard.keyboard :as keyboard]
+            [components.tab-layout :refer [sidebar-page]]
+            [components.text-field :as text-field]
+            [jirgee.router :refer [push-to-chat]]
+            [jirgee.services.user :as user-service]
+            [jirgee.state :refer [new-chat-following-state-atom
+                                  new-chat-following-loading?-atom]]))
+
+;; --- 1. User card (Timeline style) ---
+(defn- user-action-card [{:keys [name avatar-url uid bio]}]
+  (f/widget
+   :get {{{:flds [surface onSurfaceVariant outlineVariant]} .-colorScheme
+          {:flds [titleSmall bodySmall]} .-textTheme} m/Theme}
+   (m/GestureDetector
+    .onTap #(push-to-chat uid name "me")
+    .child
+    (m/Container
+     .width 140.0
+     .margin (m/EdgeInsets.only .right 12.0 .top 12.0 .bottom 12.0)
+     .padding (m/EdgeInsets.all 12.0)
+     .decoration (m/BoxDecoration
+                  .color surface
+                  .borderRadius (m/BorderRadius.circular 16.0)
+                  .border (m/Border.all .color outlineVariant .width 0.5)
+                  .boxShadow [(m/BoxShadow .color (m/Color 0x08000000) .blurRadius 8.0)])
+     .child
+     (m/Row
+      .crossAxisAlignment m/CrossAxisAlignment.start
+      .children
+      [(m/Column
+        .children
+        [(if (and avatar-url (not-empty avatar-url))
+           (m/CircleAvatar .radius 24.0 .backgroundImage (m/NetworkImage avatar-url))
+           (m/CircleAvatar .radius 24.0 .child (m/Icon m/Icons.person .color onSurfaceVariant)))])
+       (m/SizedBox .width 12.0)
+       (m/Expanded
+        .child
+        (m/Column
+         .crossAxisAlignment m/CrossAxisAlignment.start
+         .children
+         [(mgl/MongolText name 
+                          .style (.copyWith titleSmall .fontWeight m/FontWeight.bold)
+                          .maxLines 1)
+          (m/SizedBox .height 8.0)
+          (m/Expanded
+           .child 
+           (mgl/MongolText (or bio "") 
+                            .style (.copyWith bodySmall .color m/Colors.black54)
+                            .overflow m/TextOverflow.fade))]))])))))
+
+;; --- 2. Following list tab ---
+(defn- following-list-content []
+  (f/widget
+   :watch [list new-chat-following-state-atom
+           loading? new-chat-following-loading?-atom]
+   :get {{{:flds [surface]} .-colorScheme} m/Theme}
+   (m/Container
+    .color surface
+    .child (cond
+             loading? (m/Center .child (m/CircularProgressIndicator .strokeWidth 2.0))
+             
+             (empty? list)
+             (m/Center 
+              .child (m/Column 
+                      .mainAxisSize m/MainAxisSize.min
+                      .children [(m/Icon m/Icons.people_outline .size 48.0 .color m/Colors.black12)
+                                 (m/SizedBox .height 16.0)
+                                 (mgl/MongolText "No following" .style (m/TextStyle .color m/Colors.black26))]))
+
+             :else
+             (m/ListView.builder
+              .scrollDirection m/Axis.horizontal
+              .padding (m/EdgeInsets.all 16.0)
+              .itemCount (count list)
+              .itemBuilder (fn [_ idx]
+                             (let [u (nth (vec list) idx)]
+                               (user-action-card 
+                                {:uid (get u "id")
+                                 :name (or (get u "display_name") (get u "username") "User")
+                                 :avatar-url (get u "avatar_url")
+                                 :bio (get u "bio")}))))))))
+
+;; --- 3. Search tab ---
+(defn- search-for-chat-content []
+  (let [search-results (atom nil)
+        search-loading? (atom false)]
+    (f/widget
+     :managed [query-ctrl (m/TextEditingController.)]
+     :watch [results search-results
+             loading? search-loading?]
+     :get {{{:flds [surface surfaceVariant outline]} .-colorScheme
+            {:flds [primary]} .-colorScheme} m/Theme}
+     (m/Container
+      .color surface
+      .child
+      (m/Row
+       .crossAxisAlignment m/CrossAxisAlignment.stretch
+       .children
+       [(m/Padding
+         .padding (m/EdgeInsets.all 16.0)
+         .child (m/Column
+                 .children
+                 [(m/Expanded
+                   .child
+                   (text-field/text-field
+                    {:controller query-ctrl
+                     :hint "Search"
+                     :max-lines 1
+                     :on-submitted (fn [q]
+                                     (when-not (empty? q)
+                                       (reset! search-loading? true)
+                                       (user-service/search q
+                                                            #(do (reset! search-results (or % [])) (reset! search-loading? false))
+                                                            #(do (reset! search-results []) (reset! search-loading? false)))))}))
+                  (m/SizedBox .height 12.0)
+                  (m/IconButton
+                   .icon (m/Icon m/Icons.search .color primary)
+                   .onPressed (fn []
+                                (let [q (.-text query-ctrl)]
+                                  (when-not (empty? q)
+                                    (reset! search-loading? true)
+                                    (user-service/search q
+                                                         #(do (reset! search-results (or % [])) (reset! search-loading? false))
+                                                         #(do (reset! search-results []) (reset! search-loading? false)))))))]))
+
+        (cond
+          loading? (m/Expanded .child (m/Center .child (m/CircularProgressIndicator .strokeWidth 2.0)))
+
+          (and results (seq results))
+          (m/Expanded
+           .child (m/ListView.builder
+                   .scrollDirection m/Axis.horizontal
+                   .padding (m/EdgeInsets.symmetric .vertical 16.0)
+                   .itemCount (count results)
+                   .itemBuilder (fn [_ idx]
+                                  (let [u (nth results idx)]
+                                    (user-action-card
+                                     {:uid (get u "id")
+                                      :name (or (get u "display_name") (get u "username") "User")
+                                      :avatar-url (get u "avatar_url")
+                                      :bio (get u "bio")})))))
+
+          :else
+          (m/Expanded
+           .child (m/Center
+                   .child (mgl/MongolText "Please search..."
+                                          .style (m/TextStyle .color m/Colors.black26)))))])))))
+
+;; --- 4. Screen entry ---
+(defn new-chat-screen []
+  (f/widget
+   :context ctx
+   :get {{{:flds [surface onSurface]} .-colorScheme} m/Theme}
+   (m/Scaffold
+    .backgroundColor surface
+    .appBar (m/AppBar
+             .backgroundColor surface
+             .elevation 0
+             .leading (m/IconButton
+                       .icon (m/Icon m/Icons.arrow_back .color onSurface)
+                       .onPressed #(m/Navigator.pop ctx)))
+    .body
+   (m/SafeArea
+    .child
+    (sidebar-page
+    {:tabs [{:text "Following" :icon m/Icons.people_outline}
+            {:text "Search" :icon m/Icons.search}]
+     :contents [(following-list-content)
+                (search-for-chat-content)]
+     :initial-idx 0})))))

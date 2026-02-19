@@ -1,8 +1,0 @@
-{:full-name "amjil/jirgee"
- :ns-name   "amjil.jirgee"
- :sanitized "amjil/jirgee"
- :name      "jirgee"
- :modules   {:root         "modules"
-             :repositories [{:url  "https://github.com/kit-clj/modules.git"
-                             :tag  "master"
-                             :name "kit-modules"}]}}

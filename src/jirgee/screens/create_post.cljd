@@ -1,0 +1,146 @@
+(ns jirgee.screens.create-post
+  (:require [cljd.flutter :as f]
+            ["package:flutter/material.dart" :as m]
+            ["package:image_picker/image_picker.dart" :as picker]
+            [virtual-keyboard.keyboard :as keyboard]
+            [clojure.string :as str]
+            [components.app-bar :refer [mongol-side-layout]]
+            [components.text-field :refer [text-field]]
+            [jirgee.services.upload :as upload-service]
+            [jirgee.services.post :as post-service]
+            ["dart:io" :as io]
+            [jirgee.state :refer [create-post-posting?-atom
+                                  create-post-upload-progress-atom
+                                  create-post-selected-image-path-atom
+                                  set-create-post-posting?!
+                                  set-create-post-upload-progress!
+                                  set-create-post-selected-image-path!]]))
+
+(defn create-post-screen []
+  (f/widget
+   :context ctx
+   :managed [content-ctrl (m/TextEditingController)]
+   :watch [is-posting? create-post-posting?-atom
+           progress create-post-upload-progress-atom
+           image-path create-post-selected-image-path-atom]
+
+   :get {{{:flds [surface surfaceVariant onSurfaceVariant outline]} .-colorScheme
+          {:flds [bodyLarge]} .-textTheme} m/Theme
+         navigator m/Navigator}
+
+   :let [handle-publish!
+         (fn []
+           (let [content (.-text content-ctrl)]
+             (when (or (not (str/blank? content)) image-path)
+               (set-create-post-posting?! true)
+               (set-create-post-upload-progress! 0.0)
+
+               (let [submit-post (fn [remote-url]
+                                   (post-service/create
+                                    {:content content :image-url remote-url}
+                                    (fn [_]
+                                      (set-create-post-posting?! false)
+                                      (set-create-post-selected-image-path! nil)
+                                      (post-service/load-timeline-data!)
+                                      (.pop navigator))
+                                    (fn [err]
+                                      (set-create-post-posting?! false)
+                                      (println "Create post failed:" err))))]
+
+                 ;; Logic: upload image first if exists, otherwise post directly
+                 (if image-path
+                   (upload-service/upload-file
+                    {:file-path image-path
+                     :on-progress (fn [p] (set-create-post-upload-progress! p))}
+                    (fn [url] (submit-post url))
+                    (fn [_] (set-create-post-posting?! false)))
+                   (submit-post nil))))))]
+
+   (m/Scaffold
+    .backgroundColor surface)
+   .body
+   (m/SafeArea)
+   (m/Column
+    .children
+    [(m/Expanded
+      .child
+      (mongol-side-layout
+       {:title "Post"
+        :pinned? true
+        :min-width 40.0
+        :actions [{:icon m/Icons.send
+                   :on-tap (if is-posting? nil handle-publish!)}]
+        :body
+        (m/Stack
+         .children
+         [(m/Padding
+           .padding (m/EdgeInsets.all 32.0)
+           .child
+           (m/SingleChildScrollView
+            .scrollDirection m/Axis.horizontal
+            .child
+            (m/Row
+             .crossAxisAlignment m/CrossAxisAlignment.start
+             .children
+             [(text-field {:controller content-ctrl
+                           :max-lines 10
+                           :min-lines 4
+                           :autofocus true
+                           :style bodyLarge
+                           :decoration (m/InputDecoration
+                                        .hintText "Write your thoughts..."
+                                        .border m/InputBorder.none)})
+
+              (m/SizedBox .width 12.0)
+
+              ;; Image preview area
+              (if image-path
+                (m/Stack
+                 .children
+                 [(m/ClipRRect
+                   .borderRadius (m/BorderRadius.circular 12.0)
+                   .child (m/Image.file (io/File image-path)
+                                        .width 200.0 .height 300.0
+                                        .fit m/BoxFit.cover))
+                  (m/Positioned
+                   .top 4.0 .right 4.0
+                   .child (m/IconButton
+                           .icon (m/Icon m/Icons.cancel .color m/Colors.white)
+                           .onPressed #(do (set-create-post-selected-image-path! nil) nil)))
+                  ;; Upload progress overlay
+                  (if is-posting?
+                    (m/Positioned.fill
+                     .child (m/Container
+                             .color (m/Colors.black.withOpacity 0.4)
+                             .child (m/Center
+                                     .child (m/CircularProgressIndicator
+                                             .value progress
+                                             .color m/Colors.white))))
+                    (m/SizedBox.shrink))])
+
+                ;; Placeholder when no image is selected
+                (m/GestureDetector
+                 .onTap (fn []
+                          (-> (upload-service/pick-image picker/ImageSource.gallery)
+                              (.then (fn [p] (when p (set-create-post-selected-image-path! p)))))
+                          nil)
+                 .child (m/Container
+                         .width 120.0 .height 180.0
+                         .decoration (m/BoxDecoration
+                                      .color surfaceVariant
+                                      .borderRadius (m/BorderRadius.circular 12.0)
+                                      .border (m/Border.all .color outline .style m/BorderStyle.solid))
+                         .child (m/Icon m/Icons.add_a_photo .color onSurfaceVariant))))])))
+
+          ;; Global posting overlay (optional)
+          (if (and is-posting? (not image-path))
+            (m/Positioned.fill
+             .child (m/Container
+                     .color (m/Colors.black12)
+                     .child (m/Center .child (m/CircularProgressIndicator))))
+            (m/SizedBox.shrink))
+
+          (keyboard/candidates nil)])}))
+
+
+     (keyboard/keyboard {:custom-fns {}})])))

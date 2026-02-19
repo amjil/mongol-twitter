@@ -1,0 +1,83 @@
+(ns jirgee.screens.chat
+  (:require [cljd.flutter :as f]
+            ["package:flutter/material.dart" :as m]
+            ["package:mongol/mongol.dart" :as mgl]
+            [jirgee.router :refer [push-to-new-chat]]
+            [jirgee.services.chat :as chat-service]
+            [jirgee.state :refer [peer-id-atom
+                                  peer-name-atom
+                                  peer-my-id-atom]]
+            [jirgee.components.chat-bubble :refer [chat-bubble]]
+            [components.text-field :refer [text-field]]))
+
+(defn chat-screen []
+  (f/widget
+   :get {{{:keys [height]} .-size} m/MediaQuery}
+   :managed [input-ctrl (m/TextEditingController.)
+             peer-id peer-id-atom
+             peer-name peer-name-atom
+             my-id peer-my-id-atom]
+   ;; Watch messages stream, UI redraws on local/sync updates
+   :watch [messages (chat-service/watch-messages peer-id)]
+   (m/Scaffold
+    .backgroundColor m/Colors.white
+    .appBar (m/AppBar
+             .backgroundColor m/Colors.white
+             .elevation 0
+             .centerTitle true
+             .title (mgl/MongolText peer-name .style (m/TextStyle .color m/Colors.black87 .fontWeight m/FontWeight.bold))
+             .actions
+             [(m/IconButton
+               .icon (m/Icon m/Icons.add_comment_rounded .color m/Colors.black87)
+               .tooltip "New conversation"
+               .onPressed (fn []
+                            (push-to-new-chat)
+                            nil))])
+    .body
+    (m/Column
+     .children
+     [(m/Expanded
+       .child (m/Container
+               .color (m/Color 0xFFF8F8F8)
+               ;; Horizontal scroll, vertical bubbles
+               .child (m/ListView.builder
+                       .padding (m/EdgeInsets.symmetric .vertical 16.0)
+                       .scrollDirection m/Axis.horizontal
+                       .reverse true
+                       .itemCount (count messages)
+                       .itemBuilder (fn [ctx idx]
+                                      (let [msg (nth messages idx)]
+                                        (chat-bubble msg (= (.-senderId msg) my-id)))))))
+
+      ;; --- Vertical input area ---
+      (m/SafeArea
+       .child (m/Container
+               .padding (m/EdgeInsets.all 12.0)
+               .decoration (m/BoxDecoration
+                            .color m/Colors.white
+                            .border (m/Border .top (m/BorderSide .color m/Colors.black12)))
+               .child (m/Row
+                       .crossAxisAlignment m/CrossAxisAlignment.end
+                       .children
+                       [(m/Expanded
+                         .child (m/Container
+                                 .constraints (m/BoxConstraints .maxHeight 120.0)
+                                 .decoration (m/BoxDecoration
+                                              .color (m/Color 0xFFF2F2F2)
+                                              .borderRadius (m/BorderRadius.circular 20.0))
+                                 .child (text-field {:controller input-ctrl
+                                                     :hint "Message..."
+                                                     :max-lines nil
+                                                     :decoration (m/InputDecoration
+                                                                  .border m/InputBorder.none
+                                                                  .contentPadding (m/EdgeInsets.all 12.0))})))
+                        (m/SizedBox .width 8.0)
+                        (m/IconButton
+                         .icon (m/Icon m/Icons.send_rounded .color m/Colors.blueAccent)
+                         .onPressed (fn []
+                                      (let [text (.text input-ctrl)]
+                                        (when-not (empty? text)
+                                          (chat-service/send-message
+                                           {:receiver-id peer-id :content text}
+                                           (fn [_] (.clear input-ctrl))
+                                           (fn [e] (println "Send failed: " e)))))))])))]))))

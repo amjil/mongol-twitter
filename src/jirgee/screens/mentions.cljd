@@ -1,0 +1,81 @@
+(ns jirgee.screens.mentions
+  (:require [cljd.flutter :as f]
+            ["package:flutter/material.dart" :as m]
+            ["package:mongol/mongol.dart" :as mgl]
+            [components.app-bar :refer [mongol-side-layout]]
+            [jirgee.services.mention :as mention-service]
+            [jirgee.state :refer [mentions-state-atom
+                                  mentions-loading?-atom
+                                  set-mentions-state!
+                                  set-mentions-loading?!]]
+            [pull-to-refresh.refresh :refer [horizontal-refresh]]))
+
+(defn- mention-item [post]
+  (f/widget
+   :context ctx
+   :get {{{:flds [surfaceVariant onSurface]} .-colorScheme
+          {:flds [bodyMedium titleSmall]} .-textTheme} m/Theme}
+   :let [content (get post "content" "")
+         user (get post "user" {})
+         username (get user "username" "")
+         avatar-url (get user "avatar_url")]
+   (m/Card
+    .margin (m/EdgeInsets.symmetric .vertical 4.0 .horizontal 12.0)
+    .child
+    (m/Padding
+     .padding (m/EdgeInsets.all 12.0)
+     .child
+     (m/Row
+      .crossAxisAlignment m/CrossAxisAlignment.start
+      .children
+      [(m/CircleAvatar
+        .backgroundImage (when avatar-url (m/NetworkImage avatar-url))
+        .child (if-not avatar-url (m/Icon m/Icons.person) (m/SizedBox)))
+       (m/SizedBox .width 12.0)
+       (m/Expanded
+        .child
+        (m/Column
+         .crossAxisAlignment m/CrossAxisAlignment.start
+         .children
+         [(mgl/MongolText username .style (.copyWith titleSmall .fontWeight m/FontWeight.bold))
+          (m/SizedBox .height 8.0)
+          (mgl/MongolText content .style bodyMedium .maxLines 3)]))])))))
+
+(defn mentions-screen []
+  (f/widget
+   :context ctx
+   :watch [mentions mentions-state-atom
+           is-loading? mentions-loading?-atom]
+   :get {{{:flds [surface]} .-colorScheme} m/Theme}
+   :let [load-mentions! (fn []
+                          (set-mentions-loading?! true)
+                          (-> (mention-service/get-mentions {})
+                              (.then (fn [data]
+                                       (set-mentions-state! data)
+                                       (set-mentions-loading?! false)))
+                              (.catchError (fn [err]
+                                             (println "Load mentions failed:" err)
+                                             (set-mentions-loading?! false)))))]
+
+   (mongol-side-layout
+    {:title "Mentions"
+     :min-width 70.0
+     :body
+     (m/Scaffold
+      .backgroundColor surface
+      .body
+      (cond
+        is-loading?
+        (m/Center .child (m/CircularProgressIndicator))
+
+        (empty? mentions)
+        (m/Center .child (mgl/MongolText "Empty"))
+
+        :else
+        (horizontal-refresh
+         {:on-refresh (fn [] (load-mentions!))
+          :item-count (count mentions)
+          :item-builder (fn [_ idx]
+                          (mention-item (nth mentions idx)))
+          :background-color surface
+          :reverse false})))})))

@@ -1,52 +1,101 @@
 (ns jirgee.main
-  (:require
-   ["package:flutter/material.dart" :as m]
-   ["package:timeago/timeago.dart" :as timeago]
-   ["dart:convert" :as convert]
-   [cljd.flutter.alpha2 :as f]
-   [virtual-keyboard.options :as keyboard-options]
-   [jirgee.states.global :as gs]
-   [jirgee.services.shared-preferences :as sp]
-   [jirgee.services.ws :as ws]
-   [jirgee.services.ntf :as ntf]
-   [jirgee.common.theme :as theme]
-   [jirgee.screens.home :as home]
-   [jirgee.screens.login :as login]
-   [jirgee.screens.signup :as signup]
-   [jirgee.screens.profile-view :as profile]
-   [jirgee.screens.profile-edit :as edit-profile]
-   [jirgee.screens.new-tweet :as new-tweet]
-   [jirgee.screens.reply-tweet :as reply-tweet]))
+  (:require ["package:flutter/material.dart" :as m]
+            ["package:flutter/widgets.dart" :as widgets]
+            [cljd.flutter :as f]
+            [virtual-keyboard.options :as keyboard-options]
+            [jirgee.main-layout :refer [main-layout]]
+            [jirgee.router :refer [navigator-key]]
+            [jirgee.state :refer [set-current-user!]]
+            [jirgee.services.base :as base]
+            [jirgee.services.network :as network]
+            [jirgee.services.storage :as storage]
+            [jirgee.screens.login :refer [login-screen]]
+            [jirgee.screens.chat :refer [chat-screen]]
+            [jirgee.screens.register :refer [register-screen]]
+            [jirgee.screens.search :refer [search-screen]]
+            [jirgee.screens.trending :refer [trending-screen]]
+            [jirgee.screens.lists :refer [lists-screen]]
+            [jirgee.screens.report :refer [report-screen]]
+            [jirgee.screens.bookmarks :refer [bookmarks-screen]]
+            [jirgee.screens.mentions :refer [mentions-screen]]
+            [jirgee.screens.groups :refer [groups-screen]]
+            [jirgee.screens.notifications :refer [notifications-screen]]
+            [jirgee.screens.hashtag :refer [hashtag-screen]]
+            [jirgee.screens.create-post :refer [create-post-screen]]
+            [jirgee.screens.post-detail :refer [post-detail-screen]]
+            [jirgee.screens.profile :refer [profile-screen]]
+            [jirgee.screens.new-chat :refer [new-chat-screen]]))
+
+(defn- start-app [initial-route]
+  "Start app, only call runApp once"
+  (m/runApp
+   (f/widget
+    :let [info (merge keyboard-options/keyboard-option
+                      {:keyboard/key-cap-border-radius 6
+                       :keyboard/font-size 18
+                       :keyboard/key-container-color m/Colors.grey.shade500
+                       :keyboard/mongol-font-family "OyunQaganTig"})]
+    :bind {:info info}
+    (m/MaterialApp
+     .navigatorKey navigator-key
+     .title "Jirgee"
+     .debugShowCheckedModeBanner false
+     .theme (m/ThemeData .useMaterial3 true
+                         .brightness m/Brightness.dark
+                         .fontFamily "OyunQaganTig"
+                         .colorSchemeSeed m/Colors.blue)
+     .initialRoute initial-route
+     .routes {"/home" (fn [_] ^m/Widget (main-layout))
+              "/login" (fn [_] ^m/Widget (login-screen))
+              "/register" (fn [_] ^m/Widget (register-screen))
+              "/search" (fn [_] ^m/Widget (search-screen))
+              "/trending" (fn [_] ^m/Widget (trending-screen))
+              "/lists" (fn [_] ^m/Widget (lists-screen))
+              "/report" (fn [_] ^m/Widget (report-screen))
+              "/bookmarks" (fn [_] ^m/Widget (bookmarks-screen))
+              "/mentions" (fn [_] ^m/Widget (mentions-screen))
+              "/groups" (fn [_] ^m/Widget (groups-screen))
+              "/notifications" (fn [_] ^m/Widget (notifications-screen))
+              "/hashtag" (fn [_] ^m/Widget (hashtag-screen))
+              "/chat" (fn [_] ^m/Widget (chat-screen))
+              "/new-chat" (fn [_] ^m/Widget (new-chat-screen))
+              "/create-post" (fn [_] ^m/Widget (create-post-screen))
+              "/post-detail" (fn [_] ^m/Widget (post-detail-screen))
+              "/user-profile" (fn [_] ^m/Widget (profile-screen {:is-me? false}))}))))
+
+(defn- init-and-start 
+  "Initialize and start app"
+  []
+  (-> (storage/get-auth-data)
+      (.then (fn [auth-data]
+                (let [initial-route (if auth-data
+                                    (do
+                                      (println "✅ User is logged in, restoring session")
+                                      (base/set-auth-header! (:token auth-data))
+                                      (when-let [u (:user auth-data)]
+                                        (set-current-user! (into {} u)))
+                                      "/home")
+                                    (do
+                                      (println "ℹ️ User is not logged in, showing login screen")
+                                      "/login"))]
+                (start-app initial-route))))
+      (.catchError (fn [err]
+                    (println "❌ Failed to check auth status:" err)
+                    (start-app "/login")))))
 
 (defn main []
-  (m.WidgetsFlutterBinding/ensureInitialized)
-  (timeago/setLocaleMessages "mn_my" (timeago/MnMyMessages))
-  (ntf/init)
-  (let [token (await (sp/get-value {:type :string :key "user-token"}))
-        userinfo (await (sp/get-value {:type :string :key "user-info"}))]
-    (when (not-empty token)
-      (swap! gs/state assoc :user-token token)
-      (ws/connect))
-    (when (not-empty userinfo)
-      (swap! gs/state assoc :user-info (convert/jsonDecode userinfo)))
-    (m/runApp
-     (f/widget
-      :context ctx
-      :let [width  (-> m/MediaQuery (.of ctx) .-size .-width)
-            info (merge keyboard-options/keyboard-option 
-                        {:keyboard/key-cap-border-radius 6}
-                        {:keyboard/width width})]
-      :bind {:info info :state gs/state}
-      (m/MaterialApp
-       .title "Welcome to Flutter"
-       .theme theme/default-light-theme
-       .darkTheme theme/default-dark-theme
-       .initialRoute "/"
-       .routes       {"/" home/home-screen
-                      "/login" login/login-screen
-                      "/signup" signup/signup-screen
-                      "/create_tweet" new-tweet/screen
-                      "/reply_tweet" reply-tweet/screen
-                      "/user_profile" profile/screen
-                      "/edit_profile" edit-profile/screen}
-       .debugShowCheckedModeBanner false)))))
+  ;; Ensure Flutter bindings are initialized (must be called before using any Flutter services)
+  (widgets/WidgetsFlutterBinding.ensureInitialized)
+  
+  ;; Initialize database
+  (base/init!
+   (fn [_db]
+     (println "✅ Database initialized")
+     ;; Start network monitoring to ensure offline messages auto-sync
+     (network/start-observing!)
+     ;; Initialize and start app
+     (init-and-start))
+   (fn [err]
+     (println "❌ Database initialization failed:" err)
+     ;; Even if database fails, still try to start app
+     (init-and-start))))

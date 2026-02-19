@@ -1,0 +1,75 @@
+(ns jirgee.main-layout
+  (:require [cljd.flutter :as f]
+            ["package:flutter/material.dart" :as m]
+            ["package:flutter/widgets.dart" :as widgets]
+            ["package:mongol_jirgee/post_frame_trigger.dart" :as post-frame-trigger]
+            [jirgee.screens.timeline :refer [timeline-screen]]
+            [jirgee.screens.conversations :refer [conversation-screen]]
+            [jirgee.screens.profile :refer [profile-screen]]
+            [jirgee.services.message :as msg-service]
+            [jirgee.services.post :as post-service]
+            [jirgee.services.user :as user-service]
+            [jirgee.state :refer [main-layout-current-tab-atom
+                                  main-layout-theme-mode-atom
+                                  main-layout-is-pinned-atom
+                                  conversations-chats-state-atom
+                                  timeline-posts-state-atom
+                                  timeline-loading?-atom
+                                  profile-state-atom
+                                  set-main-layout-current-tab!
+                                  set-conversations-chats-state!
+                                  set-conversations-error-state!
+                                  swap-main-layout-theme-mode!
+                                  swap-main-layout-is-pinned!]]))
+
+(defn main-layout []
+  (f/widget
+   :watch [idx main-layout-current-tab-atom
+           mode main-layout-theme-mode-atom
+           timeline-posts timeline-posts-state-atom
+           timeline-loading? timeline-loading?-atom]
+   :get {{{:flds [primary onSurfaceVariant surface]} .-colorScheme} m/Theme}
+   (post-frame-trigger/PostFrameTrigger
+    .onLayout (fn [] (when (and (= idx 0) (nil? timeline-posts) (not timeline-loading?))
+                       (fn [_] (post-service/load-timeline-data!)))
+                nil))
+   (m/Scaffold
+    .backgroundColor surface
+    .body
+    (m/IndexedStack
+     .index idx
+     .children [(timeline-screen)
+                (conversation-screen)
+                (profile-screen {:is-me? true})])
+    .bottomNavigationBar
+    (m/BottomNavigationBar
+     .currentIndex idx
+     .type m/BottomNavigationBarType.fixed
+     .showSelectedLabels false
+     .showUnselectedLabels false
+     .selectedItemColor primary
+     .unselectedItemColor onSurfaceVariant
+     .onTap (fn [new-idx]
+              (set-main-layout-current-tab! new-idx)
+              (case new-idx
+                0 (when (nil? @timeline-posts-state-atom)
+                    (post-service/load-timeline-data!))
+                1 (when (nil? @conversations-chats-state-atom)
+                    (-> (msg-service/get-recent-chats identity)
+                        (.then set-conversations-chats-state!)
+                        (.catchError set-conversations-error-state!)))
+                2 (user-service/load-profile-data! "me")
+                nil))
+     .items
+     [(m/BottomNavigationBarItem
+       .icon (m/Icon m/Icons.home_outlined)
+       .activeIcon (m/Icon m/Icons.home)
+       .label "Home")
+      (m/BottomNavigationBarItem
+       .icon (m/Icon m/Icons.chat_bubble_outline)
+       .activeIcon (m/Icon m/Icons.chat_bubble)
+       .label "Messages")
+      (m/BottomNavigationBarItem
+       .icon (m/Icon m/Icons.person_outline)
+       .activeIcon (m/Icon m/Icons.person)
+       .label "Me")]))))

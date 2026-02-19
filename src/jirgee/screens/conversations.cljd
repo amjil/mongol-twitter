@@ -1,0 +1,74 @@
+(ns jirgee.screens.conversations
+  (:require [cljd.flutter :as f]
+            ["package:flutter/material.dart" :as m]
+            ["package:mongol/mongol.dart" :as mgl]
+            [jirgee.router :refer [push-to-new-chat]]
+            [jirgee.state :refer [conversations-chats-state-atom
+                                  conversations-error-state-atom
+                                  peer-id-atom
+                                  peer-name-atom
+                                  peer-my-id-atom]]))
+
+;; Sub-component: Conversation item
+(defn- conversation-item [chat]
+  (f/widget
+   :get [m/Navigator]
+   :get {{{:flds [onSurface surfaceVariant primary]} .-colorScheme
+          {:flds [titleMedium bodySmall]} .-textTheme} m/Theme}
+   :let [nickname (or (.read chat "nickname") "User")
+         content (or (.read chat "content") "")
+         avatar-url (.read chat "avatar_url")]
+   (mgl/MongolListTile
+    .onTap (fn []
+             (reset! peer-id-atom (.read chat "id"))
+             (reset! peer-name-atom nickname)
+             (reset! peer-my-id-atom "me")
+             (.pushNamed navigator "/chat")
+             nil)
+    .leading (m/CircleAvatar
+              .backgroundColor surfaceVariant
+              .backgroundImage (when avatar-url (m/NetworkImage avatar-url))
+              .child (if-not avatar-url (m/Icon m/Icons.person .color onSurface) (m/SizedBox)))
+    .title (mgl/MongolText nickname .style titleMedium)
+    .subtitle (mgl/MongolText content
+                              .style (.copyWith bodySmall .color (.withOpacity onSurface 0.6))
+                              .maxLines 2
+                              .overflow m/TextOverflow.ellipsis)
+    .trailing (m/Container
+               .width 8.0 .height 8.0
+               .decoration (m/BoxDecoration .color primary .shape m/BoxShape.circle)))))
+
+;; Main page: Conversation list
+(defn conversation-screen []
+  (f/widget
+   :context ctx
+   ;; Watch external atoms
+   :watch [chats conversations-chats-state-atom
+           error conversations-error-state-atom]
+   :get {{{:flds [surface]} .-colorScheme} m/Theme}
+   (m/Scaffold
+    .backgroundColor surface
+    .floatingActionButton (m/FloatingActionButton
+                           .heroTag "conversations-fab"
+                           .onPressed (fn []
+                                       (push-to-new-chat)
+                                       nil)
+                           .child (m/Icon m/Icons.add)
+                           .tooltip "New conversation")
+    .body
+    (cond
+      error
+      (m/Center .child (m/Text "Error loading chats"))
+
+      (nil? chats)
+      (m/Center .child (m/CircularProgressIndicator))
+
+      (empty? chats)
+      (m/Center .child (mgl/MongolText "Empty"))
+
+      :else
+      (m/ListView.builder
+       .scrollDirection m/Axis.horizontal
+       .itemCount (count chats)
+       .itemBuilder (fn [_ idx]
+                      (conversation-item (nth chats idx))))))))

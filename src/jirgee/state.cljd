@@ -1,0 +1,444 @@
+(ns jirgee.state
+  "Unified state management file containing all external state")
+
+;; ============================================
+;; Application Global State
+;; ============================================
+
+;; Main layout state
+(defonce ^:private main-layout-current-tab (atom 0))
+(defonce ^:private main-layout-theme-mode (atom :light))
+(defonce ^:private main-layout-is-pinned (atom false))
+
+;; Current logged-in user (from login/register or restored from SharedPreferences)
+(defonce ^:private current-user (atom nil))
+
+;; ============================================
+;; Screen State - Lists
+;; ============================================
+(defonce ^:private lists-state (atom nil))
+(defonce ^:private lists-loading? (atom false))
+(defonce ^:private lists-create-name-ctrl (atom nil))
+(defonce ^:private lists-create-desc-ctrl (atom nil))
+(defonce ^:private lists-create-is-public? (atom false))
+
+;; ============================================
+;; Screen State - Create Post
+;; ============================================
+(defonce ^:private create-post-posting? (atom false))
+(defonce ^:private create-post-upload-progress (atom 0.0))
+(defonce ^:private create-post-selected-image-path (atom nil))
+
+;; ============================================
+;; Screen State - Profile
+;; ============================================
+(defonce ^:private profile-state (atom nil))
+(defonce ^:private profile-user-posts-state (atom nil))
+
+;; ============================================
+;; Screen State - Timeline
+;; ============================================
+(defonce ^:private timeline-posts-state (atom nil))
+(defonce ^:private timeline-loading? (atom false))
+
+;; ============================================
+;; Screen State - Post Detail (current viewed post detail, detail screen reads from state)
+;; ============================================
+(defonce ^:private post-detail-state (atom nil))
+
+;; ============================================
+;; Screen State - Search
+;; ============================================
+(defonce ^:private search-query (atom ""))
+(defonce ^:private search-results (atom nil))
+(defonce ^:private search-type (atom "all"))
+(defonce ^:private search-loading? (atom false))
+(defonce ^:private search-history (atom nil))
+(defonce ^:private search-filter-chips (atom {"all" true "users" false "posts" false "groups" false}))
+
+;; ============================================
+;; Screen State - Hashtag
+;; ============================================
+(defonce ^:private hashtag-state (atom nil))
+(defonce ^:private hashtag-posts-state (atom nil))
+(defonce ^:private hashtag-loading? (atom false))
+(defonce hashtag-name-atom (atom nil))
+
+;; ============================================
+;; Screen State - Trending
+;; ============================================
+(defonce ^:private trending-posts-state (atom nil))
+(defonce ^:private trending-users-state (atom nil))
+(defonce ^:private trending-hashtags-state (atom nil))
+(defonce ^:private trending-loading? (atom false))
+(defonce ^:private trending-current-tab (atom 0))
+(defonce ^:private trending-filter-chips (atom {0 true 1 false 2 false}))
+
+;; ============================================
+;; Screen State - Notifications
+;; ============================================
+(defonce ^:private notifications-state (atom nil))
+(defonce ^:private notifications-loading? (atom false))
+(defonce ^:private notifications-unread-count (atom 0))
+(defonce ^:private notifications-filter-read? (atom nil))
+(defonce ^:private notifications-filter-chips (atom {"all" true "unread" false "read" false}))
+
+;; ============================================
+;; Screen State - Groups
+;; ============================================
+(defonce ^:private groups-state (atom nil))
+(defonce ^:private groups-loading? (atom false))
+(defonce ^:private groups-filter-public? (atom nil))
+(defonce ^:private groups-filter-chips (atom {"all" true "public" false}))
+
+;; ============================================
+;; Screen State - Mentions
+;; ============================================
+(defonce ^:private mentions-state (atom nil))
+(defonce ^:private mentions-loading? (atom false))
+
+;; ============================================
+;; Screen State - Bookmarks
+;; ============================================
+(defonce ^:private bookmarks-state (atom nil))
+(defonce ^:private bookmarks-loading? (atom false))
+
+;; ============================================
+;; Screen State - Report
+;; ============================================
+(defonce ^:private reports-state (atom nil))
+(defonce ^:private reports-loading? (atom false))
+(defonce ^:private reports-selected-reason (atom "spam"))
+(defonce ^:private reports-create-desc-ctrl (atom nil))
+
+(defonce reportable-type-atom (atom nil))
+(defonce reportable-id-atom (atom nil))
+
+;; ============================================
+;; Screen State - Conversations
+;; ============================================
+(defonce ^:private conversations-chats-state (atom nil))
+(defonce ^:private conversations-error-state (atom nil))
+
+(defonce peer-id-atom (atom nil))
+(defonce peer-name-atom (atom nil))
+(defonce peer-my-id-atom (atom nil))
+
+;; ============================================
+;; Screen State - New Chat (following list loaded at navigation)
+;; ============================================
+(defonce ^:private new-chat-following-state (atom nil))
+(defonce ^:private new-chat-following-loading? (atom false))
+
+;; ============================================
+;; Service State - Base
+;; ============================================
+(defonce database (atom nil))
+
+;; ============================================
+;; Export Functions - Base (Database)
+;; ============================================
+(defn get-database [] @database)
+(defn set-database! [v] (reset! database v))
+
+;; ============================================
+;; Service State - WebSocket
+;; ============================================
+(defonce ^:private websocket-channel (atom nil))
+(defonce ^:private websocket-heartbeat-timer (atom nil))
+(defonce websocket-active? (atom false))
+
+;; ============================================
+;; Service State - Network
+;; ============================================
+(defonce ^:private network-subscription (atom nil))
+
+;; ============================================
+;; Export Functions - Current User (Auth)
+;; ============================================
+(defn get-current-user [] @current-user)
+(defn set-current-user! [v] (reset! current-user v))
+
+;; ============================================
+;; Export Functions - Main Layout
+;; ============================================
+(defn get-main-layout-current-tab [] @main-layout-current-tab)
+(defn set-main-layout-current-tab! [v] (reset! main-layout-current-tab v))
+(defn get-main-layout-theme-mode [] @main-layout-theme-mode)
+(defn set-main-layout-theme-mode! [v] (reset! main-layout-theme-mode v))
+(defn swap-main-layout-theme-mode! [f] (swap! main-layout-theme-mode f))
+(defn get-main-layout-is-pinned [] @main-layout-is-pinned)
+(defn set-main-layout-is-pinned! [v] (reset! main-layout-is-pinned v))
+(defn swap-main-layout-is-pinned! [f] (swap! main-layout-is-pinned f))
+
+;; ============================================
+;; Export Functions - Lists
+;; ============================================
+(defn get-lists-state [] @lists-state)
+(defn set-lists-state! [v] (reset! lists-state v))
+(defn get-lists-loading? [] @lists-loading?)
+(defn set-lists-loading?! [v] (reset! lists-loading? v))
+(defn get-lists-create-name-ctrl [] @lists-create-name-ctrl)
+(defn set-lists-create-name-ctrl! [v] (reset! lists-create-name-ctrl v))
+(defn get-lists-create-desc-ctrl [] @lists-create-desc-ctrl)
+(defn set-lists-create-desc-ctrl! [v] (reset! lists-create-desc-ctrl v))
+(defn get-lists-create-is-public? [] @lists-create-is-public?)
+(defn set-lists-create-is-public?! [v] (reset! lists-create-is-public? v))
+
+;; ============================================
+;; Export Functions - Create Post
+;; ============================================
+(defn get-create-post-posting? [] @create-post-posting?)
+(defn set-create-post-posting?! [v] (reset! create-post-posting? v))
+(defn get-create-post-upload-progress [] @create-post-upload-progress)
+(defn set-create-post-upload-progress! [v] (reset! create-post-upload-progress v))
+(defn get-create-post-selected-image-path [] @create-post-selected-image-path)
+(defn set-create-post-selected-image-path! [v] (reset! create-post-selected-image-path v))
+
+;; ============================================
+;; Export Functions - Profile
+;; ============================================
+(defn get-profile-state [] @profile-state)
+(defn set-profile-state! [v] (reset! profile-state v))
+(defn get-profile-user-posts-state [] @profile-user-posts-state)
+(defn set-profile-user-posts-state! [v] (reset! profile-user-posts-state v))
+
+;; ============================================
+;; Export Functions - Timeline
+;; ============================================
+(defn get-timeline-posts-state [] @timeline-posts-state)
+(defn set-timeline-posts-state! [v] (reset! timeline-posts-state v))
+(defn get-timeline-loading? [] @timeline-loading?)
+(defn set-timeline-loading?! [v] (reset! timeline-loading? v))
+
+;; ============================================
+;; Export Functions - Post Detail
+;; ============================================
+(defn get-post-detail-state [] @post-detail-state)
+(defn set-post-detail-state! [v] (reset! post-detail-state v))
+
+;; ============================================
+;; Export Functions - Search
+;; ============================================
+(defn get-search-query [] @search-query)
+(defn set-search-query! [v] (reset! search-query v))
+(defn get-search-results [] @search-results)
+(defn set-search-results! [v] (reset! search-results v))
+(defn get-search-type [] @search-type)
+(defn set-search-type! [v] (reset! search-type v))
+(defn get-search-loading? [] @search-loading?)
+(defn set-search-loading?! [v] (reset! search-loading? v))
+(defn get-search-history [] @search-history)
+(defn set-search-history! [v] (reset! search-history v))
+(defn get-search-filter-chips [] @search-filter-chips)
+(defn set-search-filter-chips! [v] (reset! search-filter-chips v))
+
+;; ============================================
+;; Export Functions - Hashtag
+;; ============================================
+(defn get-hashtag-state [] @hashtag-state)
+(defn set-hashtag-state! [v] (reset! hashtag-state v))
+(defn get-hashtag-posts-state [] @hashtag-posts-state)
+(defn set-hashtag-posts-state! [v] (reset! hashtag-posts-state v))
+(defn get-hashtag-loading? [] @hashtag-loading?)
+(defn set-hashtag-loading?! [v] (reset! hashtag-loading? v))
+
+;; ============================================
+;; Export Functions - Trending
+;; ============================================
+(defn get-trending-posts-state [] @trending-posts-state)
+(defn set-trending-posts-state! [v] (reset! trending-posts-state v))
+(defn get-trending-users-state [] @trending-users-state)
+(defn set-trending-users-state! [v] (reset! trending-users-state v))
+(defn get-trending-hashtags-state [] @trending-hashtags-state)
+(defn set-trending-hashtags-state! [v] (reset! trending-hashtags-state v))
+(defn get-trending-loading? [] @trending-loading?)
+(defn set-trending-loading?! [v] (reset! trending-loading? v))
+(defn get-trending-current-tab [] @trending-current-tab)
+(defn set-trending-current-tab! [v] (reset! trending-current-tab v))
+(defn get-trending-filter-chips [] @trending-filter-chips)
+(defn set-trending-filter-chips! [v] (reset! trending-filter-chips v))
+
+;; ============================================
+;; Export Functions - Notifications
+;; ============================================
+(defn get-notifications-state [] @notifications-state)
+(defn set-notifications-state! [v] (reset! notifications-state v))
+(defn swap-notifications-state! [f] (swap! notifications-state f))
+(defn get-notifications-loading? [] @notifications-loading?)
+(defn set-notifications-loading?! [v] (reset! notifications-loading? v))
+(defn get-notifications-unread-count [] @notifications-unread-count)
+(defn set-notifications-unread-count! [v] (reset! notifications-unread-count v))
+(defn get-notifications-filter-read? [] @notifications-filter-read?)
+(defn set-notifications-filter-read?! [v] (reset! notifications-filter-read? v))
+(defn get-notifications-filter-chips [] @notifications-filter-chips)
+(defn set-notifications-filter-chips! [v] (reset! notifications-filter-chips v))
+
+;; ============================================
+;; Export Functions - Groups
+;; ============================================
+(defn get-groups-state [] @groups-state)
+(defn set-groups-state! [v] (reset! groups-state v))
+(defn get-groups-loading? [] @groups-loading?)
+(defn set-groups-loading?! [v] (reset! groups-loading? v))
+(defn get-groups-filter-public? [] @groups-filter-public?)
+(defn set-groups-filter-public?! [v] (reset! groups-filter-public? v))
+(defn get-groups-filter-chips [] @groups-filter-chips)
+(defn set-groups-filter-chips! [v] (reset! groups-filter-chips v))
+
+;; ============================================
+;; Export Functions - Mentions
+;; ============================================
+(defn get-mentions-state [] @mentions-state)
+(defn set-mentions-state! [v] (reset! mentions-state v))
+(defn get-mentions-loading? [] @mentions-loading?)
+(defn set-mentions-loading?! [v] (reset! mentions-loading? v))
+
+;; ============================================
+;; Export Functions - Bookmarks
+;; ============================================
+(defn get-bookmarks-state [] @bookmarks-state)
+(defn set-bookmarks-state! [v] (reset! bookmarks-state v))
+(defn get-bookmarks-loading? [] @bookmarks-loading?)
+(defn set-bookmarks-loading?! [v] (reset! bookmarks-loading? v))
+
+;; ============================================
+;; Export Functions - Report
+;; ============================================
+(defn get-reports-state [] @reports-state)
+(defn set-reports-state! [v] (reset! reports-state v))
+(defn get-reports-loading? [] @reports-loading?)
+(defn set-reports-loading?! [v] (reset! reports-loading? v))
+(defn get-reports-selected-reason [] @reports-selected-reason)
+(defn set-reports-selected-reason! [v] (reset! reports-selected-reason v))
+(defn get-reports-create-desc-ctrl [] @reports-create-desc-ctrl)
+(defn set-reports-create-desc-ctrl! [v] (reset! reports-create-desc-ctrl v))
+
+;; ============================================
+;; Export Functions - Conversations
+;; ============================================
+(defn get-conversations-chats-state [] @conversations-chats-state)
+(defn set-conversations-chats-state! [v] (reset! conversations-chats-state v))
+(defn get-conversations-error-state [] @conversations-error-state)
+(defn set-conversations-error-state! [v] (reset! conversations-error-state v))
+
+;; ============================================
+;; Export Functions - New Chat
+;; ============================================
+(defn set-new-chat-following-state! [v] (reset! new-chat-following-state v))
+(defn set-new-chat-following-loading?! [v] (reset! new-chat-following-loading? v))
+
+;; ============================================
+;; Export Functions - WebSocket
+;; ============================================
+(defn get-websocket-channel [] @websocket-channel)
+(defn set-websocket-channel! [v] (reset! websocket-channel v))
+(defn get-websocket-heartbeat-timer [] @websocket-heartbeat-timer)
+(defn set-websocket-heartbeat-timer! [v] (reset! websocket-heartbeat-timer v))
+(defn get-websocket-active? [] @websocket-active?)
+(defn set-websocket-active?! [v] (reset! websocket-active? v))
+
+;; ============================================
+;; Export Functions - Network
+;; ============================================
+(defn get-network-subscription [] @network-subscription)
+(defn set-network-subscription! [v] (reset! network-subscription v))
+
+;; ============================================
+;; Directly export atoms (for :watch)
+;; ============================================
+
+;; Current user (auth)
+(def current-user-atom current-user)
+
+;; Main layout
+(def main-layout-current-tab-atom main-layout-current-tab)
+(def main-layout-theme-mode-atom main-layout-theme-mode)
+(def main-layout-is-pinned-atom main-layout-is-pinned)
+
+;; Lists
+(def lists-state-atom lists-state)
+(def lists-loading?-atom lists-loading?)
+(def lists-create-name-ctrl-atom lists-create-name-ctrl)
+(def lists-create-desc-ctrl-atom lists-create-desc-ctrl)
+(def lists-create-is-public?-atom lists-create-is-public?)
+
+;; Create Post
+(def create-post-posting?-atom create-post-posting?)
+(def create-post-upload-progress-atom create-post-upload-progress)
+(def create-post-selected-image-path-atom create-post-selected-image-path)
+
+;; Profile
+(def profile-state-atom profile-state)
+(def profile-user-posts-state-atom profile-user-posts-state)
+
+;; Timeline
+(def timeline-posts-state-atom timeline-posts-state)
+(def timeline-loading?-atom timeline-loading?)
+
+;; Post Detail
+(def post-detail-state-atom post-detail-state)
+
+;; Search
+(def search-query-atom search-query)
+(def search-results-atom search-results)
+(def search-type-atom search-type)
+(def search-loading?-atom search-loading?)
+(def search-history-atom search-history)
+(def search-filter-chips-atom search-filter-chips)
+
+;; Hashtag
+(def hashtag-state-atom hashtag-state)
+(def hashtag-posts-state-atom hashtag-posts-state)
+(def hashtag-loading?-atom hashtag-loading?)
+
+;; Trending
+(def trending-posts-state-atom trending-posts-state)
+(def trending-users-state-atom trending-users-state)
+(def trending-hashtags-state-atom trending-hashtags-state)
+(def trending-loading?-atom trending-loading?)
+(def trending-current-tab-atom trending-current-tab)
+(def trending-filter-chips-atom trending-filter-chips)
+
+;; Notifications
+(def notifications-state-atom notifications-state)
+(def notifications-loading?-atom notifications-loading?)
+(def notifications-unread-count-atom notifications-unread-count)
+(def notifications-filter-read?-atom notifications-filter-read?)
+(def notifications-filter-chips-atom notifications-filter-chips)
+
+;; Groups
+(def groups-state-atom groups-state)
+(def groups-loading?-atom groups-loading?)
+(def groups-filter-public?-atom groups-filter-public?)
+(def groups-filter-chips-atom groups-filter-chips)
+
+;; Mentions
+(def mentions-state-atom mentions-state)
+(def mentions-loading?-atom mentions-loading?)
+
+;; Bookmarks
+(def bookmarks-state-atom bookmarks-state)
+(def bookmarks-loading?-atom bookmarks-loading?)
+
+;; Report
+(def reports-state-atom reports-state)
+(def reports-loading?-atom reports-loading?)
+(def reports-selected-reason-atom reports-selected-reason)
+(def reports-create-desc-ctrl-atom reports-create-desc-ctrl)
+
+;; Conversations
+(def conversations-chats-state-atom conversations-chats-state)
+(def conversations-error-state-atom conversations-error-state)
+
+;; New Chat
+(def new-chat-following-state-atom new-chat-following-state)
+(def new-chat-following-loading?-atom new-chat-following-loading?)
+
+;; WebSocket
+(def websocket-channel-atom websocket-channel)
+(def websocket-heartbeat-timer-atom websocket-heartbeat-timer)
+(def websocket-active?-atom websocket-active?)
+
+;; Network
+(def network-subscription-atom network-subscription)

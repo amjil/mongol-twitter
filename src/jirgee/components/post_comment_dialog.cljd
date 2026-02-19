@@ -1,0 +1,103 @@
+(ns jirgee.components.post-comment-dialog
+  (:require [cljd.flutter :as f]
+            ["package:flutter/material.dart" :as m]
+            ["package:mongol/mongol.dart" :as mgl]
+            [components.dialog :as dialog]
+            [components.tokens :as tokens]
+            [components.text-field :as text-field]
+            [virtual-keyboard.keyboard :as keyboard]))
+
+(defn post-comment-dialog
+  "Immersive vertical comment dialog: ultra-lightweight version"
+  [{:keys [initial-comments on-submit on-cancel]}]
+  (let [data-atom (atom {:text ""})]
+    (f/widget
+      :managed [comment-ctrl (m/TextEditingController.)]
+      :get {{{:flds [surfaceVariant onSurface outlineVariant]} .-colorScheme
+             {:flds [titleLarge bodyMedium]} .-textTheme} m/Theme}
+      
+      (dialog/vertical-custom-dialog
+        {:width-factor 1.0
+         :height-factor 0.95
+         :inset-padding m/EdgeInsets.zero
+         :child 
+         (m/Column
+           .children
+           [;; --- A. Upper part: main interaction area ---
+            (m/Expanded
+              .child
+              (m/Stack
+                .children
+                [(m/Row
+                   .crossAxisAlignment m/CrossAxisAlignment.stretch
+                   .children
+                   [;; 1. Left: title area
+                    (m/Container
+                      .alignment m/Alignment.topCenter
+                      .padding (m/EdgeInsets.only .top (tokens/space :l) .left (tokens/space :m) .right (tokens/space :m))
+                      .decoration (m/BoxDecoration 
+                                    .border (m/Border .right (m/BorderSide .color surfaceVariant .width 1.5)))
+                      .child (mgl/MongolText "Comment"
+                               .style (.copyWith titleLarge 
+                                        .fontWeight m/FontWeight.bold
+                                        .color onSurface)))
+
+                    ;; 2. Middle: comment list (horizontal scroll flow)
+                    (m/Expanded
+                      .child 
+                      (m/ListView.builder
+                        .padding (m/EdgeInsets.all (tokens/space :l))
+                        .scrollDirection m/Axis.horizontal ;; Vertical text scrolls right
+                        .itemCount (count initial-comments)
+                        .itemBuilder (fn [ctx idx]
+                                       (let [comment (nth initial-comments idx)]
+                                         (m/Padding
+                                           .padding (m/EdgeInsets.only .right (tokens/space :l))
+                                           .child (m/Column
+                                                    .crossAxisAlignment m/CrossAxisAlignment.start
+                                                    .children
+                                                    [(m/CircleAvatar .radius 12.0 .backgroundColor surfaceVariant)
+                                                     (m/SizedBox .height (tokens/space :s))
+                                                     (mgl/MongolText comment 
+                                                       .style (.copyWith bodyMedium .height 1.5))]))))))
+
+                    ;; 3. Right: input area (integrated send button, remove floating bar)
+                    (m/Container
+                      .width 140.0
+                      .padding (m/EdgeInsets.all (tokens/space :m))
+                      .decoration (m/BoxDecoration 
+                                    .color (-> surfaceVariant (.withOpacity 0.2))
+                                    .border (m/Border .left (m/BorderSide .color outlineVariant .width 0.5)))
+                      .child (m/Stack
+                               .children
+                               [(text-field/text-field 
+                                  {:controller comment-ctrl
+                                   :hint-text "Comment..." 
+                                   :autofocus true
+                                   :max-lines nil
+                                   :on-changed #(swap! data-atom assoc :text %)})
+                                ;; Send button fixed at bottom right corner
+                                (m/Positioned
+                                  .bottom 0 .right 0
+                                  .child (f/widget
+                                           :watch [data data-atom]
+                                           (m/IconButton 
+                                             .icon (m/Icon m/Icons.send)
+                                             .color (if (seq (:text data)) 
+                                                      m/Colors.blueAccent 
+                                                      (.withOpacity onSurface 0.2))
+                                             .onPressed (when (seq (:text data))
+                                                          #(on-submit (:text @data-atom))))))]))])
+                 
+                 ;; --- Top: close button ---
+                 (m/Align
+                   .alignment m/Alignment.topRight
+                   .child (m/IconButton 
+                            .icon (m/Icon m/Icons.close)
+                            .onPressed on-cancel))]))
+
+            ;; --- B. Lower part: custom keyboard area ---
+            (m/Container
+              .decoration (m/BoxDecoration 
+                            .border (m/Border .top (m/BorderSide .color surfaceVariant .width 0.5)))
+              .child (keyboard/keyboard {}))])}))))

@@ -1,53 +1,101 @@
 (ns jirgee.services.auth
-  (:require
-   [jirgee.services.user :as user-service]
-   [jirgee.states.global :as gs]
-   [jirgee.common.utils :as utils]
-   [jirgee.common.response :as response]
-   [jirgee.services.shared-preferences :as sp]
+  (:require [jirgee.services.base :refer [client set-auth-header! safe-get-response]]
+            [jirgee.services.storage :as storage]
+            [jirgee.state :refer [set-current-user!]]))
 
-   ["package:flutter/widgets.dart" :as widgets]
-   ["package:http/http.dart" :as http]
-   ["dart:convert" :as convert]))
+;; --- Authentication Operations ---
 
-(defn login [ctx ^widgets/NavigatorState navigator info right]
-  (utils/show-indicator ctx)
-  (let [result (await
-                (http/post (Uri/http utils/base-url "/api/auth/login")
-                           .headers {"Content-Type" "application/json; charset=UTF-8"}
-                           .body
-                           (convert/jsonEncode
-                            info)))]
-    (response/response-message
-     ctx
-     result
-     (fn [x]
-       (user-service/save-token (get x "token"))
-       (user-service/save-info (get x "info"))
-       (.popUntil navigator (widgets.ModalRoute/withName "/"))))))
+;; Login
+(defn login [{:keys [email password]} on-success on-error]
+  (println "[Auth] login called, email:" (pr-str email))
+  (-> (.post client "/auth/login"
+             .data {"email" email "password" password})
+      (.then (fn [resp]
+               (println "[Auth] login request success, resp.data:" (pr-str (.-data resp)))
+               (let [data (.-data resp)
+                     token (get data "token")
+                     user (get data "user")]
+                 (println "[Auth] extracted token:" (pr-str token) "user:" (pr-str user))
+                 ;; 1. Inject Token into Dio global config
+                 (set-auth-header! token)
+                 ;; 2. Save Token and user info to SharedPreferences
+                 (storage/save-auth-data! token user)
+                 ;; 3. Put user into atom for app-wide use
+                 (set-current-user! (into {} user))
+                 ;; 4. Execute success callback, return user info
+                 (on-success data))))
+      (.catchError (fn [err]
+                     (println "[Auth] login request failed err:" (pr-str err))
+                     (when-let [resp (safe-get-response err)]
+                       (println "[Auth] response status:" (.-statusCode resp))
+                       (println "[Auth] response data:" (pr-str (.-data resp))))
+                     ;; Possible errors: 401 (wrong password), 404 (user not found)
+                     (on-error err)))))
 
-(defn signup [ctx ^widgets/NavigatorState navigator info]
-  (utils/show-indicator ctx)
-  (if (not= (get info "password")
-            (get info "password_confirmation"))
-    (utils/show-toast ctx "Password confirmation")
-    (let [result (await
-                  (http/post (Uri/http utils/base-url "/api/auth/signup")
-                             .headers {"Content-Type" "application/json; charset=UTF-8"}
-                             .body
-                             (convert/jsonEncode
-                              info)))]
-      (response/response-message
-       ctx
-       result
-       (fn [_] (.pushNamed navigator "/login"))))))
+;; Register: API expects user with email, username, password, display_name (see API.md)
+(defn register [user-params on-success on-error]
+  (println "[Auth] register called, user-params:" (pr-str user-params))
+  (let [nickname (or (get user-params "nickname") (get user-params "username") "")
+        api-user (-> user-params
+                     (dissoc "nickname")
+                     (assoc "username" nickname "display_name" nickname))
+        payload {"user" api-user}]
+    (println "[Auth] request payload:" (pr-str payload))
+    (-> (.post client "/auth/register" .data payload)
+        (.then (fn [resp]
+                 (println "[Auth] register request success, resp.data:" (pr-str (.-data resp)))
+                 (let [data (.-data resp)
+                       token (get data "token")
+                       user (get data "user")]
+                   ;; 1. Inject Token into Dio global config
+                   (set-auth-header! token)
+                   ;; 2. Save Token and user info to SharedPreferences
+                   (storage/save-auth-data! token user)
+                   ;; 3. Put user into atom for app-wide use
+                   (set-current-user! (into {} user))
+                   ;; 4. Execute success callback
+                   (on-success data))))
+        (.catchError (fn [err]
+                       (println "[Auth] register request failed err:" (pr-str err))
+                       (when-let [resp (safe-get-response err)]
+                         (println "[Auth] response status:" (.-statusCode resp))
+                         (println "[Auth] response data:" (pr-str (.-data resp))))
+                       (on-error err))))))
 
-(defn get-token []
-  (stream
-   (map (fn [result]
-          (swap! gs/state assoc :user-token result)
-          :ok-token))
-   (map (fn [[er st]]
-          :error-token))
-   :as-values
-   (.asStream (sp/get-value {:type :string :key "user-token"}))))
+;; Logout
+(defn logout [on-success]
+  ;; 1. Clear token from Dio Header
+  (set-auth-header! nil)
+  ;; 2. Clear current user from atom
+  (set-current-user! nil)
+  ;; 3. Clear locally persisted token and user info from SharedPreferences
+  (-> (storage/clear-auth-data!)
+      (.then (fn [_] (on-success true)))
+      (.catchError (fn [err]
+                     (println "Failed to clear auth data:" err)
+                     (on-success true)))))
+
+;; --- Password Management ---
+
+;; Request password reset email
+(defn forgot-password [email on-success on-error]
+  (-> (.post client "/auth/forgot_password" .data {"email" email})
+      (.then (fn [resp] (on-success (into {} (.-data resp)))))
+      (.catchError on-error)))
+
+;; Change password using reset token
+(defn reset-password [{:keys [token password password-confirmation]} on-success on-error]
+  (-> (.post client "/auth/reset_password"
+             .data {"token" token
+                    "password" password
+                    "password_confirmation" password-confirmation})
+      (.then (fn [resp] (on-success (into {} (.-data resp)))))
+      (.catchError on-error)))
+
+;; Change password while logged in
+(defn change-password [{:keys [current-password new-password]} on-success on-error]
+  (-> (.post client "/auth/change_password"
+             .data {"current_password" current-password
+                    "new_password" new-password})
+      (.then (fn [resp] (on-success (into {} (.-data resp)))))
+      (.catchError on-error)))

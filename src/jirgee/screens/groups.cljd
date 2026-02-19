@@ -1,0 +1,110 @@
+(ns jirgee.screens.groups
+  (:require [cljd.flutter :as f]
+            ["package:flutter/material.dart" :as m]
+            ["package:mongol/mongol.dart" :as mgl]
+            [components.app-bar :refer [mongol-side-layout]]
+            [components.chip :refer [filter-chip]]
+            [jirgee.services.group :as group-service]
+            [jirgee.state :refer [groups-state-atom
+                                  groups-loading?-atom
+                                  groups-filter-public?-atom
+                                  groups-filter-chips-atom
+                                  set-groups-state!
+                                  set-groups-loading?!
+                                  set-groups-filter-public?!]]
+            [pull-to-refresh.refresh :refer [horizontal-refresh]]))
+
+(defn- group-item [group]
+  (f/widget
+   :context ctx
+   :get {{{:flds [surfaceVariant onSurface]} .-colorScheme
+          {:flds [titleMedium bodySmall]} .-textTheme} m/Theme}
+   :let [name (get group "name" "")
+         description (get group "description" "")
+         avatar-url (get group "avatar_url")
+         members-count (get group "members_count" 0)
+         is-public (get group "is_public" false)]
+   (mgl/MongolListTile
+    .leading (m/CircleAvatar
+              .backgroundImage (when avatar-url (m/NetworkImage avatar-url))
+              .child (if-not avatar-url (m/Icon m/Icons.group) (m/SizedBox)))
+    .title (mgl/MongolText name .style titleMedium)
+    .subtitle (mgl/MongolText (str description " · " members-count " members") .style bodySmall)
+    .trailing (m/Row
+               .mainAxisSize m/MainAxisSize.min
+               .children
+               [(when is-public (m/Icon m/Icons.public .size 16.0))
+                (m/IconButton
+                 .icon (m/Icon m/Icons.arrow_forward_ios .size 16.0)
+                 .onPressed #(println "Navigate to group:" (get group "id")))])
+    .onTap #(println "Open group:" (get group "id")))))
+
+(defn groups-screen []
+  (f/widget
+   :context ctx
+   :watch [groups groups-state-atom
+           is-loading? groups-loading?-atom
+           public-filter? groups-filter-public?-atom
+           filter-chips groups-filter-chips-atom]
+   :get {{{:flds [surface]} .-colorScheme} m/Theme}
+   :let [load-groups! (fn []
+                        (set-groups-loading?! true)
+                        (-> (group-service/get-groups {:is-public public-filter?})
+                            (.then (fn [data]
+                                     (set-groups-state! data)
+                                     (set-groups-loading?! false)))
+                            (.catchError (fn [err]
+                                           (println "Load groups failed:" err)
+                                           (set-groups-loading?! false)))))
+         _ (let [selected-filter (first (keep (fn [[k v]] (when v k)) filter-chips))]
+             (when selected-filter
+               (let [new-public-filter? (case selected-filter
+                                          "all" nil
+                                          "public" true
+                                          nil)]
+                 (when (not= public-filter? new-public-filter?)
+                   (set-groups-filter-public?! new-public-filter?)
+                   (load-groups!)))))]
+
+   (mongol-side-layout
+    {:title "Groups"
+     :min-width 70.0
+     :body
+     (m/Scaffold
+      .backgroundColor surface
+      .body
+      (m/Column
+       .children
+       [;; Filter
+        (m/SingleChildScrollView
+         .scrollDirection m/Axis.horizontal
+         .padding (m/EdgeInsets.all 16.0)
+         .child
+         (m/Row
+          .children
+          [(filter-chip "all" "All" groups-filter-chips-atom
+                        :max-select 1
+                        :haptic? true)
+           (m/SizedBox .width 8.0)
+           (filter-chip "public" "Public" groups-filter-chips-atom
+                        :max-select 1
+                        :haptic? true)]))
+
+        ;; Group list
+        (m/Expanded
+         .child
+         (cond
+           is-loading?
+           (m/Center .child (m/CircularProgressIndicator))
+
+           (empty? groups)
+           (m/Center .child (mgl/MongolText "Empty"))
+
+           :else
+           (horizontal-refresh
+            {:on-refresh (fn [] (load-groups!))
+             :item-count (count groups)
+             :item-builder (fn [_ idx]
+                             (group-item (nth groups idx)))
+             :background-color surface
+             :reverse false})))]))})))

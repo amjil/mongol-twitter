@@ -1,0 +1,118 @@
+(ns jirgee.services.storage
+  (:require ["package:shared_preferences/shared_preferences.dart" :as sp]
+            ["dart:convert" :as convert]))
+
+;; --- SharedPreferences Keys ---
+(def ^:private token-key "auth_token")
+(def ^:private user-key "user_info")
+
+;; --- Token Management ---
+
+;; Save authentication token
+(defn save-token! [token]
+  (try
+    (let [prefs (await (sp/SharedPreferences.getInstance))]
+      (await (.setString prefs token-key token))
+      (println "✅ Token saved"))
+    (catch Exception e
+      (println "❌ Failed to save token:" e))))
+
+;; Get authentication token
+(defn get-token []
+  (try
+    (let [prefs (await (sp/SharedPreferences.getInstance))
+          token (await (.getString prefs token-key))]
+      (if (or (nil? token) (= token ""))
+        nil
+        token))
+    (catch Exception e
+      (println "❌ Failed to get token:" e)
+      nil)))
+
+;; Clear authentication token
+(defn clear-token! []
+  (try
+    (let [prefs (await (sp/SharedPreferences.getInstance))]
+      (await (.remove prefs token-key))
+      (println "✅ Token cleared"))
+    (catch Exception e
+      (println "❌ Failed to clear token:" e))))
+
+;; --- User Info Management ---
+
+;; Save user information (as JSON string)
+(defn save-user! [user]
+  (try
+    (let [prefs (await (sp/SharedPreferences.getInstance))
+          user-json (convert/jsonEncode user)]
+      (await (.setString prefs user-key user-json))
+      (println "✅ User info saved"))
+    (catch Exception e
+      (println "❌ Failed to save user info:" e))))
+
+;; Get user information
+(defn get-user []
+  (try
+    (let [prefs (await (sp/SharedPreferences.getInstance))
+          user-json (await (.getString prefs user-key))]
+      (if (or (nil? user-json) (= user-json ""))
+        nil
+        (try
+          (convert/jsonDecode user-json)
+          (catch Exception e
+            (println "❌ Failed to decode user info:" e)
+            nil))))
+    (catch Exception e
+      (println "❌ Failed to get user info:" e)
+      nil)))
+
+;; Clear user information
+(defn clear-user! []
+  (try
+    (let [prefs (await (sp/SharedPreferences.getInstance))]
+      (await (.remove prefs user-key))
+      (println "✅ User info cleared"))
+    (catch Exception e
+      (println "❌ Failed to clear user info:" e))))
+
+;; --- Combined Operations ---
+
+;; Save both token and user info
+(defn save-auth-data! [token user]
+  (save-token! token)
+  (save-user! user))
+
+;; Get both token and user info
+(defn get-auth-data []
+  (try
+    (let [prefs (await (sp/SharedPreferences.getInstance))
+          token (await (.getString prefs token-key))
+          user-json (await (.getString prefs user-key))]
+      (if (and token (not= token ""))
+        (let [user (if (and user-json (not= user-json ""))
+                     (try
+                       (convert/jsonDecode user-json)
+                       (catch Exception e
+                         (println "❌ Failed to decode user info:" e)
+                         nil))
+                     nil)]
+          {:token token :user user})
+        nil))
+    (catch Exception e
+      (println "❌ Failed to get auth data:" e)
+      nil)))
+
+;; Clear all authentication data
+(defn clear-auth-data! []
+  (try
+    (let [prefs (await (sp/SharedPreferences.getInstance))]
+      (await (.remove prefs token-key))
+      (await (.remove prefs user-key))
+      (println "✅ Auth data cleared"))
+    (catch Exception e
+      (println "❌ Failed to clear auth data:" e))))
+
+;; Check if user is logged in
+(defn is-logged-in? []
+  (let [token (get-token)]
+    (not (nil? token))))

@@ -1,0 +1,56 @@
+(ns jirgee.services.interaction
+  (:require [jirgee.services.base :refer [client]]))
+
+;; =============================================================================
+;; Interaction Service (likes, reposts, etc.)
+;; =============================================================================
+
+;; Like post
+(defn like-post [post-id]
+  (-> (.post client (str "/posts/" post-id "/like"))
+      (.then (fn [resp] (.-data resp)))
+      (.catchError (fn [err] (println "Like post failed:" err)))))
+
+;; Unlike post
+(defn unlike-post [post-id]
+  (-> (.delete client (str "/posts/" post-id "/like"))
+      (.then (fn [resp] (.-data resp)))
+      (.catchError (fn [err] (println "Unlike post failed:" err)))))
+
+;; Check if already liked
+(defn is-liked [post-id]
+  (-> (.get client (str "/posts/" post-id "/is_liked"))
+      (.then (fn [resp] (get (.-data resp) "is_liked" false)))
+      (.catchError (fn [err]
+                     (println "Check like status failed:" err)
+                     false))))
+
+;; Repost
+(defn repost [post-id {:keys [content visibility]
+                      :or {visibility "public"}}]
+  (-> (.post client (str "/posts/" post-id "/repost")
+             .data (when content {"post" {"content" content "visibility" visibility}}))
+      (.then (fn [resp] (get (.-data resp) "post")))
+      (.catchError (fn [err] (println "Repost failed:" err)))))
+
+;; Unrepost
+(defn unrepost [post-id]
+  (-> (.delete client (str "/posts/" post-id "/repost"))
+      (.then (fn [resp] (.-data resp)))
+      (.catchError (fn [err] (println "Unrepost failed:" err)))))
+
+;; Check if already reposted
+(defn is-reposted [post-id]
+  (-> (.get client (str "/posts/" post-id "/is_reposted"))
+      (.then (fn [resp] (get (.-data resp) "is_reposted" false)))
+      (.catchError (fn [err]
+                     (println "Check repost status failed:" err)
+                     false))))
+
+;; Check if following user
+(defn is-following [user-id]
+  (-> (.get client (str "/users/" user-id "/is_following"))
+      (.then (fn [resp] (get (.-data resp) "is_following" false)))
+      (.catchError (fn [err]
+                     (println "Check follow status failed:" err)
+                     false))))

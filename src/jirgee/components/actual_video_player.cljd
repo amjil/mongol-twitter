@@ -1,0 +1,60 @@
+(ns jirgee.components.actual-video-player
+  (:require ["package:flutter/material.dart" :as m]
+            ["dart:ui" :as ui]
+            ["dart:core" :as dc]
+            ["package:video_player/video_player.dart" :as vp]
+            [cljd.flutter :as f]))
+
+(defn actual-video-player [url cover-url]
+  (f/widget
+    :managed [controller (vp/VideoPlayerController.network url)]
+    :watch [_initialization! (.initialize controller)
+            ^vp/VideoPlayerValue
+            {:flds [isPlaying isInitialized]} controller]
+
+    :get {{{:keys [width]} .-size} m/MediaQuery}
+    :let [content-width (* width 0.5)]
+    (m/Container
+      .width content-width
+      .height content-width
+      .margin (m/EdgeInsets.only .right 20.0)
+      .clipBehavior m/Clip.antiAlias
+      .decoration (m/BoxDecoration .color (m/Color 0xFFF5F5F5) .borderRadius (m/BorderRadius.circular 8.0))
+      .child
+      (m/Stack
+        .fit m/StackFit.expand
+        .children
+        [;; Layer 1: cover image (always shown when video not initialized)
+         (m/Image.network cover-url .fit m/BoxFit.cover)
+         
+         ;; Layer 2: frosted glass blur layer (optional, adds artistic feel)
+         (if-not isInitialized
+           (m/BackdropFilter 
+             .filter (ui/ImageFilter.blur .sigmaX 10.0 .sigmaY 10.0)
+             .child (m/Container .color (m/Color 0x20FFFFFF)))
+           (m/SizedBox.shrink))
+
+         ;; Layer 3: actual video (fade in after loading)
+         (if isInitialized
+           (m/AnimatedOpacity
+             .opacity 1.0 .duration (dc/Duration .milliseconds 500)
+             .child (m/FittedBox .fit m/BoxFit.cover
+                      .child (m/SizedBox
+                               .width (.-width (.-size (.-value controller)))
+                               .height (.-height (.-size (.-value controller)))
+                               .child (vp/VideoPlayer controller))))
+           ;; Loading progress feedback for weak network: an extremely restrained linear progress bar
+           (m/Positioned .bottom 0 .left 0 .right 0
+             .child (m/LinearProgressIndicator 
+                      .minHeight 2.0
+                      .color m/Colors.white70 
+                      .backgroundColor m/Colors.transparent)))
+         
+         ;; Layer 4: interaction button
+         (m/GestureDetector
+           .onTap (fn [] (if isPlaying (.pause controller) (.play controller)) nil)
+           .child (m/Container .color m/Colors.transparent
+                    .child (if-not isPlaying
+                             (m/Center
+                               .child (m/Icon m/Icons.play_arrow .color m/Colors.white .size 40.0))
+                             (m/SizedBox.shrink))))]))))

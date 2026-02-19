@@ -1,0 +1,26 @@
+(ns jirgee.services.network
+  (:require ["package:connectivity_plus/connectivity_plus.dart" :as connectivity]
+            [jirgee.services.chat :as chat]
+            ["dart:async" :as async]
+            [jirgee.state :refer [network-subscription-atom
+                                  set-network-subscription!]]))
+
+(defn start-observing! []
+  (when (nil? @network-subscription-atom)
+    (println "📡 Starting network observer...")
+    (set-network-subscription!
+     (-> (connectivity/Connectivity)
+         .-onConnectivityChanged
+         (.listen (fn [results]
+                    ;; results is a List<ConnectivityResult>
+                    (let [results (if (coll? results) results [results]) ; Adapt to different version returns
+                          online? (some #(not= % connectivity/ConnectivityResult.none) results)]
+                      (when online?
+                        (println "🌐 Network restored, triggering sync...")
+                        ;; Trigger message sync
+                        (chat/sync-pending-actions)))))))))
+
+(defn stop-observing! []
+  (when-let [sub @network-subscription-atom]
+    (.cancel ^async/StreamSubscription sub)
+    (set-network-subscription! nil)))

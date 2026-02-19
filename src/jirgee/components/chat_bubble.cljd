@@ -1,0 +1,44 @@
+(ns jirgee.components.chat-bubble
+  (:require [cljd.flutter :as f]
+            ["package:flutter/material.dart" :as m]
+            ["package:mongol/mongol.dart" :as mgl]))
+
+(defn chat-bubble [msg is-me]
+  (let [content (.-content msg)
+        synced? (.-isSynced msg)]
+    (m/Padding
+      .padding (m/EdgeInsets.symmetric .horizontal 12.0 .vertical 8.0)
+      .child (m/Row
+               .mainAxisAlignment (if is-me m/MainAxisAlignment.end m/MainAxisAlignment.start)
+               .crossAxisAlignment m/CrossAxisAlignment.start
+               .children
+               [(if-not is-me 
+                  (m/Padding .padding (m/EdgeInsets.only .top 4.0)
+                    .child
+                    (m/CircleAvatar .radius 16.0 .backgroundColor m/Colors.black12))
+                  (m/SizedBox.shrink))
+                
+                (m/SizedBox .width 8.0)
+                
+                (m/Container
+                  .padding (m/EdgeInsets.symmetric .horizontal 12.0 .vertical 14.0)
+                  .constraints (m/BoxConstraints .maxHeight 300.0) ;; Limit vertical height
+                  .decoration (m/BoxDecoration
+                                .color (if is-me (m/Color 0xFFE1F5FE) (m/Color 0xFFF5F5F5))
+                                .borderRadius (m/BorderRadius.only
+                                                .topLeft (m/Radius.circular 12.0)
+                                                .topRight (m/Radius.circular 12.0)
+                                                .bottomLeft (m/Radius.circular (if is-me 12.0 0.0))
+                                                .bottomRight (m/Radius.circular (if is-me 0.0 12.0))))
+                  .child (m/Stack ;; Use Stack to place an "unsynced" icon in the corner
+                           .alignment m/Alignment.bottomRight
+                           .children
+                           [(mgl/MongolText content 
+                              .style (m/TextStyle .fontSize 17.0 
+                                                  .height 1.4 
+                                                  .color m/Colors.black87))
+                            (if (not synced?)
+                              (m/Padding .padding (m/EdgeInsets.only .top 4.0)
+                                .child
+                                (m/Icon m/Icons.access_time_rounded .size 10.0 .color m/Colors.black26))
+                              (m/SizedBox.shrink))]))]))))

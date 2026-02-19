@@ -1,0 +1,271 @@
+(ns jirgee.router
+  (:require ["package:flutter/material.dart" :as m]
+            [cljd.flutter :as f]
+            [jirgee.services.search :as search-service]
+            [jirgee.services.trending :as trending-service]
+            [jirgee.services.hashtag :as hashtag-service]
+            [jirgee.services.list :as list-service]
+            [jirgee.services.report :as report-service]
+            [jirgee.services.bookmark :as bookmark-service]
+            [jirgee.services.mention :as mention-service]
+            [jirgee.services.group :as group-service]
+            [jirgee.services.user :as user-service]
+            [jirgee.services.base :refer [client response-data]]
+            [jirgee.state :refer [
+                                  peer-id-atom
+                                  peer-name-atom
+                                  peer-my-id-atom
+                                  search-history-atom
+                                  search-results-atom
+                                  set-search-history!
+                                  set-search-results!
+                                  trending-posts-state-atom
+                                  trending-users-state-atom
+                                  trending-hashtags-state-atom
+                                  trending-loading?-atom
+                                  set-trending-posts-state!
+                                  set-trending-users-state!
+                                  set-trending-hashtags-state!
+                                  set-trending-loading?!
+                                  hashtag-state-atom
+                                  hashtag-name-atom
+                                  hashtag-posts-state-atom
+                                  hashtag-loading?-atom
+                                  set-hashtag-state!
+                                  set-hashtag-posts-state!
+                                  set-hashtag-loading?!
+                                  lists-state-atom
+                                  lists-loading?-atom
+                                  lists-create-name-ctrl-atom
+                                  lists-create-desc-ctrl-atom
+                                  set-lists-state!
+                                  set-lists-loading?!
+                                  set-lists-create-name-ctrl!
+                                  set-lists-create-desc-ctrl!
+                                  reports-state-atom
+                                  reports-loading?-atom
+                                  reports-create-desc-ctrl-atom
+                                  reportable-type-atom
+                                  reportable-id-atom
+                                  set-reports-state!
+                                  set-reports-loading?!
+                                  set-reports-create-desc-ctrl!
+                                  bookmarks-state-atom
+                                  bookmarks-loading?-atom
+                                  set-bookmarks-state!
+                                  set-bookmarks-loading?!
+                                  mentions-state-atom
+                                  mentions-loading?-atom
+                                  set-mentions-state!
+                                  set-mentions-loading?!
+                                  groups-state-atom
+                                  groups-loading?-atom
+                                  groups-filter-public?-atom
+                                  set-groups-state!
+                                  set-groups-loading?!
+                                  notifications-state-atom
+                                  notifications-loading?-atom
+                                  notifications-unread-count-atom
+                                  notifications-filter-read?-atom
+                                  set-notifications-state!
+                                  set-notifications-loading?!
+                                  set-notifications-unread-count!
+                                  set-new-chat-following-state!
+                                  set-new-chat-following-loading?!]]))
+
+;; Define global navigation key
+(defonce ^#/(m/GlobalKey m/NavigatorState) navigator-key (#/(m/GlobalKey m/NavigatorState)))
+
+(defn push-to-chat [peer-id peer-name my-id]
+  (reset! peer-id-atom peer-id)
+  (reset! peer-name-atom peer-name)
+  (reset! peer-my-id-atom my-id)
+  (.pushNamed (.currentState navigator-key) "/chat"))
+
+;; Navigate to new-chat page (load following list at entry, then push)
+(defn push-to-new-chat []
+  (set-new-chat-following-loading?! true)
+  (user-service/get-following
+   "me"
+   (fn [data]
+     (set-new-chat-following-state! (or data []))
+     (set-new-chat-following-loading?! false)
+     (.pushNamed (.currentState navigator-key) "/new-chat"))
+   (fn [_]
+     (set-new-chat-following-state! [])
+     (set-new-chat-following-loading?! false)
+     (.pushNamed (.currentState navigator-key) "/new-chat"))))
+
+;; Navigate to search page
+(defn push-to-search [ctx]
+  (let [results @search-results-atom]
+    ;; Initialize: Load search history
+    (search-service/load-history! {:set-history! set-search-history!})
+    ;; If results are empty, initialize results
+    (when (nil? results)
+      (set-search-results! {"users" [] "posts" [] "groups" []}))
+    (.pushNamed (.currentState navigator-key) "/search")))
+
+;; Navigate to trending page
+(defn push-to-trending [ctx]
+  (let [posts @trending-posts-state-atom]
+    ;; Initialize: If data is empty, load data
+    (when (nil? posts)
+      (set-trending-loading?! true)
+      (-> (trending-service/get-trending-posts {})
+          (.then (fn [data]
+                   (set-trending-posts-state! data)
+                   (-> (trending-service/get-trending-users {})
+                       (.then (fn [user-data]
+                                (set-trending-users-state! user-data)
+                                (-> (hashtag-service/get-trending {})
+                                    (.then (fn [hashtag-data]
+                                             (set-trending-hashtags-state! (get hashtag-data "hashtags" []))
+                                             (set-trending-loading?! false)))
+                                    (.catchError (fn [err]
+                                                   (println "Load hashtags failed:" err)
+                                                   (set-trending-loading?! false))))))
+                       (.catchError (fn [err]
+                                      (println "Load users failed:" err)
+                                      (set-trending-loading?! false))))))
+          (.catchError (fn [err]
+                         (println "Load posts failed:" err)
+                         (set-trending-loading?! false)))))
+    (.pushNamed (.currentState navigator-key) "/trending")))
+
+;; Navigate to lists page
+(defn push-to-lists [ctx]
+  (let [name-ctrl @lists-create-name-ctrl-atom
+        desc-ctrl @lists-create-desc-ctrl-atom
+        lists @lists-state-atom]
+    ;; Initialize: create controller
+    (when (nil? name-ctrl) (set-lists-create-name-ctrl! (m/TextEditingController.)))
+    (when (nil? desc-ctrl) (set-lists-create-desc-ctrl! (m/TextEditingController.)))
+    ;; Initialize: Load lists
+    (when (nil? lists)
+      (set-lists-loading?! true)
+      (-> (list-service/get-lists)
+          (.then (fn [data]
+                   (set-lists-state! data)
+                   (set-lists-loading?! false)))
+          (.catchError (fn [err]
+                         (println "Load lists failed:" err)
+                         (set-lists-loading?! false))))))
+  (.pushNamed (.currentState navigator-key) "/lists"))
+
+;; Navigate to report page
+(defn push-to-report [ctx {:keys [reportable-type reportable-id]}]
+  (let [desc-ctrl @reports-create-desc-ctrl-atom
+        reports @reports-state-atom]
+    ;; Initialize: Create controller
+    (when (nil? desc-ctrl) (set-reports-create-desc-ctrl! (m/TextEditingController.)))
+    ;; Initialize: Load reports list
+    (when (nil? reports)
+      (set-reports-loading?! true)
+      (-> (report-service/get-reports {})
+          (.then (fn [data]
+                   (set-reports-state! (get data "reports" []))
+                   (set-reports-loading?! false)))
+          (.catchError (fn [err]
+                         (println "Load reports failed:" err)
+                         (set-reports-loading?! false))))))
+  (reset! reportable-type-atom reportable-type)
+  (reset! reportable-id-atom reportable-id)
+
+  (.pushNamed (.currentState navigator-key) "/report"))
+
+;; Navigate to bookmarks page
+(defn push-to-bookmarks [ctx]
+  (let [bookmarks @bookmarks-state-atom]
+    ;; Initialize: Load bookmarks
+    (when (nil? bookmarks)
+      (set-bookmarks-loading?! true)
+      (-> (bookmark-service/get-bookmarks {})
+          (.then (fn [data]
+                  (set-bookmarks-state! (get data "bookmarks" []))
+                  (set-bookmarks-loading?! false)))
+          (.catchError (fn [err]
+                        (println "Load bookmarks failed:" err)
+                        (set-bookmarks-loading?! false))))))
+  (.pushNamed (.currentState navigator-key) "/bookmarks"))
+
+;; Navigate to mentions page
+(defn push-to-mentions [ctx]
+  (let [mentions @mentions-state-atom]
+    ;; Initialize: Load mentions
+    (when (nil? mentions)
+      (set-mentions-loading?! true)
+      (-> (mention-service/get-mentions {})
+          (.then (fn [data]
+                  (set-mentions-state! data)
+                  (set-mentions-loading?! false)))
+          (.catchError (fn [err]
+                        (println "Load mentions failed:" err)
+                        (set-mentions-loading?! false))))))
+  (.pushNamed (.currentState navigator-key) "/mentions"))
+
+;; Navigate to groups page
+(defn push-to-groups [ctx]
+  (let [groups @groups-state-atom]
+    ;; Initialize: Load groups
+    (when (nil? groups)
+      (set-groups-loading?! true)
+      (-> (group-service/get-groups {:is-public @groups-filter-public?-atom})
+          (.then (fn [data]
+                   (set-groups-state! data)
+                   (set-groups-loading?! false)))
+          (.catchError (fn [err]
+                         (println "Load groups failed:" err)
+                         (set-groups-loading?! false))))))
+  (.pushNamed (.currentState navigator-key) "/groups"))
+
+;; Navigate to notifications page
+(defn push-to-notifications [ctx]
+  ;; Initialize: Load notifications and unread count
+  (set-notifications-loading?! true)
+  (-> (.get client "/notifications"
+            .queryParameters (when @notifications-filter-read?-atom {"read" @notifications-filter-read?-atom}))
+      (.then (fn [resp]
+              (let [data (response-data resp)
+                    notifs (get data "notifications" [])]
+                (set-notifications-state! (mapv #(into {} %) (into [] (or notifs []))))
+                (set-notifications-loading?! false))))
+      (.catchError (fn [err]
+                    (println "Load notifications failed:" err)
+                    (set-notifications-loading?! false))))
+  (-> (.get client "/notifications/unread_count")
+      (.then (fn [resp]
+              (set-notifications-unread-count! (get (response-data resp) "unread_count" 0))))
+      (.catchError (fn [err] (println "Load unread count failed:" err))))
+  (.pushNamed (.currentState navigator-key) "/notifications"))
+
+;; Navigate to hashtag page
+(defn push-to-hashtag [ctx hashtag-name]
+  (let [hashtag @hashtag-state-atom]
+    ;; Initialize: Load hashtag data
+    (when (nil? hashtag)
+      (set-hashtag-loading?! true)
+      (-> (hashtag-service/get-hashtag hashtag-name)
+          (.then (fn [data]
+                   (set-hashtag-state! data)
+                   (when data
+                     (-> (hashtag-service/get-hashtag-posts hashtag-name {})
+                         (.then (fn [posts-data]
+                                  (set-hashtag-posts-state! (get posts-data "posts" []))
+                                  (set-hashtag-loading?! false)))
+                         (.catchError (fn [err]
+                                        (println "Load posts failed:" err)
+                                        (set-hashtag-loading?! false))))))
+                 (.catchError (fn [err]
+                                (println "Load hashtag failed:" err)
+                                (set-hashtag-loading?! false)))))))
+  (reset! hashtag-name-atom hashtag-name)
+  (.pushNamed (.currentState navigator-key) "/hashtag"))
+
+;; Navigate to register page
+(defn push-to-register [ctx]
+  (.pushNamed (.currentState navigator-key) "/register"))
+
+;; Navigate to create post page
+(defn push-to-create-post [ctx]
+  (.pushNamed (.currentState navigator-key) "/create-post"))
