@@ -18,12 +18,11 @@
                  (println "[Auth] extracted token:" (pr-str token) "user:" (pr-str user))
                  ;; 1. Inject Token into Dio global config
                  (set-auth-header! token)
-                 ;; 2. Save Token and user info to SharedPreferences
-                 (storage/save-auth-data! token user)
-                 ;; 3. Put user into atom for app-wide use
-                 (set-current-user! (into {} user))
-                 ;; 4. Execute success callback, return user info
-                 (on-success data))))
+                 ;; 2. Save Token and user info; then set user atom and callback
+                 (-> (storage/save-auth-data! token user)
+                     (.then (fn [_]
+                              (set-current-user! (into {} user))
+                              (on-success data))))))
       (.catchError (fn [err]
                      (println "[Auth] login request failed err:" (pr-str err))
                      (when-let [resp (safe-get-response err)]
@@ -49,12 +48,11 @@
                        user (get data "user")]
                    ;; 1. Inject Token into Dio global config
                    (set-auth-header! token)
-                   ;; 2. Save Token and user info to SharedPreferences
-                   (storage/save-auth-data! token user)
-                   ;; 3. Put user into atom for app-wide use
-                   (set-current-user! (into {} user))
-                   ;; 4. Execute success callback
-                   (on-success data))))
+                   ;; 2. Save Token and user info to SharedPreferences, then 3 & 4
+                   (-> (storage/save-auth-data! token user)
+                       (.then (fn [_]
+                                (set-current-user! (into {} user))
+                                (on-success data))))))
         (.catchError (fn [err]
                        (println "[Auth] register request failed err:" (pr-str err))
                        (when-let [resp (safe-get-response err)]
