@@ -7,7 +7,6 @@
 
 ;; Login
 (defn login [{:keys [email password]} on-success on-error]
-  (println "[Auth] login called, email:" (pr-str email))
   (-> (.post client "/auth/login"
              .data {"email" email "password" password})
       (.then (fn [resp]
@@ -22,7 +21,7 @@
                  (-> (storage/save-auth-data! token user)
                      (.then (fn [_]
                               (set-current-user! (into {} user))
-                              (on-success data))))))
+                              (on-success data)))))))
       (.catchError (fn [err]
                      (println "[Auth] login request failed err:" (pr-str err))
                      (when-let [resp (safe-get-response err)]
@@ -33,7 +32,6 @@
 
 ;; Register: API expects user with email, username, password, display_name (see API.md)
 (defn register [user-params on-success on-error]
-  (println "[Auth] register called, user-params:" (pr-str user-params))
   (let [nickname (or (get user-params "nickname") (get user-params "username") "")
         api-user (-> user-params
                      (dissoc "nickname")
@@ -52,7 +50,7 @@
                    (-> (storage/save-auth-data! token user)
                        (.then (fn [_]
                                 (set-current-user! (into {} user))
-                                (on-success data))))))
+                                (on-success data)))))))
         (.catchError (fn [err]
                        (println "[Auth] register request failed err:" (pr-str err))
                        (when-let [resp (safe-get-response err)]
