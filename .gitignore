@@ -5,9 +5,11 @@
 *.swp
 .DS_Store
 .atom/
+.build/
 .buildlog/
 .history
 .svn/
+.swiftpm/
 migrate_working_dir/
 
 # IntelliJ related
@@ -51,7 +53,7 @@ app.*.map.json
 /linux
 /web
 /ios
-/lib
+/lib/cljd-out
 /test
 /.lsp
 /.clj-kondo
@@ -72,3 +74,15 @@ test/cljd-out/
 lib/cljd-out/
 test/cljd-out/
 server/public/
+
+# ClojureDart
+.cpcache/
+.clojuredart/
+lib/cljd-out/
+test/cljd-out/
+
+# ClojureDart
+.cpcache/
+.clojuredart/
+lib/cljd-out/
+test/cljd-out/

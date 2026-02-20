@@ -77,10 +77,10 @@
 
 ;; --- Combined Operations ---
 
-;; Save both token and user info
+;; Save both token and user info. Returns a Promise; resolve after both writes complete.
 (defn save-auth-data! [token user]
-  (save-token! token)
-  (save-user! user))
+  (-> (save-token! token)
+      (.then (fn [_] (save-user! user)))))
 
 ;; Get both token and user info
 (defn get-auth-data []
