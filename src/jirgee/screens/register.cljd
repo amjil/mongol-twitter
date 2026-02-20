@@ -6,7 +6,7 @@
             [virtual-keyboard.keyboard :as keyboard]
             [jirgee.services.auth :as auth]
             [jirgee.services.base :refer [safe-get-response]]
-            [jirgee.main-layout :refer [main-layout]]
+            [jirgee.router :refer [navigate-to-home-after-login]]
             [components.toast :as toast]
             [components.text-field :refer [text-field]]))
 
@@ -131,11 +131,8 @@
                                                    "nickname" nickname}
                                                    (fn [_data]
                                                      (println "[Register] register success, navigating")
-                                                     ;; Navigate to main layout on successful registration
-                                                     (m/Navigator.pushReplacement
-                                                      ctx
-                                                      (m/MaterialPageRoute.
-                                                       .builder (fn [_] (main-layout))))
+                                                     ;; Clear stack and go to home so there is no back button
+                                                     (navigate-to-home-after-login)
                                                      nil)
                                                    (fn [err]
                                                      (println "[Register] register failed err:" (pr-str err))
