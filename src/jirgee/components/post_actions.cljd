@@ -4,8 +4,10 @@
             ["package:mongol/mongol.dart" :as mgl]
             ["dart:core" :as dc]
             ["dart:async" :as async]
-            [components.dialog :refer [vertical-custom-dialog]] ;; Import the provided component
-            [components.tokens :as tokens]))
+            [clojure.string :as str]
+            [components.tokens :as tokens]
+            [jirgee.components.post-comment-dialog :as comment-dialog]
+            [jirgee.services.comment :as comment-service]))
 
 ;; Extract single action button with built-in animation logic
 (defn- action-item [{:keys [icon active-icon count color active-color is-active on-tap]}]
@@ -42,27 +44,26 @@
                                    .fontWeight m/FontWeight.w500))])))))
 
 
-;; --- Call the provided vertical dialog ---
-(defn- open-comment-dialog [ctx]
+;; --- Comment dialog (same layout as feedback_dialog) ---
+(defn- open-comment-dialog [ctx post-id on-comment-sent]
   (m/showDialog
-    .context ctx
-    .builder
-    (fn [ctx]
-      (vertical-custom-dialog
-        {:title "Comment"
-         :body (m/SingleChildScrollView
-                 .child (mgl/MongolText "Add a comment..."
-                          .style (m/TextStyle .fontSize 16.0)))
-         :actions [(m/IconButton 
-                     .icon (m/Icon m/Icons.close) 
-                     .onPressed #(m/Navigator.pop ctx))
-                   (m/IconButton 
-                     .icon (m/Icon m/Icons.send .color m/Colors.blueAccent) 
-                     .onPressed #(println "Send comment"))]
-         :width-factor 0.9
-         :height-factor 0.7}))))
+   .context ctx
+   .builder
+   (fn [dialog-ctx]
+     (comment-dialog/post-comment-dialog
+      {:on-submit (fn [content]
+                    (when (and post-id (not (str/blank? content)))
+                      (comment-service/create-comment
+                       post-id
+                       (str/trim content)
+                       (fn [_resp]
+                         (m/Navigator.pop dialog-ctx)
+                         (when on-comment-sent (on-comment-sent)))
+                       (fn [err]
+                         (println "Create comment failed:" err)))))
+       :on-cancel #(m/Navigator.pop dialog-ctx)}))))
 
-(defn post-action-bar-vertical [{:keys [likes comments forwards is-liked on-like on-comment on-repost]}]
+(defn post-action-bar-vertical [{:keys [likes comments forwards is-liked on-like on-comment on-repost post-id on-comment-sent]}]
   (f/widget
    :context ctx
    :get {{{:flds [outlineVariant]} .-colorScheme} m/Theme}
@@ -84,7 +85,7 @@
 
       ;; Comment
       (action-item {:icon m/Icons.chat_bubble_outline :count comments
-                    :on-tap (or on-comment #(open-comment-dialog ctx))})
+                    :on-tap (or on-comment (when post-id #(open-comment-dialog ctx post-id on-comment-sent)) #())})
 
       (m/SizedBox .height 28.0)
 

@@ -68,9 +68,9 @@
                         (m/Container .key (m/ValueKey "p")
                                      .child (actual-video-player video-url cover-url))
                         (m/Container .key (m/ValueKey "c")
-                                     (post-video-preview
-                                      {:cover-url cover-url
-                                       :on-play #(reset! is-playing true)}))))
+                                     .child (post-video-preview
+                                             {:cover-url cover-url
+                                              :on-play #(reset! is-playing true)}))))
 
               :else (m/Container .color (m/Color 0xFFF0F0F0))))))
 
@@ -104,6 +104,7 @@
              :comments comments
              :forwards forwards
              :is-liked is-liked
+             :post-id id
              :on-like #(println "Like")
-             :on-comment #(println "Comment")
+             :on-comment nil
              :on-forward #(println "Forward")})))]))))))

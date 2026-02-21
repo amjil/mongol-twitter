@@ -65,6 +65,21 @@
                        (.get client path .options o)
                        (.get client path)))))))))
 
+;; DELETE with Authorization. Same pattern as get-with-auth.
+(defn delete-with-auth [path]
+  (let [token (get-auth-token)
+        opts (when token (dio/Options. .headers (dc/Map.from {"Authorization" (str "Bearer " token)})))]
+    (if opts
+      (.delete client path .options opts)
+      (-> (storage/get-auth-data)
+          (.then (fn [auth-data]
+                   (when auth-data (set-auth-header! (:token auth-data)))
+                   (let [t (get-auth-token)
+                         o (when t (dio/Options. .headers (dc/Map.from {"Authorization" (str "Bearer " t)})))]
+                     (if o
+                       (.delete client path .options o)
+                       (.delete client path)))))))))
+
 ;; Build headers map: Content-Type + Authorization when token present (same as post.cljd explicit Options).
 (defn- auth-headers [token]
   (dc/Map.from (cond-> {"Content-Type" "application/json"}

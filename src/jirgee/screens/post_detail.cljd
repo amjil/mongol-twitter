@@ -7,6 +7,7 @@
             [jirgee.services.user :as user-service]
             [jirgee.components.post-image-gallery :refer [post-image-gallery]]
             [jirgee.components.post-actions :refer [post-action-bar-vertical]]
+            [jirgee.components.post-comments-section :refer [post-comments-section]]
             [jirgee.components.actual-video-player :refer [actual-video-player]]))
 
 (declare post-detail-page)
@@ -33,7 +34,8 @@
 (defn post-detail-page [{:keys [post]}]
   (let [{:keys [id content image-urls video-url cover-url
                 author-id author-name author-avatar likes comments forwards is-liked]} post
-        progress-atom (atom 0.0)]
+        progress-atom (atom 0.0)
+        comments-count-atom (atom (or comments 0))]
     (f/widget
      :context ctx
      ;; 1. Use f/widget built-in :vsync binding
@@ -49,7 +51,7 @@
            slide-anim (-> (m/Tween .begin (m/Offset -0.2 0.0) .end m/Offset.zero)
                           (.animate (m/CurvedAnimation .parent anim-ctrl .curve m/Curves.easeOutCirc)))]
 
-     :watch [p progress-atom]
+     :watch [p progress-atom comments-count comments-count-atom]
      (m/Scaffold
       .backgroundColor surface
       .appBar (m/AppBar
@@ -85,9 +87,9 @@
                                     .padding (m/EdgeInsets.only .top 12.0)
                                     .child (m/GestureDetector
                                             .onTap #(when (and author-id (not-empty author-id))
-                                                     (do (user-service/load-profile-data! author-id)
-                                                         (m/Navigator.pushNamed ctx "/user-profile")
-                                                         nil))
+                                                     (user-service/load-profile-data! author-id)
+                                                     (m/Navigator.pushNamed ctx "/user-profile")
+                                                     nil)
                                             .child (m/Column
                                                     .mainAxisSize m/MainAxisSize.min
                                                     .children
@@ -138,7 +140,17 @@
                    (m/Padding
                     .padding (m/EdgeInsets.only .top (* height 0.2))
                     .child (post-action-bar-vertical
-                            {:likes likes :comments comments :forwards forwards :is-liked is-liked}))
+                            {:likes likes
+                             :comments comments-count
+                             :forwards forwards
+                             :is-liked is-liked
+                             :post-id (str id)
+                             :on-comment-sent #(swap! comments-count-atom inc)}))
+
+                   (m/SizedBox .width 32.0)
+
+                   ;; --- E. Comments list (tap to load, horizontal scroll) ---
+                   (post-comments-section (str id))
 
                    (m/SizedBox .width 160.0)]))
                 (m/Positioned

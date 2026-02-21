@@ -111,7 +111,8 @@
                          (do (interaction-service/like-post post-id)
                              (swap! likes-count-atom inc)))
                        (swap! is-liked-atom not))
-            :on-comment #(println "Open Comment UI")
+            :post-id post-id
+            :on-comment-sent #(swap! comments-count-atom inc)
             :on-repost #(println "Repost logic")})])))))))
 
 ;; --- 2. Main page: Clean horizontal scroll ---
