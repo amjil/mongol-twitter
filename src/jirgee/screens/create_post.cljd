@@ -4,10 +4,11 @@
             ["package:image_picker/image_picker.dart" :as picker]
             [virtual-keyboard.keyboard :as keyboard]
             [clojure.string :as str]
-            [components.app-bar :refer [mongol-side-layout]]
+            [jirgee.components.mongol-side-layout :refer [mongol-side-layout]]
             [components.text-field :refer [text-field]]
             [jirgee.services.upload :as upload-service]
             [jirgee.services.post :as post-service]
+            [jirgee.services.base :refer [is-401-error?]]
             ["dart:io" :as io]
             [jirgee.state :refer [create-post-posting?-atom
                                   create-post-upload-progress-atom
@@ -45,7 +46,9 @@
                                       (.pop navigator))
                                     (fn [err]
                                       (set-create-post-posting?! false)
-                                      (println "Create post failed:" err))))]
+                                      ;; 401 已由全局拦截器处理（logout + 跳转登录），无需重复日志
+                                      (when-not (is-401-error? err)
+                                        (println "Create post failed:" err)))))]
 
                  ;; Logic: upload image first if exists, otherwise post directly
                  (if image-path

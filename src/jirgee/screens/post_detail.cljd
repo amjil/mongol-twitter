@@ -66,8 +66,11 @@
                          (let [metrics (.-metrics notif)
                                pixels (.-pixels metrics)
                                max-extent (.-maxScrollExtent metrics)
-                               p (if (> max-extent 0) (/ pixels max-extent) 0.0)]
-                           (reset! progress-atom (.clamp p 0.0 1.0)))
+                               p (if (> max-extent 0) (/ pixels max-extent) 0.0)
+                               new-p (.clamp p 0.0 1.0)]
+                           ;; Defer setState: scroll notifications can fire during layout
+                           (.addPostFrameCallback m/WidgetsBinding.instance
+                             (fn [_] (reset! progress-atom new-p))))
                          false)
        .child (m/Stack
                .children

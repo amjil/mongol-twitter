@@ -1,5 +1,6 @@
 (ns jirgee.services.base
-  (:require ["package:dio/dio.dart" :as dio]
+  (:require [clojure.string :as cstr]
+            ["package:dio/dio.dart" :as dio]
             ["package:mongol_jirgee/database.dart" :as db]
             ["dart:core" :as dc]
             [virtual-keyboard.options :as keyboard-options]
@@ -27,6 +28,12 @@
 
 ;; Current token for interceptor; Dio headers must be Map<String, dynamic>, not Clojure map
 (def ^:private auth-token-atom (atom nil))
+
+;; Callback invoked on 401 (except auth paths). Set from main.cljd to clear auth and navigate to login.
+(defonce ^:private on-401-handler (atom nil))
+
+(defn set-on-401-handler! [f]
+  (reset! on-401-handler f))
 
 (defn set-auth-header! [token]
   (reset! auth-token-atom token))
@@ -85,7 +92,21 @@
   (dc/Map.from (cond-> {"Content-Type" "application/json"}
                  token (assoc "Authorization" (str "Bearer " token)))))
 
+;; Safely get response from error (if DioException), otherwise nil. Defined before interceptors that use it.
+(defn safe-get-response [err]
+  (try
+    (.-response err)
+    (catch Exception _ nil)
+    (catch dc/Error _ nil)))
+
+;; Return true if error is a 401 response. Use to avoid redundant logs when 401 handler already ran.
+(defn is-401-error? [err]
+  (or (when-let [resp (safe-get-response err)]
+        (== 401 (.-statusCode resp)))
+      (cstr/includes? (str err) "401")))
+
 ;; Request interceptor: set Authorization on every request. If atom has no token, load from storage first.
+;; Response interceptor: on 401 (except /auth/*), clear auth and navigate to login.
 (doto client
   (.interceptors.add
    (dio/InterceptorsWrapper
@@ -99,19 +120,22 @@
                                   (when auth-data (set-auth-header! (:token auth-data)))
                                   (let [t (get-auth-token)]
                                     (set! (.-headers options) (auth-headers t))
-                                    ((.-next handler) options)))))))))))
+                                    ((.-next handler) options))))))))))
+  (.interceptors.add
+   (dio/InterceptorsWrapper
+    .onError (fn [err handler]
+               (let [resp (safe-get-response err)
+                     status (when resp (.-statusCode resp))
+                     path (when (.-requestOptions err) (.-path (.-requestOptions err)))
+                     auth-path? (when path (cstr/includes? path "/auth/"))]
+                 (if (and (= status 401) (not auth-path?))
+                   (do (when-let [f @on-401-handler] (f))
+                       ((.-reject handler) err))
+                   ((.-reject handler) err)))))))
 
 ;; Convert Dio response body to Clojure map to avoid ICollection protocol errors with Dart Map
 (defn response-data [resp]
   (into {} (.-data resp)))
-
-;; Safely get response from error (if DioException), otherwise nil
-;; Handles NoSuchMethodError (Error type) internally so callers need not catch dynamic
-(defn safe-get-response [err]
-  (try
-    (.-response err)
-    (catch Exception _ nil)
-    (catch dc/Error _ nil)))
 
 ;; --- Database Configuration ---
 ;; Database state has been moved to jirgee.state

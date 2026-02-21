@@ -2,7 +2,7 @@
   (:require [cljd.flutter :as f]
             ["package:flutter/material.dart" :as m]
             ["package:mongol/mongol.dart" :as mgl]
-            [components.app-bar :refer [mongol-side-layout]]
+            [jirgee.components.mongol-side-layout :refer [mongol-side-layout]]
             [components.dialog :as dialog]
             [components.text-field :as text-field]
             [jirgee.services.report :as report-service]

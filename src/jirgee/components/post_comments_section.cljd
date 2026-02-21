@@ -3,8 +3,7 @@
             ["package:flutter/material.dart" :as m]
             ["package:mongol/mongol.dart" :as mgl]
             ["package:mongol_jirgee/post_frame_trigger.dart" :as post-frame-trigger]
-            [jirgee.services.comment :as comment-service]
-            ["dart:math" :as math]))
+            [jirgee.services.comment :as comment-service]))
 
 (defn- comment-item [comment]
   (let [user (get comment "user")
@@ -51,65 +50,66 @@
                                                  (assoc :loading false))))))))))]
 
      (if (not triggered)
-       ;; --- Initial state ---
-       (m/GestureDetector
-        .onTap load-fn!
-        .child (m/Container
-                .width 160.0
-                .alignment m/Alignment.center
-                .child (m/Column
-                        .mainAxisSize m/MainAxisSize.min
-                        .children
-                        [(m/Icon m/Icons.chat_bubble_outline .color m/Colors.black26 .size 28.0)
-                         (m/SizedBox .height 12.0)
-                         (mgl/MongolText "Comments" .style (m/TextStyle .fontSize 14.0 .color m/Colors.black26))])))
+       ;; --- Initial state: auto-load comments on mount, tap as fallback ---
+       (post-frame-trigger/PostFrameTrigger
+        .onLayout load-fn!
+        .child (m/GestureDetector
+                .onTap load-fn!
+                .child (m/Container
+                        .width 160.0
+                        .alignment m/Alignment.center
+                        .child (m/Column
+                                .mainAxisSize m/MainAxisSize.min
+                                .children
+                                [(m/Icon m/Icons.chat_bubble_outline .color m/Colors.black26 .size 28.0)
+                                 (m/SizedBox .height 12.0)
+                                 (mgl/MongolText "Comments" .style (m/TextStyle .fontSize 14.0 .color m/Colors.black26))]))))
 
        ;; --- Expanded state ---
        (m/Row
         .crossAxisAlignment m/CrossAxisAlignment.start
         .children
-        [(m/SizedBox .width 60.0)
-         (m/Padding
+        [(m/Padding
           .padding (m/EdgeInsets.only .top 12.0)
           .child
           (mgl/MongolText "Comments"
                           .style (m/TextStyle .fontSize 14.0 .color m/Colors.black26 .fontWeight m/FontWeight.bold)))
          (m/SizedBox .width 32.0)
 
-         (m/ConstrainedBox
-          .constraints (m/BoxConstraints .maxHeight (* height 0.65))
-          .child (m/ListView.builder
-                  .scrollDirection m/Axis.horizontal
-                  .shrinkWrap true
-                  .physics (m/ClampingScrollPhysics.)
-                  ;; Even if no more, we add one index to show "end" marker
-                  .itemCount (+ (count comments) 1)
-                  .itemBuilder
-                  (fn [ctx idx]
-                    (if (< idx (count comments))
-                      (comment-item (nth comments idx))
-                      ;; --- List end logic ---
-                      (if has-more
-                        ;; Case A: more available, show sentinel and trigger load
-                        (f/widget
-                         (post-frame-trigger/PostFrameTrigger
-                          .onLayout load-fn!)
-                         (m/Container
-                          .width 100.0
-                          .alignment m/Alignment.center
-                          .child (m/SizedBox .width 20.0 .height 20.0
-                                             .child (m/CircularProgressIndicator
-                                                     .strokeWidth 1.5
-                                                     .valueColor (m/AlwaysStoppedAnimation. m/Colors.black12)))))
-                        ;; Case B: all loaded, show an elegant end point
-                        (m/Container
-                         .width 100.0
-                         .alignment m/Alignment.center
-                         .child (m/Column
-                                 .mainAxisSize m/MainAxisSize.min
-                                 .children
-                                 [(m/Container .width 4.0 .height 4.0
-                                               .decoration (m/BoxDecoration .color m/Colors.black12 .shape m/BoxShape.circle))
-                                  (m/SizedBox .height 16.0)
-                                  (mgl/MongolText "End"
-                                                  .style (m/TextStyle .fontSize 12.0 .color m/Colors.black12))])))))))])))))
+         (m/ListView.builder
+          .scrollDirection m/Axis.horizontal
+          .shrinkWrap true
+          .physics (m/ClampingScrollPhysics.)
+          ;; Even if no more, we add one index to show "end" marker
+          .itemCount (+ (count comments) 1)
+          .itemBuilder
+          (fn [ctx idx]
+            (if (< idx (count comments))
+              (comment-item (nth comments idx))
+              ;; --- List end logic ---
+              (if has-more
+                ;; Case A: more available, show sentinel and trigger load
+                (f/widget
+                 (post-frame-trigger/PostFrameTrigger
+                  .onLayout load-fn!)
+                 (m/Container
+                  .width 100.0
+                  .alignment m/Alignment.center
+                  .child (m/SizedBox .width 20.0 .height 20.0
+                                     .child (m/CircularProgressIndicator
+                                             .strokeWidth 1.5
+                                             .valueColor (m/AlwaysStoppedAnimation. m/Colors.black12)))))
+                ;; Case B: all loaded, show an elegant end point
+                (m/Container
+                 .width 100.0
+                 .alignment m/Alignment.center
+                 .child (m/Column
+                         .mainAxisSize m/MainAxisSize.min
+                         .children
+                         [(m/Container .width 4.0 .height 4.0
+                                       .decoration (m/BoxDecoration .color m/Colors.black12 .shape m/BoxShape.circle))
+                          (m/SizedBox .height 16.0)
+                          (mgl/MongolText "End"
+                                          .style (m/TextStyle .fontSize 12.0 .color m/Colors.black12))]))))))])))))
+
+         

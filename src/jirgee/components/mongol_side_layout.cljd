@@ -1,0 +1,162 @@
+(ns jirgee.components.mongol-side-layout
+  "Side layout with sidebar (hidden <-> narrow strip). Replaces components.app-bar/mongol-side-layout."
+  (:require [cljd.flutter :as f]
+            ["package:flutter/material.dart" :as m]
+            ["package:flutter/physics.dart" :as p]
+            ["package:mongol/mongol.dart" :as mongol]))
+
+(defn mongol-side-layout
+  "Optimized single-state linked sidebar (hidden <-> narrow strip).
+   When `:pinned? true`, the sidebar is fixed and cannot be hidden."
+  [{:keys [title actions body min-width spring-config pinned? has-back-button?]
+    :or {min-width 40.0
+         spring-config {:mass 1.0 :stiffness 280.0 :damping 30.0}
+         pinned? false
+         has-back-button? true
+         actions []}}]
+  (let [state (atom {:width 0.0 :animation nil})
+        hidden-width 0.0]
+    (f/widget
+     :vsync vsync
+     :get {{{:flds [surface onSurface primary onSurfaceVariant] :as theme} .-colorScheme
+            {:flds [titleLarge]} .-textTheme} m/Theme
+           {padding .-padding} m/MediaQuery
+           navigator m/Navigator}
+     :managed [animator (m/AnimationController .vsync vsync)]
+     :watch [{:keys [width animation]} state]
+
+     :bg-watcher ([animated-width animation]
+                  (if (< animated-width 0.5)
+                    (swap! state assoc :width 0.0 :animation nil)
+                    (swap! state assoc :width animated-width)))
+
+     :let [effective-width (if pinned? min-width width)
+           progress (-> (/ effective-width min-width) (max 0.0) (min 1.0))
+           curve-progress (.transform (m/Curves.easeInOutCubic) progress)
+           padding-top (.-top padding)
+
+           main-scale (- 1.0 (* curve-progress 0.06))
+           main-offset (* effective-width 0.75)
+           main-radius (* curve-progress 24.0)
+
+           run-spring
+           (fn [target-w velocity]
+             (when-not pinned?
+               (.stop animator)
+               (let [{:keys [mass stiffness damping]} spring-config
+                     spring (p/SpringDescription .mass mass .stiffness stiffness .damping damping)
+                     sim (p/SpringSimulation spring width target-w velocity)]
+                 (swap! state assoc :animation
+                        (.drive animator (m/Tween .begin width .end target-w)))
+                 (.animateWith animator sim)))
+             nil)]
+
+     (m/PopScope
+      .canPop (<= effective-width 0.0)
+      .onPopInvokedWithResult (fn [did-pop _]
+                                (when (and (not did-pop) (not pinned?))
+                                  (run-spring hidden-width 0.0))))
+
+     (m/GestureDetector
+      .behavior m/HitTestBehavior.translucent
+      .onHorizontalDragDown (when-not pinned?
+                              (fn [_]
+                                (.stop animator)
+                                (swap! state assoc :animation nil)
+                                nil))
+      .onHorizontalDragUpdate (when-not pinned?
+                                (fn [^m/DragUpdateDetails details]
+                                  (let [dx (.-dx (.-delta details))]
+                                    (swap! state assoc :width (-> (+ width dx) (max hidden-width) (min min-width)))
+                                    nil)))
+      .onHorizontalDragEnd
+      (when-not pinned?
+        (fn [^m/DragEndDetails details]
+          (let [vx (.-dx (.-pixelsPerSecond (.-velocity details)))
+                target (cond (< vx -300) hidden-width
+                             (> vx 300)  min-width
+                             (< width (* min-width 0.6)) hidden-width
+                             :else min-width)]
+            (run-spring target vx) nil)))
+
+      .child
+      (m/Stack
+       .children
+       [(m/Positioned.fill .child (m/Container .color (.-surface theme)))
+
+        (m/Transform.translate
+         .offset (m/Offset main-offset 0.0)
+         .child (m/Transform.scale
+                 .scale main-scale
+                 .child (m/ClipRRect
+                         .borderRadius (m/BorderRadius.circular main-radius)
+                         .child body)))
+
+        (if (and (> effective-width 0.0) (not pinned?))
+          (m/Positioned.fill
+           .child (m/GestureDetector
+                   .onTap #(run-spring hidden-width -600.0)
+                   .child (m/Container .color (m/Colors.black.withOpacity (* progress 0.35)))))
+          (m/SizedBox.shrink))
+
+        (if (> effective-width 0.0)
+          (m/Positioned
+           .left 0 .top 0 .bottom 0 .width 25.0
+           .child (m/Container .color m/Colors.transparent))
+          (m/SizedBox.shrink))
+
+        (m/Positioned
+         .left 0 .top 0 .bottom 0
+         .child
+         (m/Container
+          .width effective-width
+          .decoration (m/BoxDecoration
+                       .color (-> surface (.withOpacity (min 0.98 (+ 0.8 (* 0.15 progress)))))
+                       .border (m/Border .right (m/BorderSide .color (-> onSurface (.withOpacity 0.08)))))
+          .child
+          (m/Column
+           .children
+           [(m/Expanded
+             .child (m/Center
+                     .child (m/Opacity
+                             .opacity (-> (* progress 2.0) (min 1.0))
+                             .child (mongol/MongolText title
+                                                       .style (-> titleLarge
+                                                                  (.copyWith .color onSurface
+                                                                            .fontWeight m/FontWeight.w600
+                                                                            .fontSize 20.0))))))
+            (m/Padding
+             .padding (m/EdgeInsets.only .bottom 16.0)
+                     .child (m/Column
+                     .children
+                     (into [] (map (fn [{:keys [icon on-tap]}]
+                                     (m/Opacity
+                                      .opacity progress
+                                      .child (m/IconButton .icon (m/Icon icon .color onSurfaceVariant)
+                                                           .onPressed on-tap)))
+                                   (or actions [])))))])))
+
+        (if has-back-button?
+          (m/Align
+           .alignment m/Alignment.topLeft
+           .child
+           (m/IconButton
+            .icon (m/Icon m/Icons.arrow_back .color primary)
+            .onPressed #(do (.pop navigator) nil)))
+          (m/SizedBox.shrink))
+
+        (m/Positioned
+         .left 0 .top (+ padding-top 40.0)
+         .child
+         (m/Opacity
+          .opacity (-> (- 1.0 (* progress 3.0)) (max 0.0))
+          .child
+          (m/GestureDetector
+           .onTap #(run-spring min-width 0.0)
+           .child
+           (m/Container
+            .width 6.0 .height 100.0
+            .decoration (m/BoxDecoration
+                         .color (-> primary (.withOpacity 0.4))
+                         .borderRadius (m/BorderRadius.only .topRight (m/Radius.circular 12.0)
+                                                           .bottomRight (m/Radius.circular 12.0)))))))])))))

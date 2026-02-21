@@ -266,6 +266,15 @@
 (defn navigate-to-home-after-login []
   (.pushNamedAndRemoveUntil (.currentState navigator-key) "/home" (fn [_] false)))
 
+;; Navigate to login on 401 (token expired/invalid), clear entire stack.
+;; Use addPostFrameCallback so navigation runs after build; Dio callbacks may run before Navigator is ready.
+(defn navigate-to-login-on-401 []
+  (.addPostFrameCallback m/WidgetsBinding.instance
+    (fn [_]
+      (when-let [state (.-currentState navigator-key)]
+        (.pushNamedAndRemoveUntil state "/login" (fn [_] false)))
+  
+      nil)))
 ;; Navigate to register page
 (defn push-to-register [ctx]
   (.pushNamed (.currentState navigator-key) "/register"))

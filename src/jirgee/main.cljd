@@ -4,7 +4,8 @@
             [cljd.flutter :as f]
             [virtual-keyboard.options :as keyboard-options]
             [jirgee.main-layout :refer [main-layout]]
-            [jirgee.router :refer [navigator-key]]
+            [jirgee.router :refer [navigator-key navigate-to-login-on-401]]
+            [jirgee.services.auth :as auth]
             [jirgee.state :refer [set-current-user!]]
             [jirgee.services.base :as base]
             [jirgee.services.network :as network]
@@ -66,6 +67,12 @@
 (defn- init-and-start 
   "Initialize and start app"
   []
+  ;; Register 401 handler: clear auth and navigate to login. Call both immediately so we
+  ;; don't depend on storage/clear-auth-data! returning a Future; auth/logout clears atom sync.
+  (base/set-on-401-handler!
+   (fn []
+     (auth/logout identity)
+     (navigate-to-login-on-401)))
   (-> (storage/get-auth-data)
       (.then (fn [auth-data]
                 (let [initial-route (if auth-data
