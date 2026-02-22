@@ -1,5 +1,6 @@
 (ns jirgee.services.post
-  (:require [jirgee.services.base :refer [post-with-auth get-with-auth]]
+  (:require [jirgee.services.base :refer [post-with-auth get-with-auth is-401-error?]]
+            [jirgee.router :refer [navigate-to-login-on-401]]
             [jirgee.state :refer [set-timeline-posts-state!
                                   set-timeline-loading?!]]))
 
@@ -20,7 +21,9 @@
       (.then (fn [resp]
                (set-timeline-posts-state! (or (get (.-data resp) "posts") []))
                (set-timeline-loading?! false)))
-      (.catchError (fn [_]
-                     (set-timeline-posts-state! [])
-                     (set-timeline-loading?! false))))
+      (.catchError (fn [err]
+                     (set-timeline-loading?! false)
+                     (if (is-401-error? err)
+                       (navigate-to-login-on-401)
+                       (set-timeline-posts-state! [])))))
   nil)
