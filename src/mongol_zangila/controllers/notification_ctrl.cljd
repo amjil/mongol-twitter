@@ -1,0 +1,43 @@
+(ns mongol-zangila.controllers.notification-ctrl
+  "Domain controller for handling user notifications.
+   Orchestrates local state clearing, global badge sync, and background read markers."
+  (:require
+   ["dart:core" :as dc]
+   [mongol-zangila.state :as state]
+   [mongol-zangila.infrastructure.api :as api]
+   [components.toast :as toast]))
+
+(defn load-notifications! 
+  "Fetches paginated notifications."
+  [ctx !notifications !page !has-more? !loading-state? is-refresh?]
+  (when is-refresh?
+    (reset! !page 1)
+    (reset! !has-more? true))
+  
+  (reset! !loading-state? true)
+  
+  (-> (api/get-req (str "/notifications?page=" @!page))
+      (.then (fn [res]
+               (let [new-notes (get res "data" [])]
+                 (if is-refresh?
+                   (reset! !notifications new-notes)
+                   (swap! !notifications #(vec (concat % new-notes))))
+                 
+                 ;; 假设后端默认每页返回 20 条，如果少于 20 条说明触底了
+                 (if (< (count new-notes) 20) 
+                   (reset! !has-more? false)
+                   (swap! !page inc))
+                 
+                 (reset! !loading-state? false))))
+      (.catchError (fn [err]
+                     (reset! !loading-state? false)
+                     ;; ⚡ 补回了原来的 Toast 错误提示
+                     (toast/error ctx (str "Мэдэгдэл татахад алдаа гарлаа: " err) :fade)))))
+
+(defn mark-all-read!
+  "⚡ Optimistically flushes the global unread count to 0 instantly,
+   then syncs all unread notifications to the backend in one request."
+  []
+  (reset! state/unread-notifications-count 0)
+  (-> (api/post-req "/notifications/read-all" {})
+      (.catchError (fn [_] nil))))

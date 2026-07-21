@@ -1,0 +1,157 @@
+(ns mongol-zangila.ui.scanner.view
+  "Hardware-accelerated optical scanner viewport.
+   Processes camera feeds to decode QR codes, featuring an LTR-optimized HUD 
+   and semantic routing upon successful payload extraction."
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:flutter/services.dart" :as services]
+   ["package:mobile_scanner/mobile_scanner.dart" :as ms]
+   ["package:mongol/mongol.dart" :as mgl]
+   ["dart:core" :as dc]
+   ["dart:async" :as async]
+   [cljd.flutter :as f]
+   [clojure.string :as str]
+   
+   ;; UI & Shared Components
+   [mongol-zangila.ui.theme :as theme]
+   [mongol-zangila.utils.nav :as nav]
+   [components.toast :as toast]))
+
+;; =============================================================================
+;; 1. Payload Parsing & Routing Logic
+;; =============================================================================
+
+(defn- handle-scan-capture!
+  [ctx ^ms/BarcodeCapture capture !scanned? ^ms/MobileScannerController scanner-ctrl]
+  (when-not @!scanned?
+    (let [barcodes (.-barcodes capture)]
+      (when-let [^ms/Barcode first-code (first barcodes)]
+        (let [raw-value (.-rawValue first-code)]
+          (when-not (str/blank? raw-value)
+            ;; Lock state
+            (reset! !scanned? true)
+            ;; Stop camera hardware immediately
+            (.stop scanner-ctrl)
+            (services/HapticFeedback.vibrate)
+            
+            (if (str/starts-with? raw-value "mz://user/")
+              (let [user-id (subs raw-value 10)]
+                (nav/pop! ctx)
+                (nav/push! ctx "/profile/view" {:user-id user-id}))
+              
+              ;; Fallback for invalid codes
+              (do
+                (toast/info ctx "Тодорхойгүй код байна.")
+                (async/Timer. 
+                 (dc/Duration. .seconds 2)
+                 (fn []
+                   (reset! !scanned? false)
+                   (.start scanner-ctrl)
+                   nil))))))))) 
+  nil)
+
+;; =============================================================================
+;; 2. Visual Overlay (The Targeting Reticle)
+;; =============================================================================
+
+(defn- scanner-overlay []
+  (m/Stack
+   .children
+   [(m/Container .color (.withOpacity m/Colors.black 0.6))
+    (m/Center
+     .child
+     (m/Container
+      .width 280.0
+      .height 280.0
+      .decoration (m/BoxDecoration
+                   .borderRadius (m/BorderRadius.circular 16.0)
+                   .border (m/Border.all .color theme/brand-blue .width 3.0))))]))
+
+;; =============================================================================
+;; 3. The Main Scanner Screen Widget
+;; =============================================================================
+
+(defn scanner-screen []
+  (let [!scanned? (atom false)
+        !torch-on? (atom false)]
+    
+    (f/widget
+     :context ctx
+     
+     ;; ⚡ 极简生命周期：只负责创建和销毁控制器，不搞延迟挂载
+     :managed [scanner-ctrl (ms/MobileScannerController. 
+                             .facing ms/CameraFacing.back
+                             .detectionSpeed ms/DetectionSpeed.noDuplicates)
+               :dispose .dispose]
+               
+     :watch [torch-on? !torch-on?]
+
+     (m/Scaffold
+      .backgroundColor m/Colors.black
+      
+      .body
+      (m/Stack
+       .children
+       [
+        ;; --- A. Camera Feed ---
+        (ms/MobileScanner
+         .controller scanner-ctrl
+         .onDetect #(handle-scan-capture! ctx % !scanned? scanner-ctrl)
+         
+         ;; ⚡ 安全网：如果权限被拒绝或发生硬件级错误，在这里接管，防止闪退
+         .errorBuilder (fn [c error _]
+                         (m/Center 
+                          .child (m/Column
+                                  .mainAxisSize m/MainAxisSize.min
+                                  .children
+                                  [(m/Icon m/Icons.videocam_off_rounded .color theme/error-red .size 48.0)
+                                   (m/SizedBox .height 24.0)
+                                   (mgl/MongolText "Камерын эрх олгогдоогүй байна."
+                                                   .style (m/TextStyle .color m/Colors.white 
+                                                                       .fontFamily "OyunQaganTig"
+                                                                       .fontSize 16.0))]))))
+        
+        ;; --- B. Overlay ---
+        (m/Positioned.fill .child (scanner-overlay))
+        
+        ;; --- C. Instructional Text ---
+        (m/Align
+         .alignment (m/Alignment 0.7 0.0)
+         .child (m/Container
+                 .padding (m/EdgeInsets.symmetric .vertical 24.0 .horizontal 12.0)
+                 .decoration (m/BoxDecoration 
+                              .color (.withOpacity m/Colors.black 0.7)
+                              .borderRadius (m/BorderRadius.circular 24.0))
+                 .child (mgl/MongolText "QR кодыг голлуулна уу"
+                                        .style (m/TextStyle .color m/Colors.white 
+                                                            .fontFamily "OyunQaganTig" 
+                                                            .fontSize 16.0))))
+        
+        ;; --- D. Floating HUD ---
+        (m/SafeArea
+         .child
+         (m/Padding
+          .padding (m/EdgeInsets.all 16.0)
+          .child
+          (m/Column
+           .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+           .crossAxisAlignment m/CrossAxisAlignment.start
+           .children
+           [
+            (m/Container
+             .decoration (m/BoxDecoration .color (.withOpacity m/Colors.black 0.4) .shape m/BoxShape.circle)
+             .child (m/IconButton
+                     .icon (m/Icon m/Icons.close_rounded .color m/Colors.white)
+                     .onPressed (fn [] 
+                                  (nav/pop! ctx)
+                                  nil)))
+            
+            (m/Container
+             .decoration (m/BoxDecoration .color (.withOpacity m/Colors.black 0.4) .shape m/BoxShape.circle)
+             .child (m/IconButton
+                     .icon (m/Icon (if torch-on? m/Icons.flash_on_rounded m/Icons.flash_off_rounded) 
+                                   .color (if torch-on? theme/warning-yellow m/Colors.white))
+                     .onPressed (fn []
+                                  (.toggleTorch scanner-ctrl)
+                                  (swap! !torch-on? not)
+                                  nil)))])))])))))

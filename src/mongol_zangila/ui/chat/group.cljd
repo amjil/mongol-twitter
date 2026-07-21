@@ -1,0 +1,134 @@
+(ns mongol-zangila.ui.chat.group
+  "Group messaging thread viewport.
+   Supports infinite scroll pagination, offline retries, and immersive media viewing."
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol_zangila/post_frame_trigger.dart" :as pft]
+   [cljd.flutter :as f]
+
+   [mongol-zangila.state :as state]
+   [mongol-zangila.controllers.chat-ctrl :as chat-ctrl]
+
+   [rich-editor.components.simple-editor :as simple-editor]
+
+   [mongol-zangila.ui.theme :as theme]
+   [mongol-zangila.utils.nav :as nav]
+   
+   [mongol-zangila.ui.chat.components.message-bubble :as msg-bubble]
+   [mongol-zangila.ui.chat.components.voice-bubble :as voice-bubble]
+   [mongol-zangila.ui.chat.components.chat-composer :as composer]))
+
+(defn group-chat-screen
+  [group-id group-name member-count]
+  (let [!messages (atom [])
+        !loading? (atom true)
+        !chat-topic (atom nil)
+        
+        ;; ⚡ 核心修复：直接接管底层返回的 Atom，绝不嵌套
+        !editor-state (simple-editor/init-simple-state)
+        
+        !input-mode (atom :text)
+        !is-recording? (atom false)
+        
+        ;; ⚡ 分页核心状态
+        !loading-more? (atom false)
+        !has-more? (atom true)
+        
+        current-user @state/current-user
+        current-user-id (get current-user "id")
+        
+        cleanup-fn! (fn [_]
+                      (when-let [topic @!chat-topic]
+                        (chat-ctrl/unsubscribe-thread! topic)))]
+
+    (f/widget
+     :context ctx
+     
+     ;; ⚡ 初始化 ScrollController 并绑定触顶加载监听
+     :managed [scroll-ctrl (let [sc (m/ScrollController.)]
+                             (.addListener sc 
+                                           (fn []
+                                             (let [pos (.-position sc)]
+                                               ;; 当距离最顶部（因为 reverse=true，所以是 maxScrollExtent）小于 200 像素时触发预加载
+                                               (when (and (>= (.-pixels pos) (- (.-maxScrollExtent pos) 200.0))
+                                                          (not @!loading-more?)
+                                                          @!has-more?)
+                                                 (reset! !loading-more? true)
+                                                 ;; 传入 group-topic 确保在数据库中查找到正确的群聊记录
+                                                 (-> (chat-ctrl/load-older-messages! ctx (chat-ctrl/group-topic group-id) (count @!messages) !messages !has-more?)
+                                                     (.whenComplete #(reset! !loading-more? false)))))))
+                             sc)
+               :dispose .dispose
+               
+               dummy-ctrl nil :dispose cleanup-fn!]
+               
+     :watch [messages !messages
+             loading? !loading?
+             has-more? !has-more?]
+
+     (pft/PostFrameTrigger
+      .onLayout #(chat-ctrl/initialize-group-thread! ctx group-id !messages !loading? current-user-id !chat-topic)
+      .child
+      (m/Scaffold
+       .backgroundColor theme/bg-color
+
+       .appBar
+       (m/AppBar
+        .backgroundColor m/Colors.white
+        .elevation 0.5
+        .leading (m/IconButton .icon (m/Icon m/Icons.arrow_back_rounded .color theme/text-primary) .onPressed #(nav/pop! ctx))
+        .title (m/Column .crossAxisAlignment m/CrossAxisAlignment.start
+                         .children [(m/Text group-name .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 18.0 .fontWeight m/FontWeight.bold .color theme/text-primary))
+                                    (m/Text (str member-count " гишүүнтэй") .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 12.0 .color theme/text-secondary))])
+        .actions [(m/IconButton .icon (m/Icon m/Icons.info_outline_rounded .color theme/brand-blue) .onPressed #(nav/push! ctx "/chat/group-info" {:group-id group-id}))])
+
+       .body
+       (m/Column
+        .children
+        [
+         ;; --- A. Feed ---
+         (m/Expanded
+          .child
+          (if loading?
+            (m/Center .child (m/CircularProgressIndicator .color theme/brand-blue))
+            (m/ListView.builder
+             .controller scroll-ctrl ;; ⚡ 绑定滚动控制器
+             .scrollDirection m/Axis.horizontal
+             .reverse true
+             .padding (m/EdgeInsets.symmetric .horizontal 16.0)
+             .physics (m/AlwaysScrollableScrollPhysics. .parent (m/BouncingScrollPhysics.)) ;; ⚡ 保证内容不够也能触发滚动
+             
+             ;; ⚡ 预留一个位置给顶部的加载菊花图
+             .itemCount (if has-more? (inc (count messages)) (count messages))
+             
+             .itemBuilder
+             (fn [_ i]
+               ;; ⚡ 当渲染到最后一个假索引时，显示加载圈
+               (if (= i (count messages))
+                 (m/Padding 
+                  .padding (m/EdgeInsets.only .right 24.0 .left 24.0)
+                  .child (m/Center .child (m/SizedBox .width 24.0 .height 24.0 
+                                                      .child (m/CircularProgressIndicator .strokeWidth 2.0 .color theme/brand-blue))))
+                 
+                 (let [msg (nth messages i) m-type (get msg "type" "text")]
+                   (cond
+                     (= m-type "system") (msg-bubble/system-bubble (get msg "content"))
+                     (= m-type "audio")  (voice-bubble/voice-bubble ctx msg current-user-id
+                                                                    :show-sender-info? true
+                                                                    :on-retry! #(chat-ctrl/retry-message! ctx group-id % !messages))
+                     ;; ⚡ 传入 on-retry! 重发回调
+                     :else               (msg-bubble/chat-bubble ctx msg current-user-id
+                                                                 :show-sender-info? true
+                                                                 :on-retry! #(chat-ctrl/retry-message! ctx group-id % !messages)))))))))
+
+         ;; --- B. Bottom Area ---
+         ;; ⚡ The Reusable Composer
+         (composer/chat-composer 
+          ctx 
+          !editor-state 
+          !input-mode 
+          !is-recording? 
+          (fn [content entities]
+            (chat-ctrl/dispatch-group-message! ctx group-id content entities !messages current-user))
+          (chat-ctrl/send-image-message! ctx group-id (str "/chat/groups/" group-id "/messages") !messages :extra-fields {"sender" current-user})
+          (chat-ctrl/send-voice-message! ctx group-id (str "/chat/groups/" group-id "/messages") !messages :extra-fields {"sender" current-user}))]))))))

@@ -1,0 +1,191 @@
+(ns mongol-zangila.infrastructure.socket
+  (:require
+   ["dart:core" :as dc]
+   ["package:phoenix_wings/phoenix_wings.dart" :as phx]
+   [clojure.string :as str]
+   
+   ;; System Dependencies
+   [mongol-zangila.state :as state]
+   [mongol-zangila.infrastructure.config :as config]))
+
+;; =============================================================================
+;; 1. Global Socket Instance & Memory Registries
+;; =============================================================================
+
+(defonce ^:private !socket (atom nil))
+
+;; 活跃的物理频道连接 (网络断开时清空)
+(defonce ^:private !active-channels (atom {}))
+
+;; ⚡ 订阅意图注册表 (必须由 UI 管理，网络断开时不许清空，用于重连恢复)
+(defonce ^:private !channel-subscriptions (atom {}))
+(defonce ^:private !on-connect-callbacks (atom []))
+(defonce ^:private !inbox-event-callbacks (atom []))
+
+(declare rejoin-all-channels!)
+
+(defn on-connect!
+  "Registers a callback invoked whenever the socket connects or reconnects."
+  [callback-fn]
+  (swap! !on-connect-callbacks conj callback-fn))
+
+(defn on-inbox-event!
+  "Registers a callback for user-channel inbox events: :new_message / :thread_updated."
+  [callback-fn]
+  (swap! !inbox-event-callbacks conj callback-fn))
+
+(defn remove-inbox-event!
+  [callback-fn]
+  (swap! !inbox-event-callbacks
+         (fn [cbs] (vec (remove #(identical? % callback-fn) cbs)))))
+
+;; =============================================================================
+;; 2. Connection Lifecycle Management
+;; =============================================================================
+
+(defn- build-ws-url []
+  (let [base config/base-url
+        ws-base (str/replace base #"^http" "ws")]
+    (str/replace ws-base #"/api/v1$" "/socket/websocket")))
+
+(defn disconnect! 
+  "Severs the WebSocket connection and clears ACTIVE channel registries. 
+   ⚡ Crucially PRESERVES subscriptions and callbacks so they survive auto-reconnects."
+  []
+  (when-let [socket @!socket]
+    (.disconnect socket)
+    (reset! !socket nil)
+    (reset! !active-channels {})
+    ;; 绝不能在这里清空 !channel-subscriptions 和 !inbox-event-callbacks
+    (dc/print "🔌 [Socket] Physical connection severed, registries preserved.")))
+
+;; ⚡ 核心修复：补齐缺失的 full-teardown! 函数
+(defn full-teardown!
+  "Completely dismantles the socket and ALL memory registries. Used strictly on Logout."
+  []
+  (disconnect!)
+  (reset! !channel-subscriptions {})
+  (reset! !inbox-event-callbacks [])
+  (dc/print "🧹 [Socket] Full teardown complete. Registries wiped."))
+
+(defn connected? []
+  (boolean @!socket))
+
+(defn connect! 
+  "Opens a WebSocket when none is active. No-op if already connected."
+  []
+  (when-not @!socket
+    (when-let [token @state/auth-token]
+      (let [ws-url (build-ws-url)
+            ;; Phoenix mutates params (adds "vsn"); must be a Dart Map, not PersistentHashMap.
+            params (dc/Map.fromEntries
+                     (dc/List.from [(dc/MapEntry. "token" token)]))
+            socket-opts (phx/PhoenixSocketOptions. .params params)
+            socket (phx/PhoenixSocket. ws-url .socketOptions socket-opts)]
+        
+        (.onOpen socket (fn [] 
+                          (dc/print "🟢 [Socket] Connected to Phoenix Cluster.")
+                          (doseq [cb @!on-connect-callbacks] (cb))
+                          ;; 连接成功后，根据内存里的订阅意图自动恢复所有房间
+                          (rejoin-all-channels!)))
+        
+        (.onClose socket (fn [_] 
+                           (dc/print "🔴 [Socket] Connection Closed.")))
+        
+        (.onError socket (fn [err] 
+                           (dc/print (str "⚠️ [Socket] Error: " err))))
+        
+        (.connect socket)
+        (reset! !socket socket)))))
+
+(defn reconnect!
+  "Tears down any existing socket and connects with the current JWT."
+  []
+  (disconnect!)
+  (connect!))
+
+(defn ensure-connected! []
+  (connect!))
+
+;; =============================================================================
+;; 3. Channel Multiplexing & Subscription
+;; =============================================================================
+
+(defn- do-join-channel!
+  [topic event-handlers]
+  (when (and @!socket (not (contains? @!active-channels topic)))
+    (let [channel (.channel @!socket topic)
+          join-push (.join channel)]
+      (.receive join-push "ok"
+                (fn [_] (dc/print (str "✅ [Channel] Joined: " topic))))
+      (.receive join-push "error"
+                (fn [res] (dc/print (str "❌ [Channel] Failed to join " topic ": " res))))
+      (doseq [[event-name cb-fn] event-handlers]
+        (.on channel event-name (fn [payload _ref _join-ref]
+                                  (cb-fn payload))))
+      (swap! !active-channels assoc topic channel)
+      channel)))
+
+(defn- rejoin-all-channels!
+  "Iterates over preserved UI intents and automatically re-binds them."
+  []
+  (reset! !active-channels {})
+  (doseq [[topic handlers] @!channel-subscriptions]
+    (do-join-channel! topic handlers)))
+
+(defn join-channel! 
+  "Subscribes to a specific Phoenix Channel. Preserves intent for reconnects."
+  [topic event-handlers]
+  (swap! !channel-subscriptions assoc topic event-handlers)
+  (if-not @!socket
+    (dc/print (str "⏳ [Socket] Not connected. Will join " topic " upon next connect."))
+    (do-join-channel! topic event-handlers)))
+
+(defn leave-channel! 
+  "Gracefully leaves a channel and removes it from the local registry."
+  [topic]
+  (swap! !channel-subscriptions dissoc topic)
+  (when-let [channel (get @!active-channels topic)]
+    (.leave channel)
+    (swap! !active-channels dissoc topic)
+    (dc/print (str "👋 [Channel] Left: " topic))))
+
+;; =============================================================================
+;; 4. Global System Listeners (The Background Daemon)
+;; =============================================================================
+
+(defn- notify-inbox-callbacks!
+  [event-type payload]
+  (doseq [cb @!inbox-event-callbacks]
+    (cb event-type payload)))
+
+(defn boot-system-daemons! 
+  "Subscribes to global user-centric channels that must always be active."
+  []
+  (let [user-id (get @state/current-user "id")]
+    (when user-id
+      (join-channel!
+       (str "user:notifications:" user-id)
+       {"new_notification"
+        (fn [_payload]
+          (dc/print "🔔 [Daemon] New notification received!")
+          (swap! state/unread-notifications-count inc))
+        "clear_badge"
+        (fn [_payload]
+          (dc/print "🧹 [Daemon] Clearing notification badge.")
+          (reset! state/unread-notifications-count 0))})
+
+      (join-channel!
+       (str "user:" user-id)
+       {"new_message"
+        (fn [payload]
+          (when-not (= (get payload "sender_id") user-id)
+            (swap! state/unread-messages-count inc))
+          (notify-inbox-callbacks! :new_message payload))
+        "thread_updated"
+        (fn [payload]
+          (notify-inbox-callbacks! :thread_updated payload))}))
+
+    (dc/print "🛡️ [Daemon] System listeners successfully booted/restored.")))
+
+(on-connect! boot-system-daemons!)

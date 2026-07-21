@@ -1,0 +1,231 @@
+(ns mongol-zangila.ui.settings.panel
+  "Global application configuration and settings viewport.
+   A declarative UI layer adapted into a horizontal LTR gallery of vertical configuration pillars."
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
+   [cljd.flutter :as f]
+
+   ;; System Infrastructure & Controllers
+   [mongol-zangila.controllers.auth-ctrl :as auth-ctrl]
+   [mongol-zangila.infrastructure.storage :as storage]
+
+   ;; UI & Shared Components
+   [mongol-zangila.ui.theme :as theme]
+   [mongol-zangila.utils.nav :as nav]
+   [components.toast :as toast]))
+
+;; =============================================================================
+;; 1. Sub-components (Vertical Pillar Architecture)
+;; =============================================================================
+
+(defn- settings-section-header
+  "A typographic vertical pillar establishing visual hierarchy for settings categories."
+  [title]
+  (m/Container
+   .width 48.0
+   .padding (m/EdgeInsets.symmetric .vertical 24.0)
+   .alignment m/Alignment.topCenter
+   .child
+   (mgl/MongolText title
+                   .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                       .fontSize 14.0
+                                       .fontWeight m/FontWeight.bold
+                                       .color theme/text-secondary))))
+
+(defn- settings-list-tile
+  "A highly reusable, interactive vertical pillar for the settings gallery.
+   Supports custom trailing widgets (e.g., toggles) or defaults to a downward chevron."
+  [icon-data title subtitle on-tap & {:keys [trailing color] :or {color theme/text-primary}}]
+  (m/InkWell
+   .onTap on-tap
+   .child
+   (m/Container
+    .width 140.0
+    .padding (m/EdgeInsets.symmetric .vertical 24.0 .horizontal 8.0)
+    .child
+    (m/Column
+     .crossAxisAlignment m/CrossAxisAlignment.center
+     .children
+     [;; Leading Icon
+      (m/Container
+       .padding (m/EdgeInsets.all 12.0)
+       .decoration (m/BoxDecoration
+                    .color theme/bg-color
+                    .shape m/BoxShape.circle)
+       .child (m/Icon icon-data .color color .size 24.0))
+
+      (m/SizedBox .height 24.0)
+
+      ;; Title & Subtitle (Vertical Flow)
+      (m/Expanded
+       .child
+       (m/Row
+        .mainAxisAlignment m/MainAxisAlignment.center
+        .crossAxisAlignment m/CrossAxisAlignment.start
+        .children
+        [(mgl/MongolText title
+                         .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                             .fontSize 16.0
+                                             .fontWeight m/FontWeight.w500
+                                             .color color))
+         
+         ;; ⚡ 核心修复：使用 if 和 SizedBox.shrink 彻底阻绝 nil 混入 Widget 数组
+         (if subtitle
+           (m/Padding
+            .padding (m/EdgeInsets.only .left 12.0)
+            .child (mgl/MongolText subtitle
+                                   .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                                       .fontSize 13.0
+                                                       .color theme/text-secondary)))
+           (m/SizedBox.shrink))]))
+
+      (m/SizedBox .height 16.0)
+
+      ;; Trailing Widget (Switch or Rotated Chevron)
+      (or trailing 
+          ;; Rotate the standard right chevron 90 degrees to point downward, mapping to the vertical drill-down intent
+          (m/RotatedBox 
+           .quarterTurns 1 
+           .child (m/Icon m/Icons.chevron_right_rounded .color theme/text-secondary .size 22.0)))]))))
+
+;; =============================================================================
+;; 2. The Main Settings Panel Widget
+;; =============================================================================
+
+(defn settings-panel-screen
+  "The primary viewport for application-wide configurations, rendered as a horizontal gallery."
+  []
+
+  ;; Local atoms for managing immediate UI toggle states
+  (let [!offline-mode? (atom true)
+        !standard-ime-mapping? (atom true)]
+
+    (f/widget
+     :context ctx
+     :watch [offline-mode? !offline-mode?
+             standard-ime? !standard-ime-mapping?]
+
+     (m/Scaffold
+      .backgroundColor theme/bg-color
+
+      ;; --- Top App Bar ---
+      .appBar
+      (m/AppBar
+       .backgroundColor m/Colors.white
+       .elevation 0.5
+       .leading (m/IconButton
+                 .icon (m/Icon m/Icons.arrow_back_rounded .color theme/text-primary)
+                 .onPressed #(nav/pop! ctx))
+       .title (m/Text "Тохиргоо" ;; "Settings"
+                      .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                          .fontSize 18.0
+                                          .fontWeight m/FontWeight.bold
+                                          .color theme/text-primary)))
+
+      ;; --- Main Body: Horizontal Scrolling Configuration Ledger ---
+      .body
+      (m/SafeArea
+       .child
+       (m/ListView
+        ;; ⚡ Convert the core layout flow to horizontal
+        .scrollDirection m/Axis.horizontal
+        .physics (m/BouncingScrollPhysics.)
+        .padding (m/EdgeInsets.only .right 24.0)
+        .children
+        [
+         ;; --- Section 1: Account & Identity ---
+         (m/Container
+          .margin (m/EdgeInsets.only .left 24.0 .top 24.0 .bottom 24.0)
+          .decoration (m/BoxDecoration .color m/Colors.white .borderRadius (m/BorderRadius.circular 16.0))
+          .child
+          (m/Row
+           .children
+           [(settings-section-header "Бүртгэл") ;; "Account"
+            (m/VerticalDivider .width 1.0 .thickness 1.0 .color theme/border-color)
+            (settings-list-tile m/Icons.person_outline_rounded
+                                "Профайл мэдээлэл" ;; "Profile information"
+                                "Нэр, био болон зураг солих" ;; "Change name, bio, and photo"
+                                #(nav/push! ctx "/profile/edit"))
+            (m/VerticalDivider .width 1.0 .thickness 1.0 .color theme/border-color)
+            (settings-list-tile m/Icons.shield_outlined
+                                "Нууц үг ба Аюулгүй байдал" ;; "Password and Security"
+                                nil
+                                #(nav/push! ctx "/profile/change-password"))]))
+
+         ;; --- Section 2: Input & Editor Configuration ---
+         (m/Container
+          .margin (m/EdgeInsets.only .left 24.0 .top 24.0 .bottom 24.0)
+          .decoration (m/BoxDecoration .color m/Colors.white .borderRadius (m/BorderRadius.circular 16.0))
+          .child
+          (m/Row
+           .children
+           [(settings-section-header "Бичвэр болон Гарын тохиргоо") ;; "Text and Keyboard Settings"
+            (m/VerticalDivider .width 1.0 .thickness 1.0 .color theme/border-color)
+            (settings-list-tile m/Icons.keyboard_outlined
+                                "Стандарт гарын байрлал" ;; "Standard keyboard layout"
+                                "Эгшиг үсгүүдийг (c, v, o, u) товчлуурт байрлуулах" ;; "Map vowels to c, v, o, u keys"
+                                nil
+                                :trailing (m/Switch
+                                           .value standard-ime?
+                                           .onChanged (fn [val] (reset! !standard-ime-mapping? val))
+                                           .activeColor theme/brand-blue))
+            (m/VerticalDivider .width 1.0 .thickness 1.0 .color theme/border-color)
+            (settings-list-tile m/Icons.font_download_outlined
+                                "Үсгийн фонт хэмжээ" ;; "Font size"
+                                "Дэлгэц дээрх бичвэрийн хэмжээг тохируулах" ;; "Adjust text size on screen"
+                                #(toast/info ctx "Фонт тохиргоо"))]))
+
+         ;; --- Section 3: Storage & Network ---
+         (m/Container
+          .margin (m/EdgeInsets.only .left 24.0 .top 24.0 .bottom 24.0)
+          .decoration (m/BoxDecoration .color m/Colors.white .borderRadius (m/BorderRadius.circular 16.0))
+          .child
+          (m/Row
+           .children
+           [(settings-section-header "Өгөгдөл ба Сүлжээ") ;; "Data and Network"
+            (m/VerticalDivider .width 1.0 .thickness 1.0 .color theme/border-color)
+            (settings-list-tile m/Icons.offline_pin_outlined
+                                "Оффлайн горим (Local-first)" ;; "Offline mode"
+                                "Нийтлэл болон аудиог төхөөрөмжид хадгалах" ;; "Save posts and audio to device"
+                                nil
+                                :trailing (m/Switch
+                                           .value offline-mode?
+                                           .onChanged (fn [val] (reset! !offline-mode? val))
+                                           .activeColor theme/brand-blue))
+            (m/VerticalDivider .width 1.0 .thickness 1.0 .color theme/border-color)
+            (settings-list-tile m/Icons.delete_outline_rounded
+                                "Кэш цэвэрлэх" ;; "Clear cache"
+                                "Төхөөрөмжид хадгалагдсан түр зуурын файлыг устгах" ;; "Delete temporary files saved on device"
+                                #(do (storage/truncate-offline-db!)
+                                     (toast/success ctx "Кэш цэвэрлэгдлээ." :fade)))]))
+
+         ;; --- Section 4: Blocklist ---
+         (m/Container
+          .margin (m/EdgeInsets.only .left 24.0 .top 24.0 .bottom 24.0)
+          .decoration (m/BoxDecoration .color m/Colors.white .borderRadius (m/BorderRadius.circular 16.0))
+          .child
+          (m/Row
+           .children
+           [(settings-section-header "Блоклосон хэрэглэгч") ;; "Blocked users"
+            (m/VerticalDivider .width 1.0 .thickness 1.0 .color theme/border-color)
+            (settings-list-tile m/Icons.block_outlined
+                                "Блоклосон хэрэглэгч" ;; "Blocked users"
+                                nil
+                                #(nav/push! ctx "/profile/blocklist"))]))
+
+         ;; --- Section 5: System Actions ---
+         (m/Container
+          .margin (m/EdgeInsets.only .left 24.0 .top 24.0 .bottom 24.0)
+          .decoration (m/BoxDecoration .color m/Colors.white .borderRadius (m/BorderRadius.circular 16.0))
+          .child
+          (m/Row
+           .children
+           [(settings-section-header "Систем") ;; "System"
+            (m/VerticalDivider .width 1.0 .thickness 1.0 .color theme/border-color)
+            ;; Pure UI Delegation: Call auth-ctrl/logout! directly
+            (settings-list-tile m/Icons.logout_rounded
+                                "Гарах" ;; "Log out"
+                                nil
+                                #(auth-ctrl/logout! ctx)
+                                :color theme/error-red)]))]))))))

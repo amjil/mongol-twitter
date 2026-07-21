@@ -1,0 +1,101 @@
+(ns mongol-zangila.ui.media.viewer
+  "Full-screen immersive media viewer.
+   Supports swipe pagination, pinch-to-zoom, and pan gestures for high-resolution images."
+  (:require
+   ["package:flutter/material.dart" :as m]
+   [cljd.flutter :as f]
+   
+   ;; UI & Utilities
+   [mongol-zangila.utils.nav :as nav]
+   [mongol-zangila.ui.widgets.cached-image :as cached-image]))
+
+;; =============================================================================
+;; 1. The Main Viewer Screen Widget
+;; =============================================================================
+
+(defn media-viewer-screen 
+  "Renders an immersive, dark-mode image gallery.
+   Accepts a vector of image URLs and an optional starting index."
+  [media-urls & {:keys [initial-index]
+                 :or {initial-index 0}}]
+  
+  (let [!current-index (atom initial-index)
+        total-count (count media-urls)]
+    
+    (f/widget
+     :context ctx
+     
+     ;; ⚡ Initialize the PageController with the exact tapped image index
+     :managed [page-ctrl (m/PageController .initialPage initial-index)]
+     :watch [current-index !current-index]
+     
+     (m/Scaffold
+      ;; An absolute black background maximizes contrast and battery life (on OLEDs)
+      .backgroundColor m/Colors.black
+      
+      .body
+      (m/Stack
+       .children
+       [
+        ;; --- A. The Pager & Interactive Engine ---
+        (m/PageView.builder
+         .controller page-ctrl
+         .physics (m/BouncingScrollPhysics.)
+         .onPageChanged #(reset! !current-index %)
+         .itemCount total-count
+         .itemBuilder
+         (fn [_ i]
+           (let [url (nth media-urls i)]
+             ;; ⚡ InteractiveViewer instantly provides 60fps pinch-to-zoom and panning
+             (m/InteractiveViewer
+              .minScale 1.0
+              .maxScale 4.0
+              .child
+              (m/Center
+               .child
+               (cached-image/cached-img url
+                                        :width double/infinity
+                                        :height double/infinity
+                                        ;; contain ensures the entire image fits on screen initially
+                                        :fit m/BoxFit.contain
+                                        :border-radius 0.0))))))
+        
+        ;; --- B. The Floating HUD (Heads-Up Display) Overlay ---
+        ;; We use a SafeArea to ensure controls are not blocked by the hardware notch or status bar
+        (m/SafeArea
+         .child
+         (m/Padding
+          .padding (m/EdgeInsets.symmetric .horizontal 16.0 .vertical 16.0)
+          .child
+          (m/Row
+           .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+           .crossAxisAlignment m/CrossAxisAlignment.start
+           .children
+           [
+            ;; 1. Dismiss Button
+            (m/Container
+             .decoration (m/BoxDecoration 
+                          .color (.withOpacity m/Colors.black 0.6)
+                          .shape m/BoxShape.circle)
+             .child
+             (m/IconButton
+              .icon (m/Icon m/Icons.close_rounded .color m/Colors.white .size 24.0)
+              .onPressed #(nav/pop! ctx)))
+            
+            ;; 2. Pagination Indicator (Only rendered if it's a multi-image gallery)
+            (if (> total-count 1)
+              (m/Container
+               .padding (m/EdgeInsets.symmetric .horizontal 14.0 .vertical 8.0)
+               .decoration (m/BoxDecoration
+                            .color (.withOpacity m/Colors.black 0.6)
+                            .borderRadius (m/BorderRadius.circular 20.0))
+               .child
+               (m/Text (str (inc current-index) " / " total-count)
+                       .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                           .color m/Colors.white 
+                                           .fontSize 14.0
+                                           .fontWeight m/FontWeight.bold
+                                           .letterSpacing 1.0)))
+              
+              ;; Empty placeholder to maintain flex spacing
+              (m/SizedBox.shrink))])))])))))

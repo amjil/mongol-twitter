@@ -1,0 +1,172 @@
+(ns mongol-zangila.ui.feed.post-detail
+  "Detailed thread view for a single post.
+   Features 2-level flattened reply rendering.
+   Fully adapted for Left-to-Right vertical Mongolian typography."
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
+   ["dart:core" :as dc]
+   
+   ;; Centralized Dart Interop Interceptor
+   ["package:mongol_zangila/post_frame_trigger.dart" :as pft]
+   
+   [cljd.flutter :as f]
+   
+   ;; System Infrastructure
+   [mongol-zangila.infrastructure.api :as api]
+   [mongol-zangila.controllers.feed-ctrl :as feed-ctrl]
+   
+   ;; UI & Shared Components
+   [mongol-zangila.ui.theme :as theme]
+   [mongol-zangila.utils.nav :as nav]
+   [mongol-zangila.ui.widgets.empty-state :as empty-state]
+   
+   ;; Domain Components
+   [mongol-zangila.ui.feed.components.post-card :as post-card]
+   [components.toast :as toast]))
+
+;; =============================================================================
+;; 1. Core Data Fetching Engine
+;; =============================================================================
+
+(defn- fetch-thread! 
+  [ctx post-id !post-data !replies !loading? & [is-refresh?]]
+  (when-not is-refresh?
+    (reset! !loading? true))
+  (-> (api/get-req (str "/posts/" post-id "/thread"))
+      (.then (fn [res]
+               (let [data (get res "data" {})]
+                 (reset! !post-data (get data "post"))
+                 (reset! !replies (get data "replies" []))
+                 (reset! !loading? false))))
+      (.catchError (fn [err]
+                     (reset! !loading? false)
+                     (toast/error ctx (str "Мэдээлэл татахад алдаа гарлаа: " err))))))
+
+(defn- cleanup-refresh-watch [k]
+  (remove-watch feed-ctrl/!feed-refresh-trigger k))
+
+;; =============================================================================
+;; 2. The Post Detail Screen Widget
+;; =============================================================================
+
+(defn post-detail-screen 
+  "The primary viewport for reading a post and its comments."
+  [post-id]
+  
+  (let [!post-data (atom nil)
+        !replies (atom [])
+        !loading? (atom true)]
+    
+    (f/widget
+     :context ctx
+     
+     :managed [scroll-ctrl (m/ScrollController.)
+               :dispose .dispose
+               
+               sync-watcher (let [key (keyword (str "detail-" post-id "-" (.-millisecondsSinceEpoch (dc/DateTime.now))))]
+                              (add-watch feed-ctrl/!feed-refresh-trigger key
+                                         (fn [_ _ old-val new-val]
+                                           (when (> new-val old-val)
+                                             (fetch-thread! ctx post-id !post-data !replies !loading? true))))
+                              key)
+               :dispose cleanup-refresh-watch]
+               
+     :watch [post-data !post-data
+             replies !replies
+             loading? !loading?]
+     
+     (pft/PostFrameTrigger
+      .onLayout #(fetch-thread! ctx post-id !post-data !replies !loading? false)
+      .child
+      (m/Scaffold
+       .backgroundColor theme/bg-color
+       
+       .appBar
+       (m/AppBar
+        .backgroundColor m/Colors.white
+        .elevation 0.5
+        .leading (m/IconButton 
+                  .icon (m/Icon m/Icons.arrow_back_rounded .color theme/text-primary)
+                  .onPressed #(nav/pop! ctx))
+        .title (m/Text "Нийтлэл"
+                       .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                           .fontSize 18.0 
+                                           .fontWeight m/FontWeight.bold 
+                                           .color theme/text-primary)))
+       
+       .floatingActionButton
+       (when post-data
+         (m/FloatingActionButton
+          .backgroundColor theme/brand-blue
+          .elevation 4.0
+          .onPressed #(nav/push-fullscreen! ctx "/feed/compose"
+                                            {:reply-to-id post-id
+                                             :reply-to-author-id (get-in post-data ["author" "id"])
+                                             :reply-to-name (get-in post-data ["author" "handle"]
+                                                                    (get-in post-data ["author" "name"]))})
+          .child (m/Icon m/Icons.reply_rounded .color m/Colors.white)))
+       
+       .body
+       (cond
+         loading?
+         (m/Center .child (m/CircularProgressIndicator .color theme/brand-blue))
+         
+         (nil? post-data)
+         (empty-state/empty-view ctx 
+                                 :icon-data m/Icons.visibility_off_rounded
+                                 :title "Устгагдсан байна"
+                                 :subtitle "Энэ нийтлэл устгагдсан эсвэл танд харах эрх алга.")
+         
+         :else
+         (m/ListView.builder
+          .controller scroll-ctrl
+          .scrollDirection m/Axis.horizontal
+          .physics (m/AlwaysScrollableScrollPhysics.)
+          .itemCount (+ 2 (count replies))
+          .itemBuilder
+          (fn [_ i]
+           (cond
+             ;; 1. The Anchor Post
+             (= i 0)
+             (m/Container
+              .padding (m/EdgeInsets.only .left 16.0 .right 16.0 .top 16.0 .bottom 16.0)
+              .child (post-card/post-card 
+                      ctx post-data 
+                      :is-detail-view true
+                      :on-mutate (fn [mutator] (swap! !post-data mutator))
+                      :on-delete (fn []
+                                   (feed-ctrl/delete-post! ctx post-id !replies)
+                                   (nav/pop! ctx))))
+             
+             ;; 2. Visual Separator
+             (= i 1)
+             (m/Container
+              .color theme/bg-color
+              .padding (m/EdgeInsets.symmetric .horizontal 16.0 .vertical 16.0)
+              .alignment m/Alignment.topCenter
+              .child (mgl/MongolText (str (count replies) " сэтгэгдэл")
+                                     .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                                         .color theme/text-secondary 
+                                                         .fontWeight m/FontWeight.bold)))
+             
+             ;; 3. The Conversation Thread (Comments)
+             :else
+             (let [idx (- i 2)]
+               (if (< idx (count replies))
+                 (let [reply-data (nth replies idx)]
+                   (m/Container
+                    .padding (m/EdgeInsets.only .top 32.0 .right 16.0 .bottom 16.0)
+                    .child (post-card/post-card 
+                            ctx reply-data 
+                            :is-reply true
+                            ;; ⚡ 核心改动：把主帖的 ID 传给所有的评论卡片
+                            :root-post-id post-id
+                            :on-mutate (fn [mutator]
+                                         (swap! !replies (fn [rs]
+                                                           (mapv #(if (= (get % "id") (get reply-data "id"))
+                                                                    (mutator %)
+                                                                    %)
+                                                                 rs))))
+                            :on-delete #(feed-ctrl/delete-post! ctx (get reply-data "id") !replies))))
+                 (m/SizedBox.shrink))))))))))))

@@ -1,0 +1,77 @@
+(ns mongol-zangila.utils.time-format
+  "Converts backend ISO8601 timestamps to localized Mongolian relative/short formats."
+  (:require
+   ["dart:core" :as dc]))
+
+(defn- pad-zero [n]
+  (.padLeft (.toString n) 2 "0"))
+
+(defn- parse-local [iso-str]
+  (.toLocal (dc/DateTime.parse iso-str)))
+
+(defn format-relative
+  "Short relative time for feeds and notifications (e.g. 'одоо', '5м', '2ц', '3ө')."
+  [iso-str]
+  (if (or (nil? iso-str) (empty? iso-str))
+    ""
+    (try
+      (let [date-time (parse-local iso-str)
+            now (dc/DateTime.now)
+            diff (.difference now date-time)
+            seconds (.-inSeconds diff)
+            minutes (.-inMinutes diff)
+            hours (.-inHours diff)
+            days (.-inDays diff)]
+        (cond
+          (< seconds 60) "одоо"
+          (< minutes 60) (str minutes "м")
+          (< hours 24) (str hours "ц")
+          (< days 7) (str days "ө")
+          :else (str (.-year date-time)
+                     "-"
+                     (pad-zero (.-month date-time))
+                     "-"
+                     (pad-zero (.-day date-time)))))
+      ;; ⚡ Precision Catch: DateTime.parse specifically throws FormatException on bad data
+      (catch dc/FormatException _ iso-str))))
+
+(defn format-inbox-time
+  "Compact timestamp for chat inbox rows (HH:mm, 'Өчигдөр', or yyyy-MM-dd)."
+  [iso-str]
+  (if (or (nil? iso-str) (empty? iso-str))
+    ""
+    (try
+      (let [date-time (parse-local iso-str)
+            now (dc/DateTime.now)
+            today-start (dc/DateTime. (.-year now) (.-month now) (.-day now))
+            yesterday-start (.subtract today-start (dc/Duration. .days 1))
+            dt-day-start (dc/DateTime. (.-year date-time) (.-month date-time) (.-day date-time))]
+        (cond
+          (not (.isBefore dt-day-start today-start))
+          (str (pad-zero (.-hour date-time)) ":" (pad-zero (.-minute date-time)))
+
+          (not (.isBefore dt-day-start yesterday-start))
+          "Өчигдөр"
+
+          :else
+          (str (.-year date-time)
+               "-"
+               (pad-zero (.-month date-time))
+               "-"
+               (pad-zero (.-day date-time)))))
+      (catch dc/FormatException _ iso-str))))
+
+;; ⚡ Added: Detailed timestamp formatter for single Post/Article detail views
+(defn format-detailed-time
+  "Full absolute timestamp for detailed post views (e.g. '2026-06-09 15:57')."
+  [iso-str]
+  (if (or (nil? iso-str) (empty? iso-str))
+    ""
+    (try
+      (let [date-time (parse-local iso-str)]
+        (str (.-year date-time) "-"
+             (pad-zero (.-month date-time)) "-"
+             (pad-zero (.-day date-time)) " "
+             (pad-zero (.-hour date-time)) ":"
+             (pad-zero (.-minute date-time))))
+      (catch dc/FormatException _ iso-str))))

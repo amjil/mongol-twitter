@@ -1,0 +1,124 @@
+(ns mongol-zangila.ui.widgets.empty-state
+  "Standardized placeholders for empty, offline, or error states.
+   Provides a unified visual language and fallback UI across the entire application,
+   fully adapted for LTR Mongolian vertical typography."
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
+   [cljd.flutter :as f]
+   
+   ;; System Theme
+   [mongol-zangila.ui.theme :as theme]))
+
+;; =============================================================================
+;; 1. Core Engine: The Flexible Empty Canvas
+;; =============================================================================
+
+(defn empty-view 
+  "The foundational empty state widget, rendered as a vertical architectural pillar."
+  [ctx & {:keys [icon-data title subtitle action-label on-action]
+          :or {icon-data m/Icons.inbox_rounded
+               title "Мэдээлэл олдсонгүй"}}] ;; Default: "No information found"
+  (m/Center
+   .child
+   ;; ⚡ FIXED: Added SingleChildScrollView to absorb any vertical height constraints and prevent RenderFlex overflows.
+   (m/SingleChildScrollView
+    .child
+    (m/Padding
+     .padding (m/EdgeInsets.all 32.0)
+     .child
+     (m/Column
+      .mainAxisSize m/MainAxisSize.min
+      .crossAxisAlignment m/CrossAxisAlignment.center
+      ;; ⚡ FIXED: Used `vec` combined with `keep identity` to force a strict, concrete Dart List and obliterate Null casts.
+      .children
+      (vec
+       (keep identity
+             [;; A. Hero Icon
+              (m/Icon icon-data 
+                      .size 80.0 
+                      .color (-> theme/text-secondary (.withOpacity 0.2)))
+              
+              (m/SizedBox .height 24.0)
+              
+              ;; B. Primary Title (Vertical Mongol Typography)
+              (mgl/MongolText title 
+                              .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                                  .fontSize 18.0 
+                                                  .fontWeight m/FontWeight.bold
+                                                  .color theme/text-primary))
+              
+              ;; C. Optional Subtitle (Contextual Help)
+              (when subtitle (m/SizedBox .height 12.0))
+              (when subtitle 
+                (mgl/MongolText subtitle 
+                                .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                                    .fontSize 14.0 
+                                                    .color theme/text-secondary)))
+              
+              ;; D. Optional Call-to-Action Button
+              (when (and action-label on-action) (m/SizedBox .height 32.0))
+              (when (and action-label on-action)
+                (mgl/MongolElevatedButton
+                 .style (m/ElevatedButton.styleFrom
+                         .backgroundColor theme/brand-blue
+                         .elevation 0.0
+                         .padding (m/EdgeInsets.symmetric .horizontal 24.0 .vertical 12.0)
+                         .shape (m/RoundedRectangleBorder .borderRadius (m/BorderRadius.circular 24.0)))
+                 .onPressed on-action
+                 .child (mgl/MongolText action-label 
+                                        .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                                            .color m/Colors.white
+                                                            .fontWeight m/FontWeight.bold))))])))))))
+
+;; =============================================================================
+;; 2. Semantic Domain Wrappers
+;; =============================================================================
+
+(defn offline-view 
+  "Rendered when the network is unreachable."
+  [ctx on-retry-fn]
+  (empty-view ctx
+              :icon-data m/Icons.wifi_off_rounded
+              :title "Сүлжээнд холбогдоогүй байна"
+              :subtitle "Та интернэт холболтоо шалгаад дахин оролдоно уу."
+              :action-label "Дахин оролдох"
+              :on-action on-retry-fn))
+
+(defn empty-search-view 
+  "Rendered when a search query yields zero results."
+  [ctx query]
+  (empty-view ctx
+              :icon-data m/Icons.search_off_rounded
+              :title "Илэрц олдсонгүй"
+              :subtitle (str "“" query "” хайлтад тохирох үр дүн алга.")))
+
+(defn empty-chat-view 
+  "Rendered when a user's inbox is completely empty."
+  [ctx on-start-chat-fn]
+  (empty-view ctx
+              :icon-data m/Icons.chat_bubble_outline_rounded
+              :title "Зурвас алга"
+              :subtitle "Найзуудтайгаа холбогдож шинэ яриа эхлүүлээрэй."
+              :action-label "Шинэ зурвас"
+              :on-action on-start-chat-fn))
+
+(defn empty-feed-view 
+  "Rendered when the timeline has no posts to show."
+  [ctx on-compose-fn]
+  (empty-view ctx
+              :icon-data m/Icons.dynamic_feed_rounded
+              :title "Нийтлэл алга байна"
+              :subtitle "Та өөрийн бодлоо хуваалцаж эхний нийтлэлийг оруулаарай."
+              :action-label "Шинэ нийтлэл"
+              :on-action on-compose-fn))
+
+(defn empty-profile-posts-view
+  "Rendered when a user's profile timeline has no posts."
+  [ctx {:keys [is-self? on-compose-fn]}]
+  (if is-self?
+    (empty-feed-view ctx on-compose-fn)
+    (empty-view ctx
+                :icon-data m/Icons.article_outlined
+                :title "Нийтлэл алга байна"
+                :subtitle "Энэ хэрэглэгч одоогоор нийтлэл оруулаагүй байна.")))

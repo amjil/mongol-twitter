@@ -1,0 +1,459 @@
+(ns mongol-zangila.controllers.chat-ctrl
+  "Domain controller for direct and group messaging.
+   Orchestrates local SQLite Drift caching, real-time WebSocket bindings, 
+   Optimistic UI updates, and offline Outbox dispatching."
+  (:require
+   ["dart:async" :as async]
+   ["dart:core" :as dc]
+   ["dart:math" :as math] ;; ⚡ Added for generating unique Idempotency Keys
+   [clojure.string :as str]
+   
+   ;; Infrastructure
+   [mongol-zangila.state :as state]
+   [mongol-zangila.infrastructure.api :as api]
+   [mongol-zangila.infrastructure.db :as db]
+   [mongol-zangila.infrastructure.socket :as socket]
+   [mongol-zangila.infrastructure.write-buffer :as write-buffer]
+   [mongol-zangila.ui.chat.inbox-helpers :as inbox-helpers]
+   [mongol-zangila.utils.nav :as nav]
+   [components.toast :as toast]))
+
+;; =============================================================================
+;; 1. Topic Generators & Active UI Registry
+;; =============================================================================
+
+(defn thread-topic [thread-id] (str "thread:" thread-id))
+(defn group-topic [group-id] (str "group:" group-id))
+
+(defonce ^:private !active-chat-atoms (atom {}))
+
+(defn- register-active-chat! [topic !messages]
+  (swap! !active-chat-atoms assoc topic !messages))
+
+(defn- unregister-active-chat! [topic]
+  (swap! !active-chat-atoms dissoc topic))
+
+(defn- clj-map
+  "Converts a Dart jsonDecode map into a Clojure associative map."
+  [m]
+  (into {} m))
+
+(defn resolve-outbox-sync!
+  "Called globally by the background outbox daemon upon a successful network sync."
+  [topic temp-id server-msg]
+  (db/save-messages! topic [server-msg])
+  (when-let [!messages (get @!active-chat-atoms topic)]
+    (swap! !messages (fn [msgs]
+                       (mapv #(if (= (get % "id") temp-id) (clj-map server-msg) %) msgs)))))
+
+;; =============================================================================
+;; 2. Inbox Management & Read Markers
+;; =============================================================================
+
+(defonce ^:private !active-inbox-atom (atom nil))
+
+(defn register-inbox! [!chats]
+  (reset! !active-inbox-atom !chats))
+
+(defn unregister-inbox! []
+  (reset! !active-inbox-atom nil))
+
+(defn- clear-local-unread!
+  "Optimistically clears the unread count in the inbox UI and global badge."
+  [chat-id]
+  (when-let [!chats @!active-inbox-atom]
+    (let [chats-val @!chats
+          target-chat (first (filter #(= (get % "id") chat-id) chats-val))
+          unread-count (get target-chat "unread_count" 0)]
+      (when (> unread-count 0)
+        (swap! state/unread-messages-count #(max 0 (- % unread-count)))
+        (swap! !chats (fn [msgs]
+                        (mapv #(if (= (get % "id") chat-id)
+                                 (assoc (clj-map %) "unread_count" 0)
+                                 %)
+                              msgs)))))))
+
+(defn mark-thread-read!
+  "Marks a DM thread as read on the backend silently."
+  [thread-id]
+  (clear-local-unread! thread-id)
+  (-> (api/post-req (str "/chat/threads/" thread-id "/read") {})
+      (.catchError (fn [_] nil))))
+
+(defn mark-group-read!
+  "Marks a Group thread as read on the backend silently."
+  [group-id]
+  (clear-local-unread! group-id)
+  (-> (api/post-req (str "/chat/groups/" group-id "/read") {})
+      (.catchError (fn [_] nil))))
+
+(defn open-dm-with-user!
+  "Ensures a DM thread exists with the given user, then navigates to the chat screen."
+  [ctx partner-id partner-name]
+  (-> (api/post-req "/chat/threads/ensure" {"user_id" partner-id})
+      (.then (fn [res]
+               (let [thread (get res "data")
+                     thread-id (get thread "id")]
+                 (nav/push! ctx "/chat/dm"
+                            {:thread-id thread-id
+                             :partner-name partner-name
+                             :partner-id partner-id}))))
+      (.catchError (fn [err]
+                     (toast/error ctx (str "Зурвас эхлүүлэхэд алдаа гарлаа: " err))))))
+
+(defn load-inbox!
+  "Fetches the user's active direct messages and group chats.
+   The backend returns the full inbox in a single response (no pagination).
+   Returns a Future for pull-to-refresh integration."
+  [ctx !inbox-items !loading? is-refresh?]
+  (let [completer (async/Completer.)]
+    (if (or is-refresh? (empty? @!inbox-items))
+      (do
+        (when-not is-refresh?
+          (reset! !loading? true))
+        (-> (api/get-req "/chat/inbox")
+            (.then (fn [res]
+                     (let [fetched-threads (mapv clj-map (get res "data" []))]
+                       (reset! !inbox-items fetched-threads)
+                       (reset! !loading? false)
+                       ;; Recalculate global unread badge securely
+                       (let [total-unread (reduce + (map #(get % "unread_count" 0) fetched-threads))]
+                         (reset! state/unread-messages-count total-unread))
+                       (.complete completer true))))
+            (.catchError (fn [err]
+                           (reset! !loading? false)
+                           (toast/error ctx (str "Жагсаалт татахад алдаа гарлаа: " err) :fade)
+                           (.completeError completer err)))))
+      (.complete completer true))
+    (.-future completer)))
+
+(defn bind-inbox-realtime!
+  "Binds the global inbox WebSocket events to the UI state."
+  [!threads current-user-id !callback-atom]
+  (when-not @!callback-atom
+    (let [cb (fn [event-type payload]
+               (inbox-helpers/apply-inbox-event! !threads event-type payload current-user-id))]
+      (reset! !callback-atom cb)
+      (socket/on-inbox-event! cb))))
+
+(defn unbind-inbox-realtime!
+  "Removes the inbox listener."
+  [!callback-atom]
+  (when-let [cb @!callback-atom]
+    (socket/remove-inbox-event! cb)
+    (reset! !callback-atom nil)))
+
+;; =============================================================================
+;; 3. Core State Hydration & DB Caching
+;; =============================================================================
+
+(defn- message-time [msg] (get msg "created_at" ""))
+
+(defn merge-messages-newest-first
+  [api-messages cached-messages]
+  (let [merged (merge (into {} (map (fn [m] [(get m "id") (clj-map m)]) cached-messages))
+                      (into {} (map (fn [m] [(get m "id") (clj-map m)]) api-messages)))]
+    (->> (vals merged)
+         (sort-by message-time #(compare %2 %1))
+         vec)))
+
+(defn load-thread-messages!
+  "Hydrates the message stream by blending remote server data with local SQLite caches."
+  [ctx topic !messages !loading? api-path]
+  (reset! !loading? true)
+  (-> (api/get-req api-path)
+      (.then (fn [res]
+               (let [server-data (get res "data" [])]
+                 (db/save-messages! topic server-data)
+                 (-> (db/get-cached-messages topic)
+                     (.then (fn [cached]
+                              (reset! !messages (merge-messages-newest-first server-data cached))
+                              (reset! !loading? false)))))))
+      (.catchError
+       (fn [err]
+         (-> (db/get-cached-messages topic)
+             (.then (fn [cached]
+                      (if (seq cached)
+                        (do (reset! !messages (mapv clj-map cached))
+                            (reset! !loading? false)
+                            (toast/info ctx "Оффлайн кэшээс уншлаа."))
+                        (do (reset! !loading? false)
+                            (toast/error ctx (str "Зурвас татахад алдаа: " err)))))))))))
+
+;; =============================================================================
+;; 4. Thread Initialization & WebSocket Binding
+;; =============================================================================
+
+(defn unsubscribe-thread!
+  "Leaves the specified chat channel and unregisters UI callbacks."
+  [topic]
+  (unregister-active-chat! topic)
+  (socket/leave-channel! topic))
+
+(defn- bind-realtime-listener!
+  "Joins the Phoenix channel and listens for new messages."
+  [topic !messages]
+  (socket/join-channel! 
+   topic
+   {"new_message"
+    (fn [new-message]
+      (db/save-messages! topic [new-message])
+      (swap! !messages 
+             (fn [msgs]
+               (let [existing-idx (first (keep-indexed #(when (= (get %2 "id") (get new-message "id")) %1) msgs))]
+                 (if existing-idx
+                   (assoc msgs existing-idx (clj-map new-message))
+                   (into [(clj-map new-message)] msgs))))))}))
+
+(defn initialize-dm-thread!
+  "Ignites the Direct Message room."
+  [ctx thread-id !messages !loading? current-user-id !chat-topic]
+  (let [topic (thread-topic thread-id)
+        api-path (str "/chat/threads/" thread-id "/messages")]
+    (reset! !chat-topic topic)
+    (register-active-chat! topic !messages)
+    
+    (mark-thread-read! thread-id)
+    
+    (load-thread-messages! ctx topic !messages !loading? api-path)
+    (bind-realtime-listener! topic !messages)))
+
+(defn initialize-group-thread!
+  "Ignites the Group Chat room."
+  [ctx group-id !messages !loading? current-user-id !chat-topic]
+  (let [topic (group-topic group-id)
+        api-path (str "/chat/groups/" group-id "/messages")]
+    (reset! !chat-topic topic)
+    (register-active-chat! topic !messages)
+    
+    (mark-group-read! group-id)
+    
+    (load-thread-messages! ctx topic !messages !loading? api-path)
+    (bind-realtime-listener! topic !messages)))
+
+;; =============================================================================
+;; 5. Outbound Mutations (Optimistic UI & Offline Queue)
+;; =============================================================================
+
+(defn dispatch-message!
+  "Sends a DM thread message with rich entities support. Caches to DB immediately upon server confirmation."
+  [ctx thread-id content entities !messages] ;; ⚡ 增加了 entities 入参
+  (let [temp-id (str "temp-" (.-millisecondsSinceEpoch (dc/DateTime.now)))
+        idk (str temp-id "-" (.nextInt (math/Random.) 1000000))
+        ;; 乐观 UI 气泡：直接注入 entities，这样自己发出去的瞬间 @ 和 # 就能高亮可点
+        temp-msg {"id" temp-id "thread_id" thread-id "sender_id" "self"
+                  "type" "text" "content" content "entities" entities ;; ⚡ 注入本地乐观锁
+                  "created_at" (.toIso8601String (dc/DateTime.now))
+                  "status" "sending"}
+        api-path (str "/chat/threads/" thread-id "/messages")
+        topic (thread-topic thread-id)
+        is-offline? (= @state/network-status :offline)
+        ;; 传输 Payload：将实体数组上报给 Elixir / Phoenix 后端
+        api-payload {"content" content "type" "text" "entities" entities "idempotency_key" idk}]
+    
+    (swap! !messages #(into [(assoc temp-msg "status" (if is-offline? "queued" "sending"))] %))
+    
+    (if is-offline?
+      (do
+        (write-buffer/enqueue! "send-message" 
+                               {"endpoint" api-path "topic" topic "temp_id" temp-id 
+                                "payload" api-payload}
+                               idk)
+        (toast/info ctx "Оффлайн байна. Дараа илгээнэ."))
+      (-> (api/post-req api-path api-payload)
+          (.then (fn [res]
+                   (let [server-msg (get res "data")]
+                     (db/save-messages! topic [server-msg])
+                     (swap! !messages (fn [msgs] (mapv #(if (= (get % "id") temp-id) (clj-map server-msg) %) msgs))))))
+          (.catchError (fn [_]
+                         (toast/error ctx "Зурвас илгээгдсэнгүй." :fade)
+                         (swap! !messages (fn [msgs] (mapv #(if (= (get % "id") temp-id) (assoc (clj-map %) "status" "failed") %) msgs)))))))))
+
+(defn dispatch-group-message!
+  "Sends a Group message with rich entities support. Caches to DB immediately upon server confirmation."
+  [ctx group-id content entities !messages current-user] ;; ⚡ 增加了 entities 入参
+  (let [temp-id (str "temp-" (.-millisecondsSinceEpoch (dc/DateTime.now)))
+        idk (str temp-id "-" (.nextInt (math/Random.) 1000000))
+        temp-msg {"id" temp-id "group_id" group-id "sender_id" (get current-user "id")
+                  "sender" current-user "type" "text" "content" content "entities" entities ;; ⚡ 注入本地乐观锁
+                  "created_at" (.toIso8601String (dc/DateTime.now))
+                  "status" "sending"}
+        api-path (str "/chat/groups/" group-id "/messages")
+        topic (group-topic group-id)
+        is-offline? (= @state/network-status :offline)
+        api-payload {"content" content "type" "text" "entities" entities "idempotency_key" idk}]
+    
+    (swap! !messages #(into [(assoc temp-msg "status" (if is-offline? "queued" "sending"))] %))
+    
+    (if is-offline?
+      (do
+        (write-buffer/enqueue! "send-message" 
+                               {"endpoint" api-path "topic" topic "temp_id" temp-id 
+                                "payload" api-payload}
+                               idk)
+        (toast/info ctx "Оффлайн байна. Дараа илгээнэ."))
+      (-> (api/post-req api-path api-payload)
+          (.then (fn [res]
+                   (let [server-msg (get res "data")]
+                     (db/save-messages! topic [server-msg])
+                     (swap! !messages (fn [msgs] (mapv #(if (= (get % "id") temp-id) (clj-map server-msg) %) msgs))))))
+          (.catchError (fn [_]
+                         (toast/error ctx "Зурвас илгээгдсэнгүй." :fade)
+                         (swap! !messages (fn [msgs] (mapv #(if (= (get % "id") temp-id) (assoc (clj-map %) "status" "failed") %) msgs)))))))))
+
+
+(defn send-image-message!
+  "Sends an image. Caches to DB immediately upon server confirmation."
+  [ctx thread-or-group-id api-path !messages & {:keys [extra-fields]}]
+  (fn [media-url]
+    (let [temp-id (str "temp-" (.-millisecondsSinceEpoch (dc/DateTime.now)))
+          idk (str temp-id "-" (.nextInt (math/Random.) 1000000))
+          temp-msg (merge {"id" temp-id "thread_id" thread-or-group-id "sender_id" "self"
+                           "type" "image" "content" "" "media_url" media-url
+                           "created_at" (.toIso8601String (dc/DateTime.now))
+                           "status" "sending"} extra-fields)
+          topic (if (get extra-fields "sender") (group-topic thread-or-group-id) (thread-topic thread-or-group-id))
+          is-offline? (= @state/network-status :offline)
+          api-payload {"type" "image" "content" "" "media_url" media-url "idempotency_key" idk}]
+      
+      (swap! !messages #(into [(assoc temp-msg "status" (if is-offline? "queued" "sending"))] %))
+      
+      (if is-offline?
+        (do
+          (write-buffer/enqueue! "send-message" 
+                                 {"endpoint" api-path "topic" topic "temp_id" temp-id 
+                                  "payload" api-payload}
+                                 idk)
+          (toast/info ctx "Оффлайн байна. Дараа илгээнэ."))
+        (-> (api/post-req api-path api-payload)
+            (.then (fn [res]
+                     (let [server-msg (get res "data")]
+                       (db/save-messages! topic [server-msg])
+                       (swap! !messages (fn [msgs] (mapv #(if (= (get % "id") temp-id) (clj-map server-msg) %) msgs))))))
+            (.catchError (fn [_]
+                           (toast/error ctx "Зураг илгээгдсэнгүй." :fade)
+                           (swap! !messages (fn [msgs] (mapv #(if (= (get % "id") temp-id) (assoc (clj-map %) "status" "failed") %) msgs))))))))))
+
+(defn send-voice-message!
+  "Sends a voice message. Employs identical Optimistic UI and Offline Queueing as text/images."
+  [ctx thread-or-group-id api-path !messages & {:keys [extra-fields]}]
+  (fn [media-url duration]
+    (let [temp-id (str "temp-" (.-millisecondsSinceEpoch (dc/DateTime.now)))
+          idk (str temp-id "-" (.nextInt (math/Random.) 1000000)) ;; Unique idempotency key
+          temp-msg (merge {"id" temp-id "thread_id" thread-or-group-id "sender_id" "self"
+                           "type" "audio" "content" ""
+                           "media_url" media-url "media_duration" duration
+                           "created_at" (.toIso8601String (dc/DateTime.now))
+                           "status" "sending"} extra-fields)
+          topic (if (get extra-fields "sender") (group-topic thread-or-group-id) (thread-topic thread-or-group-id))
+          is-offline? (= @state/network-status :offline)
+          api-payload {"type" "audio" "content" "" "media_url" media-url "media_duration" duration "idempotency_key" idk}]
+      
+      (swap! !messages #(into [(assoc temp-msg "status" (if is-offline? "queued" "sending"))] %))
+      
+      (if is-offline?
+        (do
+          (write-buffer/enqueue! "send-message" 
+                                 {"endpoint" api-path "topic" topic "temp_id" temp-id 
+                                  "payload" api-payload}
+                                 idk)
+          (toast/info ctx "Оффлайн байна. Дараа илгээнэ."))
+        (-> (api/post-req api-path api-payload)
+            (.then (fn [res]
+                     (let [server-msg (get res "data")]
+                       (db/save-messages! topic [server-msg])
+                       (swap! !messages (fn [msgs] (mapv #(if (= (get % "id") temp-id) (clj-map server-msg) %) msgs))))))
+            (.catchError (fn [_]
+                           (toast/error ctx "Дуут зурвас илгээгдсэнгүй." :fade)
+                           (swap! !messages (fn [msgs] (mapv #(if (= (get % "id") temp-id) (assoc (clj-map %) "status" "failed") %) msgs))))))))))
+
+;; ⚡ NEW: Manual Retry Handler
+(defn retry-message!
+  "Manually retries a failed message directly from the UI.
+   Dynamically rebuilds the payload based on the message type (text, image, audio)."
+  [ctx thread-or-group-id failed-msg !messages]
+  (let [temp-id (get failed-msg "id")
+        msg-type (get failed-msg "type")
+        is-group? (contains? failed-msg "group_id")
+        api-path (if is-group? 
+                   (str "/chat/groups/" thread-or-group-id "/messages")
+                   (str "/chat/threads/" thread-or-group-id "/messages"))
+        topic (if is-group? (group-topic thread-or-group-id) (thread-topic thread-or-group-id))
+        
+        ;; Reconstruct API payload dynamically
+        api-payload (cond
+                      (= msg-type "audio")
+                      {"type" "audio"
+                       "content" ""
+                       "media_url" (get failed-msg "media_url")
+                       "media_duration" (get failed-msg "media_duration")
+                       "idempotency_key" (str temp-id "-retry-" (.nextInt (math/Random.) 1000000))}
+                      
+                      (= msg-type "image")
+                      {"type" "image"
+                       "content" ""
+                       "media_url" (get failed-msg "media_url")
+                       "idempotency_key" (str temp-id "-retry-" (.nextInt (math/Random.) 1000000))}
+                       
+                      :else
+                      {"type" "text"
+                       "content" (get failed-msg "content")
+                       "entities" (get failed-msg "entities")
+                       "idempotency_key" (str temp-id "-retry-" (.nextInt (math/Random.) 1000000))})
+        
+        is-offline? (= @state/network-status :offline)]
+        
+    ;; Optimistically update UI to 'sending' (or 'queued' if offline)
+    (swap! !messages (fn [msgs] 
+                       (mapv #(if (= (get % "id") temp-id) 
+                                (assoc (clj-map %) "status" (if is-offline? "queued" "sending")) 
+                                %) 
+                             msgs)))
+    
+    (if is-offline?
+      (do
+        (write-buffer/enqueue! "send-message" 
+                               {"endpoint" api-path "topic" topic "temp_id" temp-id "payload" api-payload}
+                               (get api-payload "idempotency_key"))
+        (toast/info ctx "Оффлайн байна. Дараа илгээнэ."))
+      (-> (api/post-req api-path api-payload)
+          (.then (fn [res]
+                   (let [server-msg (get res "data")]
+                     (db/save-messages! topic [server-msg])
+                     (swap! !messages (fn [msgs] (mapv #(if (= (get % "id") temp-id) (clj-map server-msg) %) msgs))))))
+          (.catchError (fn [_]
+                         (toast/error ctx "Дахин илгээхэд алдаа гарлаа." :fade)
+                         (swap! !messages (fn [msgs] (mapv #(if (= (get % "id") temp-id) (assoc (clj-map %) "status" "failed") %) msgs)))))))))
+
+;; =============================================================================
+;; 6. Outbox Daemon Handlers Registration
+;; =============================================================================
+
+(defn register-outbox-handlers! []
+  (write-buffer/register-handler! 
+   "send-message" 
+   (fn [payload-map server-msg]
+     (let [topic (get payload-map "topic")
+           temp-id (get payload-map "temp_id")]
+       (resolve-outbox-sync! topic temp-id server-msg)))))
+
+;; =============================================================================
+;; 7. Pagination
+;; =============================================================================
+
+(defn load-older-messages!
+  "Fetches the next page of historical messages from local Drift DB."
+  [ctx thread-id current-offset !messages !has-more?]
+  (let [limit 50]
+    (-> (db/fetch-thread-messages thread-id limit current-offset)
+        (.then (fn [older-msgs]
+                 (if (empty? older-msgs)
+                   (reset! !has-more? false)
+                   (do
+                     ;; Append older messages to the end of the list (top of UI due to reverse=true)
+                     (swap! !messages #(vec (concat % older-msgs)))
+                     ;; If the DB returned fewer rows than requested, we've hit the end of history
+                     (when (< (count older-msgs) limit)
+                       (reset! !has-more? false))))))
+        (.catchError (fn [err]
+                       (dc/print (str "Failed to load older messages: " err)))))))

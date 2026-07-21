@@ -1,0 +1,96 @@
+(ns mongol-zangila.ui.chat.inbox-helpers
+  "State reducers and pure functions for inbox data manipulation.
+   Utilizes O(1) map lookups for high-performance real-time updates."
+  (:require [clojure.string :as str]))
+
+(defn- preview-for-type
+  "Fallback snippet when media messages have empty content."
+  [msg-type]
+  (case msg-type
+    "image" "📷 Зураг"
+    "audio" "🎤 Дуут зурвас"
+    ""))
+
+(defn last-message-preview
+  "Extracts the text preview from the polymorphic last_message payload."
+  [thread-data]
+  (let [lm (get thread-data "last_message")]
+    (cond
+      (string? lm) lm
+      (map? lm) (let [content (get lm "content" "")
+                      msg-type (get lm "type" "text")]
+                  (if (str/blank? content)
+                    (preview-for-type msg-type)
+                    content))
+      :else "")))
+
+(defn thread-updated-at
+  "Safely extracts the latest temporal coordinate for chronological sorting."
+  [thread-data]
+  (or (get thread-data "updated_at")
+      (get-in thread-data ["last_message" "created_at"] "")))
+
+;; =============================================================================
+;; 1. High-Performance State Reducers
+;; =============================================================================
+
+(defn- handle-new-message
+  "Processes incoming message payloads and updates the index map in O(1) time."
+  [threads-map payload current-user-id]
+  (let [thread-id (get payload "thread_id")
+        sender-id (get payload "sender_id")
+        from-self? (= sender-id current-user-id)]
+
+    (if-let [existing-thread (get threads-map thread-id)]
+      ;; Thread exists: Perform granular associative patch
+      (assoc threads-map thread-id
+             (assoc existing-thread
+                    "last_message" {"type" (get payload "type" "text")
+                                    "content" (get payload "content" "")
+                                    "created_at" (get payload "created_at" "")}
+                    "unread_count" (if from-self?
+                                     (get existing-thread "unread_count" 0)
+                                     (inc (get existing-thread "unread_count" 0)))))
+
+      ;; Thread does not exist: Initialize new minimal thread entity
+      (assoc threads-map thread-id
+             {"id" thread-id
+              "type" "dm"
+              "last_message" {"type" (get payload "type" "text")
+                              "content" (get payload "content" "")
+                              "created_at" (get payload "created_at" "")}
+              "unread_count" (if from-self? 0 1)}))))
+
+(defn apply-inbox-event!
+  "Pops the atom state container and executes specialized mutative reductions."
+  [!threads-map event-type payload current-user-id]
+  (case event-type
+    :new_message
+    (swap! !threads-map handle-new-message payload current-user-id)
+
+    :thread_updated
+    (let [thread-id (get payload "thread_id")]
+      (when thread-id
+        (swap! !threads-map update thread-id merge payload)))
+
+    nil))
+
+;; =============================================================================
+;; 2. API Hydration Helpers
+;; =============================================================================
+
+(defn items-to-threads-map
+  "Converts a paginated API response vector into the O(1) inbox index map."
+  [items]
+  (into {} (map (fn [item] [(get item "id") item]) items)))
+
+;; =============================================================================
+;; 3. View Selectors
+;; =============================================================================
+
+(defn get-sorted-threads-list
+  "Selector: Project the O(1) storage map into a sorted vector for the UI ListView."
+  [threads-map]
+  (->> (vals threads-map)
+       (sort-by thread-updated-at #(compare %2 %1))
+       vec))

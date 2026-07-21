@@ -1,0 +1,34 @@
+(ns mongol-zangila.infrastructure.session
+  "Centralized session teardown. Used by logout and 401 forced kicks.
+   Full teardown (outbox daemon + navigation) is registered by auth-ctrl
+   to avoid cyclic namespace dependencies with infrastructure.api."
+  (:require
+   [mongol-zangila.state :as state]
+   [mongol-zangila.infrastructure.storage :as storage]
+   [mongol-zangila.infrastructure.socket :as socket]))
+
+(defonce ^:private !force-logout-handler (atom nil))
+
+(defn register-force-logout-handler!
+  "Registers the complete forced-logout pipeline (outbox stop, nav, etc.)."
+  [handler]
+  (reset! !force-logout-handler handler))
+
+(defn has-force-logout-handler? []
+  (some? @!force-logout-handler))
+
+(defn destroy-session!
+  "Disconnects realtime services, wipes secure storage, and clears in-memory state.
+   Returns a Future that completes when persistent token removal finishes."
+  []
+  (socket/full-teardown!)
+  (-> (storage/delete-token!)
+      (.then (fn [_]
+               (state/clear-all-state!)))))
+
+(defn force-logout!
+  "Invoked by the API layer on HTTP 401. Delegates to the registered handler."
+  []
+  (if-let [handler @!force-logout-handler]
+    (handler)
+    (destroy-session!)))

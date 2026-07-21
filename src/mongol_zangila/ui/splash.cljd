@@ -1,0 +1,60 @@
+(ns mongol-zangila.ui.splash
+  "Application bootstrap and routing director.
+   Presents the initial brand identity while delegating system ignition 
+   and session validation to the auth-ctrl domain controller."
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
+
+   ;; Centralized Dart Interop Interceptor
+   ["package:mongol_zangila/post_frame_trigger.dart" :as pft]
+
+   [cljd.flutter :as f]
+
+   ;; System Controllers
+   [mongol-zangila.controllers.auth-ctrl :as auth-ctrl]
+
+   ;; Theme
+   [mongol-zangila.ui.theme :as theme]))
+
+;; =============================================================================
+;; The Splash Screen Widget
+;; =============================================================================
+
+(defn splash-screen
+  "The initial view presented to the user while the app boots in the background."
+  []
+  (f/widget
+   :context ctx
+
+   ;; Pure UI Delegation: We hand over the entire boot sequence to the controller.
+   ;; The UI component no longer needs to know about sockets, storage, or APIs.
+   (pft/PostFrameTrigger
+    .onLayout #(auth-ctrl/boot-application! ctx)
+    .child
+    (m/Scaffold
+     .backgroundColor theme/brand-blue
+     .body
+     (m/Center
+      .child
+      ;; ⚡ Replaced Column with Row to adhere to the LTR Mongolian reading direction.
+      ;; The loading spinner now appears to the right of the vertical text.
+      (m/Row
+       .mainAxisAlignment m/MainAxisAlignment.center
+       .crossAxisAlignment m/CrossAxisAlignment.center
+       .children
+       [;; 1. Brand Logo / Typography (Vertical Mongol Text)
+        (mgl/MongolText "Монгол Зангилаа" ;; "Mongol Zangila"
+                        .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                            .fontSize 36.0
+                                            .fontWeight m/FontWeight.bold
+                                            .color m/Colors.white
+                                            .letterSpacing 2.0))
+
+        ;; ⚡ Spacing adjusted for horizontal layout
+        (m/SizedBox .width 48.0)
+
+        ;; 2. Elegant Loading Indicator
+        (m/CircularProgressIndicator
+         .valueColor (m/AlwaysStoppedAnimation. m/Colors.white)
+         .strokeWidth 3.0)]))))))

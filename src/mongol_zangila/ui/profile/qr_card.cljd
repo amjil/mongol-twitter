@@ -1,0 +1,115 @@
+(ns mongol-zangila.ui.profile.qr-card
+  "Personal QR code identity card viewport.
+   Renders a high-contrast, scannable QR code payload, structured as a horizontal 
+   identity card tailored for vertical Mongolian typography."
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
+   ["package:qr_flutter/qr_flutter.dart" :as qr]
+   [cljd.flutter :as f]
+   
+   ;; System Infrastructure
+   [mongol-zangila.state :as state]
+   
+   ;; UI & Shared Components
+   [mongol-zangila.ui.theme :as theme]
+   [mongol-zangila.utils.nav :as nav]
+   [mongol-zangila.ui.widgets.avatar :as smart-avatar]))
+
+;; =============================================================================
+;; 1. Sub-components
+;; =============================================================================
+
+(defn- id-card
+  "The central elevated card containing the user's vertical identity pillar and QR code."
+  [ctx user-id name handle avatar-url qr-payload]
+  (m/Container
+   ;; Expanded width to accommodate the side-by-side LTR layout
+   .padding (m/EdgeInsets.all 32.0)
+   .decoration (m/BoxDecoration
+                .color m/Colors.white
+                .borderRadius (m/BorderRadius.circular 24.0)
+                .boxShadow [(m/BoxShadow
+                             .color (.withOpacity theme/brand-blue 0.15)
+                             .blurRadius 24.0
+                             .offset (m/Offset 0.0 12.0))])
+   .child
+   ;; 1. Right Pillar: The Optical Payload (QR Code) & Instructions
+   (m/Expanded
+    .child
+    (m/Row
+     .crossAxisAlignment m/CrossAxisAlignment.start
+     .children
+     [;; Scan Instructions (Vertical)
+      (mgl/MongolText "Найзаа нэмэхийн тулд уншуулна уу" ;; "Scan to add friend"
+                      .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                          .fontSize 15.0
+                                          .fontWeight m/FontWeight.bold
+                                          .color theme/text-secondary))
+      (m/SizedBox .width 24.0)
+
+      ;; The QR Code
+      (m/Container
+       .padding (m/EdgeInsets.all 16.0)
+       .decoration (m/BoxDecoration
+                    .color m/Colors.white
+                    .borderRadius (m/BorderRadius.circular 16.0)
+                    .border (m/Border.all .color theme/border-color .width 1.0))
+       .child (qr/QrImageView
+               .data qr-payload
+               .version qr/QrVersions.auto
+               .size 200.0
+               .errorCorrectionLevel qr/QrErrorCorrectLevel.H
+               .eyeStyle (qr/QrEyeStyle .eyeShape qr/QrEyeShape.square .color theme/brand-blue)
+               .dataModuleStyle (qr/QrDataModuleStyle .dataModuleShape qr/QrDataModuleShape.square .color theme/text-primary)))]))))
+
+;; =============================================================================
+;; 2. The Main Screen Widget
+;; =============================================================================
+
+(defn qr-card-screen 
+  "The primary viewport for presenting the user's digital business card."
+  []
+  (let [current-user @state/current-user
+        user-id (get current-user "id")
+        name (get current-user "name" "Unknown")
+        handle (get current-user "handle" "user")
+        avatar-url (get current-user "avatar_url" "")
+        
+        ;; Construct the deterministic routing payload expected by the scanner module
+        qr-payload (str "mz://user/" user-id)]
+    
+    (f/widget
+     :context ctx
+     
+     (m/Scaffold
+      ;; Apply a brand-colored background to heavily contrast against the white QR card
+      .backgroundColor theme/brand-blue
+      
+      .appBar
+      (m/AppBar
+       .backgroundColor m/Colors.transparent
+       .elevation 0.0
+       .leading (m/IconButton 
+                 .icon (m/Icon m/Icons.close_rounded .color m/Colors.white)
+                 .onPressed #(nav/pop! ctx))
+       .actions [(m/IconButton
+                  .icon (m/Icon m/Icons.share_rounded .color m/Colors.white)
+                  .onPressed #(do
+                                ;; Integration point for native share sheets
+                                nil))])
+      
+      .body
+      (m/SafeArea
+       .child
+       (m/Center
+        .child
+        (m/SingleChildScrollView
+         .scrollDirection m/Axis.horizontal
+         .physics (m/BouncingScrollPhysics.)
+         .padding (m/EdgeInsets.symmetric .horizontal 24.0)
+         .child
+         (m/Row
+          .mainAxisAlignment m/MainAxisAlignment.center
+          .children
+          [(id-card ctx user-id name handle avatar-url qr-payload)]))))))))

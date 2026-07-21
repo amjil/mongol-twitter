@@ -1,0 +1,192 @@
+(ns mongol-zangila.ui.profile.edit-profile
+  "Profile editing viewport.
+   A declarative UI layer adapted for LTR Mongolian typography, 
+   integrating a custom IME keyboard and candidate predictor."
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
+   [cljd.flutter :as f]
+
+   ;; System Controllers & State
+   [mongol-zangila.state :as state]
+   [mongol-zangila.controllers.profile-ctrl :as profile-ctrl]
+
+   ;; UI & Shared Components
+   [mongol-zangila.ui.theme :as theme]
+   [mongol-zangila.utils.nav :as nav]
+   [mongol-zangila.infrastructure.media :as media-attach]
+   [mongol-zangila.ui.widgets.avatar :as smart-avatar]
+   
+   ;; ⚡ Custom Keyboard Components
+   [virtual-keyboard.keyboard :as keyboard]
+   [virtual-keyboard.options :as options])) ;; ⚡ 核心修复 1：引入键盘配置项
+
+;; =============================================================================
+;; 1. Sub-component: Form Inputs
+;; =============================================================================
+
+(defn- profile-input
+  "A styled text field optimized for native vertical Mongolian input.
+   Utilizes MongolTextField for correct cursor movement and line wrapping."
+  [^m/TextEditingController ctrl label hint max-lines]
+  (m/Container
+   ;; Constrain width so it forms a neat vertical pillar section
+   .padding (m/EdgeInsets.only .top 24.0 .bottom 24.0 .right 24.0)
+   .child
+   (m/Row
+    .crossAxisAlignment m/CrossAxisAlignment.start
+    .children
+    [;; Vertical Label on the Left
+     (mgl/MongolText label
+                     .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                         .fontSize 15.0
+                                         .fontWeight m/FontWeight.bold
+                                         .color theme/text-secondary))
+     (m/SizedBox .width 16.0)
+
+     ;; Native Vertical Input Field
+     (mgl/MongolTextField
+      .controller ctrl
+      .maxLines max-lines
+      .minLines (if (> max-lines 1) 3 1)
+      .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 16.0 .color theme/text-primary)
+      .decoration (m/InputDecoration
+                   .hintText hint
+                   .hintStyle (m/TextStyle .color theme/border-color)
+                   .filled true
+                   .fillColor theme/bg-color
+                   .border (m/OutlineInputBorder
+                            .borderRadius (m/BorderRadius.circular 12.0)
+                            .borderSide m/BorderSide.none)))])))
+
+;; =============================================================================
+;; 2. The Main Edit Profile Screen Widget
+;; =============================================================================
+
+(defn edit-profile-screen
+  "The primary viewport for modifying user identity metadata."
+  []
+  (let [current-user @state/current-user
+
+        ;; Initialize local UI state from the global state
+        !avatar-url (atom (get current-user "avatar_url" ""))
+        !loading? (atom false)]
+
+    (f/widget
+     :context ctx
+
+     ;; Safely manage and auto-dispose text controllers pre-filled with existing data
+     :managed [name-ctrl (m/TextEditingController. .text (get current-user "name" ""))
+               bio-ctrl (m/TextEditingController. .text (get current-user "bio" ""))]
+     
+     :watch [avatar-url !avatar-url
+             loading? !loading?]
+     
+     ;; ⚡ 核心修复 2：为键盘注入配置，防止抛出 "Null is not a subtype of num"
+     :let [info (merge options/keyboard-option {:keyboard/mongol-font-family "OyunQaganTig"
+                                                :keyboard/key-container-color m/Colors.grey.shade500
+                                                :keyboard/font-size 16})]
+     :bind {:info info}
+
+     (m/Scaffold
+      .backgroundColor m/Colors.white
+
+      ;; --- Top App Bar ---
+      .appBar
+      (m/AppBar
+       .backgroundColor m/Colors.white
+       .elevation 0.5
+       .leading (m/IconButton
+                 .icon (m/Icon m/Icons.close_rounded .color theme/text-primary)
+                 .onPressed #(nav/pop! ctx))
+       .title (m/Text "Профайл засах" ;; "Edit Profile"
+                      .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                          .fontSize 18.0
+                                          .fontWeight m/FontWeight.bold
+                                          .color theme/text-primary))
+       .actions
+       [(m/Padding
+         .padding (m/EdgeInsets.symmetric .horizontal 16.0 .vertical 8.0)
+         .child
+         (m/Container
+          .decoration (m/BoxDecoration .color theme/brand-blue .shape m/BoxShape.circle)
+          .child
+          (m/IconButton
+           .icon (if loading?
+                   (m/SizedBox .width 16.0 .height 16.0
+                               .child (m/CircularProgressIndicator .strokeWidth 2.0 .color m/Colors.white))
+                   (m/Icon m/Icons.check_rounded .color m/Colors.white .size 18.0))
+           .onPressed (if loading?
+                        nil
+                        #(profile-ctrl/update-profile!
+                          ctx
+                          (.-text name-ctrl)
+                          (.-text bio-ctrl)
+                          avatar-url
+                          !loading?)))))])
+
+      ;; --- Main Body: IME Layout Wrapper ---
+      .body
+      (m/SafeArea
+       .child
+       (m/Column
+        .children
+        [
+         ;; 1. Upper Viewport: Stack containing the form and the floating candidates bar
+         (m/Expanded
+          .child
+          (m/Stack
+           .children
+           [
+            ;; A. Base Layer: The Horizontally Scrolling Form
+            (m/SingleChildScrollView
+             .scrollDirection m/Axis.horizontal
+             ;; Added top padding to prevent the form from hiding under the candidates bar
+             .padding (m/EdgeInsets.only .left 24.0 .right 48.0 .top 64.0)
+             .physics (m/BouncingScrollPhysics.)
+             .child
+             (m/Row
+              .crossAxisAlignment m/CrossAxisAlignment.start
+              .children
+              [          
+               ;; Avatar Upload Pillar
+               (m/Container
+                .alignment m/Alignment.topCenter
+                .padding (m/EdgeInsets.only .left 24.0 .bottom 24.0 .right 24.0)
+                .child
+                (m/Stack
+                 .children
+                 [(smart-avatar/smart-avatar ctx (get current-user "id") avatar-url :size 120.0)
+                  (m/Positioned
+                   .bottom 0.0
+                   .right 0.0
+                   .child
+                   (m/GestureDetector
+                    .onTap #(media-attach/pick-and-upload!
+                             ctx
+                             (fn [uploaded-url] (reset! !avatar-url uploaded-url)))
+                    .child
+                    (m/Container
+                     .padding (m/EdgeInsets.all 10.0)
+                     .decoration (m/BoxDecoration
+                                  .color theme/brand-blue
+                                  .shape m/BoxShape.circle
+                                  .border (m/Border.all .color m/Colors.white .width 3.0))
+                     .child (m/Icon m/Icons.camera_alt_rounded .color m/Colors.white .size 20.0))))]))
+
+               (m/VerticalDivider .width 1.0 .thickness 1.0 .color theme/border-color)
+
+               ;; Name Field Pillar
+               (profile-input name-ctrl "Нэр" "Өөрийн нэрийг оруулна уу" 1)
+
+               (m/VerticalDivider .width 1.0 .thickness 1.0 .color theme/border-color)
+
+               ;; Bio Field Pillar
+               (profile-input bio-ctrl "Био" "Өөрийнхөө тухай товчхон..." 4)]))
+            
+            ;; B. Overlay Layer: The Candidates Predictor Bar
+            ;; ⚡ 核心修复 3：移除了外层多余的 m/Positioned，防止 Competing ParentDataWidgets 崩溃
+            (keyboard/candidates nil)]))
+         
+         ;; 2. Lower Viewport: The Custom FST Keyboard
+         (keyboard/keyboard {})]))))))

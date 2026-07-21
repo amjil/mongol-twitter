@@ -1,0 +1,122 @@
+(ns mongol-zangila.ui.search.topic-feed
+  "Topic-specific timeline view.
+   Displays a paginated feed of posts associated with a specific hashtag or category,
+   adapted as a horizontal gallery for LTR vertical Mongolian typography."
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
+   ["dart:core" :as dc]
+   
+   ["package:mongol_zangila/post_frame_trigger.dart" :as pft]
+   
+   [cljd.flutter :as f]
+   [clojure.string :as str]
+   
+   [mongol-zangila.controllers.feed-ctrl :as feed-ctrl]
+   [mongol-zangila.ui.theme :as theme]
+   [mongol-zangila.utils.nav :as nav]
+   [mongol-zangila.ui.widgets.empty-state :as empty-state]
+   [mongol-zangila.ui.feed.components.post-card :as post-card]))
+
+(defn topic-feed-screen 
+  "The primary viewport for exploring a specific hashtag or topic.
+   Implements horizontal infinite scrolling."
+  [topic-name]
+  
+  (let [;; 1. 防空指针保护
+        safe-topic-name (or topic-name "")
+        
+        ;; ⚡ 2. 核心修复：剔除开头的 # 号！防止后端收到 %23 导致 404
+        clean-topic-name (str/replace-first safe-topic-name #"^#" "")
+        
+        !posts (atom [])
+        !page (atom 1)
+        !has-more? (atom true)
+        !initial-loading? (atom true)
+        !refresh-loading? (atom false)
+        !pagination-loading? (atom false)
+        
+        ;; 使用纯净的 name 拼接 API 请求
+        topic-endpoint (str "/topics/" (dc/Uri.encodeComponent clean-topic-name))
+        
+        ;; UI 显示上依然保留 # 号
+        display-title (if (str/starts-with? safe-topic-name "#") safe-topic-name (str "#" safe-topic-name))]
+    
+    (f/widget
+     :context ctx
+     
+     :managed [scroll-ctrl (let [ctrl (m/ScrollController.)]
+                             (.addListener ctrl
+                                           (fn []
+                                             (let [pos (.-position ctrl)
+                                                   pixels (.-pixels pos)
+                                                   max-ext (.-maxScrollExtent pos)]
+                                               (when (and (>= pixels (- max-ext 200.0))
+                                                          (not @!pagination-loading?)
+                                                          (not @!refresh-loading?)
+                                                          @!has-more?)
+                                                 (feed-ctrl/load-page! ctx topic-endpoint !posts !page !has-more? !pagination-loading? false)))))
+                             ctrl)
+               :dispose .dispose]
+     
+     :watch [posts !posts
+             init-loading? !initial-loading?
+             page-loading? !pagination-loading?]
+     
+     (pft/PostFrameTrigger
+      .onLayout (fn []
+                  (reset! !initial-loading? false)
+                  (feed-ctrl/load-page! ctx topic-endpoint !posts !page !has-more? !initial-loading? true))
+      .child
+      (m/Scaffold
+       .backgroundColor theme/bg-color
+       
+       ;; --- Top App Bar ---
+       .appBar
+       (m/AppBar
+        .backgroundColor m/Colors.white
+        .elevation 0.5
+        .leading (m/IconButton 
+                  .icon (m/Icon m/Icons.arrow_back_rounded .color theme/text-primary)
+                  .onPressed #(nav/pop! ctx))
+        .title (m/Text display-title
+                       .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                           .fontSize 18.0 
+                                           .fontWeight m/FontWeight.bold 
+                                           .color theme/brand-blue))
+        .actions [(m/IconButton
+                   .icon (m/Icon m/Icons.refresh_rounded .color theme/brand-blue)
+                   .onPressed #(feed-ctrl/load-page! ctx topic-endpoint !posts !page !has-more? !refresh-loading? true))])
+       
+       ;; --- Main Body ---
+       .body
+       (if init-loading?
+         (m/Center .child (m/CircularProgressIndicator .color theme/brand-blue))
+         
+         (if (empty? posts)
+           (empty-state/empty-view ctx 
+                                   :icon-data m/Icons.tag_rounded
+                                   :title "Нийтлэл олдсонгүй"
+                                   :subtitle (str display-title " сэдэвтэй нийтлэл одоогоор алга байна."))
+           
+           (m/ListView.builder
+            .controller scroll-ctrl
+            .scrollDirection m/Axis.horizontal
+            .physics (m/BouncingScrollPhysics.) 
+            .padding (m/EdgeInsets.only .left 16.0 .right 32.0)
+            .itemCount (if (and @!has-more? page-loading?) (inc (count posts)) (count posts))
+            .itemBuilder
+            (fn [_ i]
+              (if (and page-loading? (= i (count posts)))
+                (m/Padding
+                 .padding (m/EdgeInsets.symmetric .horizontal 24.0)
+                 .child (m/Center .child (m/CircularProgressIndicator .strokeWidth 2.0 .color theme/brand-blue)))
+                
+                (let [post-data (nth posts i)]
+                  (m/Container
+                   .margin (m/EdgeInsets.only .right 16.0 .top 16.0 .bottom 16.0)
+                   .child (post-card/post-card 
+                           ctx post-data
+                           :on-mutate (fn [mutator]
+                                        (swap! !posts (fn [ps]
+                                                        (mapv #(if (= (get % "id") (get post-data "id")) (mutator %) %) ps)))))))))))))))))

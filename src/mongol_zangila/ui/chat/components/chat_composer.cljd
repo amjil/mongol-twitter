@@ -1,0 +1,275 @@
+(ns mongol-zangila.ui.chat.components.chat-composer
+  "A polymorphic chat input composer.
+   ⚡ Advanced UI MVP: The Left-Side full-height input panel is precisely offset 
+   by 56px to perfectly align with the parent Scaffold's standard AppBar."
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:flutter/services.dart" :as services]
+   ["package:mongol/mongol.dart" :as mgl]
+   ["dart:async" :as async]
+   ["dart:core" :as dc]
+   [cljd.flutter :as f]
+   [clojure.string :as str]
+   
+   [mongol-zangila.ui.theme :as theme]
+   [mongol-zangila.utils.nav :as nav]
+   [components.toast :as toast]
+   
+   [mongol-zangila.infrastructure.media :as media-attach]
+   [mongol-zangila.ui.widgets.tag-search :as tag-search]
+   [rich-editor.components.simple-editor :as simple-editor]
+   
+   [virtual-keyboard.options :as options]))
+
+(defn- format-duration [total-seconds]
+  (let [m (quot total-seconds 60)
+        s (rem total-seconds 60)]
+    (str m ":" (if (< s 10) (str "0" s) s))))
+
+(defn chat-composer 
+  "The minimalist universal chat bottom bar."
+  [ctx !editor-state !input-mode !is-recording? on-send-text! on-send-image! on-send-voice!]
+  
+  (let [!record-duration (atom 0)
+        !record-timer (atom nil)
+        !cancel-intent? (atom false)
+        !uploading-type (atom nil)
+        !press-active? (atom false)
+
+        cleanup-timer! (fn [_]
+                         (when-let [t @!record-timer] (.cancel ^async/Timer t))
+                         (reset! !record-timer nil))
+
+        stop-recording! (fn [duration canceled?]
+                          (reset! !press-active? false) 
+                          (when @!is-recording? 
+                            (reset! !is-recording? false)
+                            (cleanup-timer! nil)
+                            (services/HapticFeedback.lightImpact)
+                            (cond
+                              canceled?
+                              (do
+                                (media-attach/cancel-voice-record!)
+                                (reset! !cancel-intent? false)
+                                (toast/info ctx "Цуцлагдлаа."))
+
+                              (<= duration 0)
+                              (do
+                                (media-attach/cancel-voice-record!)
+                                (toast/warn ctx "Зурвас хэт богино байна."))
+
+                              :else
+                              (do
+                                (reset! !uploading-type :voice)
+                                (-> (media-attach/stop-voice-record-and-upload! ctx duration on-send-voice!)
+                                    (.whenComplete #(reset! !uploading-type nil)))))))
+
+        cancel-voice-record! (fn [_]
+                               (cleanup-timer! nil)
+                               (when @!is-recording? (media-attach/cancel-voice-record!)))
+        
+        ;; 弹出全屏侧吸式 Overlay 面板
+        show-input-overlay! (fn []
+                              (m/showGeneralDialog
+                               .context ctx
+                               .barrierDismissible false
+                               .barrierColor m/Colors.transparent ;; 保持背景完全透视
+                               .pageBuilder
+                               (fn [d-ctx _ _]
+                                 (f/widget
+                                  :bind {:info (merge options/keyboard-option 
+                                                      {:keyboard/mongol-font-family "OyunQaganTig" 
+                                                       :keyboard/font-size 16})}
+                                  (m/Scaffold
+                                   .backgroundColor m/Colors.transparent
+                                   .resizeToAvoidBottomInset false
+                                   .body
+                                   (m/SafeArea
+                                    .child
+                                    (m/Stack
+                                     .children
+                                     [
+                                      ;; 1. 绝对顶层的防误触背景：覆盖全屏(包括AppBar透出的56px区域)，点击退出
+                                      (m/Positioned.fill
+                                       .child (m/GestureDetector 
+                                               .onTap #(nav/pop! d-ctx) 
+                                               .child (m/Container .color m/Colors.transparent)))
+                                      
+                                      ;; 2. ⚡ 核心修复：实际内容区下推 56.0 像素
+                                      ;; 完美避开父级 Scaffold 的 AppBar，实现严丝合缝的对齐！
+                                      (m/Positioned
+                                       .left 0.0 .right 0.0 .top 56.0 .bottom 0.0
+                                       .child
+                                       (m/Stack
+                                        .children
+                                        [
+                                         ;; A. 左侧输入纯白实体面板底色挡板 (宽度 260)
+                                         (m/Positioned
+                                          .left 0.0 .top 0.0 .bottom 0.0 .width 160.0
+                                          .child
+                                          (m/Container
+                                           .decoration (m/BoxDecoration 
+                                                        .color m/Colors.white
+                                                        .border (m/Border .right (m/BorderSide .color theme/border-color .width 1.0)
+                                                                          .top (m/BorderSide .color theme/border-color .width 1.0)) ;; 补齐顶边框，视觉更立体
+                                                        .boxShadow [(m/BoxShadow .color m/Colors.black12 .blurRadius 16.0 .offset (m/Offset 4.0 0.0))])))
+                                         
+                                         ;; B. 编辑器挂载区 (同样从距离顶部 56.0 的位置开始渲染)
+                                         (simple-editor/simple-editor 
+                                          !editor-state
+
+                                          ;; rich-editor 默认白色字体，白底面板需显式覆盖
+                                          :editor-config
+                                          {:block-style
+                                           {:paragraph (m/TextStyle .fontFamily "OyunQaganTig" .color theme/text-primary .fontSize 16.0)
+                                            :heading-1 (m/TextStyle .fontFamily "OyunQaganTig" .color theme/text-primary .fontSize 20.0 .fontWeight m/FontWeight.bold)
+                                            :heading-2 (m/TextStyle .fontFamily "OyunQaganTig" .color theme/text-primary .fontSize 18.0 .fontWeight m/FontWeight.bold)
+                                            :list-item (m/TextStyle .fontFamily "OyunQaganTig" .color theme/text-primary .fontSize 16.0)
+                                            :blockquote (m/TextStyle .fontFamily "OyunQaganTig" .color theme/text-secondary .fontSize 15.0)}}
+                                          
+                                          :leading (m/SizedBox.shrink)
+                                          
+                                          ;; 右对齐占满全宽的吸顶工具栏
+                                          :toolbar (m/Container
+                                                    .width (.-infinity dc/double)
+                                                    .decoration (m/BoxDecoration 
+                                                                 .color m/Colors.white
+                                                                 .border (m/Border .top (m/BorderSide .color theme/border-color .width 0.5))
+                                                                 .boxShadow [(m/BoxShadow .color (m/Color 0x08000000) .blurRadius 4.0 .offset (m/Offset 0.0 -2.0))])
+                                                    .padding (m/EdgeInsets.symmetric .horizontal 16.0 .vertical 6.0)
+                                                    .child
+                                                    (m/Row
+                                                     .crossAxisAlignment m/CrossAxisAlignment.center
+                                                     .children
+                                                     [
+                                                      (m/IconButton 
+                                                       .icon (m/Icon m/Icons.close_rounded .color theme/text-secondary .size 24.0) 
+                                                       .onPressed #(nav/pop! d-ctx))
+                                                      
+                                                      (m/Spacer)
+                                                      
+                                                      (m/IconButton 
+                                                       .icon (m/Icon m/Icons.alternate_email_rounded .color theme/text-secondary .size 22.0) 
+                                                       .onPressed #(tag-search/show-tag-modal! d-ctx !editor-state simple-editor/insert-entity-at-cursor!))
+                                                      
+                                                      (m/SizedBox .width 12.0)
+                                                      
+                                                      (m/IconButton 
+                                                       .icon (m/Icon m/Icons.tag_rounded .color theme/text-secondary .size 22.0) 
+                                                       .onPressed #(tag-search/show-tag-modal! d-ctx !editor-state simple-editor/insert-entity-at-cursor!))
+                                                      
+                                                      (m/SizedBox .width 16.0)
+                                                      
+                                                      (m/Material
+                                                       .color theme/brand-blue
+                                                       .borderRadius (m/BorderRadius.circular 24.0)
+                                                       .elevation 1.0
+                                                       .child
+                                                       (m/InkWell
+                                                        .borderRadius (m/BorderRadius.circular 24.0)
+                                                        .onTap (fn []
+                                                                 (let [block (get-in @!editor-state [:blocks "main-post-id"])
+                                                                       content (:content block "")
+                                                                       entities (:entities block [])]
+                                                                   (when-not (str/blank? content)
+                                                                     (on-send-text! content entities)
+                                                                     (reset! !editor-state @(simple-editor/init-simple-state))
+                                                                     (nav/pop! d-ctx))))
+                                                        .child (m/Padding
+                                                                .padding (m/EdgeInsets.symmetric .horizontal 16.0 .vertical 8.0)
+                                                                .child (m/Icon m/Icons.send_rounded .color m/Colors.white .size 18.0))))]))
+                                          
+                                          :trailing (m/Expanded .child (m/SizedBox.shrink)))]))])))))))]
+
+    (f/widget
+     :context ctx
+     :watch [input-mode !input-mode
+             is-recording? !is-recording?
+             duration !record-duration
+             cancel-intent? !cancel-intent?
+             uploading-type !uploading-type]
+
+     :managed [_dummy-anchor (atom nil) :dispose cancel-voice-record!]
+
+     (m/Container
+      .decoration (m/BoxDecoration .color m/Colors.white .border (m/Border .top (m/BorderSide .color theme/border-color .width 0.5)))
+      .padding (m/EdgeInsets.only .bottom 32.0 .top 12.0 .left 16.0 .right 16.0)
+      .child
+      (if (or is-recording? cancel-intent? (= uploading-type :voice))
+        
+        ;; --- 状态 A: 语音录制中流反馈 ---
+        (m/Row
+         .children
+         [(m/Icon (if cancel-intent? m/Icons.delete_sweep_rounded 
+                      (if (= uploading-type :voice) m/Icons.cloud_upload_rounded m/Icons.mic_rounded))
+                  .color (if cancel-intent? theme/error-red theme/brand-blue)
+                  .size 28.0)
+          (m/SizedBox .width 16.0)
+          (mgl/MongolText (cond
+                            (= uploading-type :voice) "Илгээж байна..."
+                            cancel-intent? "Суллаж цуцлах"
+                            :else (format-duration duration))
+                          .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold .fontSize 16.0 .color theme/text-primary))
+          (m/Spacer)])
+        
+        ;; --- 状态 B: 默认极简横向控制按钮条 ---
+        (m/Row
+         .children
+         [
+          ;; 1. 虚拟键盘激活器
+          (m/IconButton
+           .icon (m/Icon m/Icons.keyboard_alt_outlined .color theme/text-secondary .size 28.0)
+           .onPressed show-input-overlay!)
+          
+          (m/SizedBox .width 8.0)
+          
+          ;; 2. 媒体选择器
+          (if (= uploading-type :image)
+            (m/Padding .padding (m/EdgeInsets.all 12.0)
+                       .child (m/SizedBox .width 20.0 .height 20.0 .child (m/CircularProgressIndicator .strokeWidth 2.0 .color theme/brand-blue)))
+            (m/IconButton
+             .icon (m/Icon m/Icons.image_outlined .color theme/text-secondary .size 28.0)
+             .onPressed #(when-not uploading-type
+                           (reset! !uploading-type :image)
+                           (-> (media-attach/pick-and-upload! ctx on-send-image!)
+                               (.whenComplete (fn [] (reset! !uploading-type nil)))))))
+          
+          (m/Spacer)
+          
+          ;; 3. 独立对齐的录音控制手势球
+          (m/GestureDetector
+           .onLongPressStart (fn [_]
+                               (when-not uploading-type
+                                 (reset! !press-active? true) 
+                                 (services/HapticFeedback.mediumImpact)
+                                 (-> (media-attach/start-voice-record! 
+                                       ctx 
+                                       (fn [] 
+                                         (toast/info ctx "Хамгийн их 60 секунд")
+                                         (stop-recording! 60 @!cancel-intent?)))
+                                     (.then (fn [success?]
+                                              (if (and success? @!press-active?)
+                                                (do
+                                                  (services/HapticFeedback.heavyImpact)
+                                                  (reset! !cancel-intent? false)
+                                                  (reset! !is-recording? true)
+                                                  (reset! !record-duration 0)
+                                                  (reset! !record-timer
+                                                         (async/Timer.periodic (dc/Duration. .seconds 1)
+                                                                               (fn [_] (swap! !record-duration #(min 60 (inc %)))))))
+                                                (when success? (media-attach/cancel-voice-record!))))))))
+           .onLongPressMoveUpdate (fn [details]
+                                    (let [dy (.-dy (.-localOffsetFromOrigin details))]
+                                      (if (< dy -40.0)
+                                        (when-not @!cancel-intent?
+                                          (services/HapticFeedback.mediumImpact)
+                                          (reset! !cancel-intent? true))
+                                        (when @!cancel-intent?
+                                          (reset! !cancel-intent? false)))))
+           .onLongPressEnd (fn [_] (stop-recording! @!record-duration @!cancel-intent?))
+           .onLongPressCancel (fn [] (stop-recording! @!record-duration true))
+           .child
+           (m/Container
+            .padding (m/EdgeInsets.all 12.0)
+            .decoration (m/BoxDecoration .color theme/brand-blue .shape m/BoxShape.circle)
+            .child (m/Icon m/Icons.mic_rounded .color m/Colors.white)))]))))))

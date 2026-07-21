@@ -1,0 +1,329 @@
+(ns mongol-zangila.ui.feed.components.post-card
+  "A polymorphic widget representing a single post or reply.
+   A pure UI component completely driven by props, emitting mutations upward.
+   ⚡ Dynamic Grid MVP: Implements a highly scalable, declarative algorithm 
+   for WeChat/Twitter-style media galleries with intelligent row distribution."
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:flutter/services.dart" :as services]
+   ["package:mongol/mongol.dart" :as mgl]
+   [clojure.string :as str]
+
+   ;; System Infrastructure & Controllers
+   [mongol-zangila.infrastructure.config :as config]
+   [mongol-zangila.infrastructure.media :as media]
+   [mongol-zangila.controllers.feed-ctrl :as feed-ctrl]
+   [mongol-zangila.controllers.profile-ctrl :as profile-ctrl]
+   [mongol-zangila.state :as state]
+
+   ;; UI & Utilities
+   [mongol-zangila.ui.theme :as theme]
+   [mongol-zangila.utils.nav :as nav]
+   [mongol-zangila.utils.time-format :as time-format]
+   [components.toast :as toast]
+
+   ;; Domain Widgets
+   [mongol-zangila.ui.widgets.avatar :as smart-avatar]
+   [mongol-zangila.ui.widgets.post-media-gallery :as post-media-gallery]
+  [mongol-zangila.ui.widgets.quoted-post :as quoted-post-widget]
+   [mongol-zangila.utils.rich-text-parser :as rich-text-parser]))
+
+;; =============================================================================
+;; 1. UI Helper Functions
+;; =============================================================================
+
+(defn- share-post-link!
+  [ctx post-id]
+  (let [link (str (str/replace config/base-url #"/api/v1$" "") "/post/" post-id)]
+    (services/Clipboard.setData (services/ClipboardData. .text link))
+    (toast/success ctx "Линк хуулагдлаа.")))
+
+(defn- open-post-detail! [ctx post-id]
+  (nav/push! ctx "/feed/post-detail" {:post-id post-id}))
+
+;; =============================================================================
+;; 2. Sub-components (Action Bar & Modals)
+;; =============================================================================
+
+(defn- action-button 
+  [icon-data count-val is-active? active-color on-tap]
+  (m/InkWell
+   .onTap on-tap
+   .borderRadius (m/BorderRadius.circular 16.0)
+   .child
+   (m/Padding
+    .padding (m/EdgeInsets.symmetric .horizontal 4.0 .vertical 8.0)
+    .child
+    (m/Column
+     .mainAxisSize m/MainAxisSize.min
+     .children
+     [(m/Icon icon-data 
+              .size 20.0 
+              .color (if is-active? active-color theme/text-secondary))
+      (if (> count-val 0)
+        (m/Padding
+         .padding (m/EdgeInsets.only .top 6.0)
+         .child (m/Text (str count-val)
+                        .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                            .fontSize 13.0
+                                            .color (if is-active? active-color theme/text-secondary))))
+        (m/SizedBox.shrink))
+      (m/SizedBox .height 12.0)]))))
+
+(defn- show-post-options! 
+  [ctx post-data on-mutate on-delete]
+  (let [author (get post-data "author" {})
+        author-id (get author "id")
+        author-name (get author "name" "Unknown")
+        is-self? (= author-id (get @state/current-user "id"))]
+    (m/showModalBottomSheet
+     .context ctx
+     .backgroundColor m/Colors.white
+     .shape (m/RoundedRectangleBorder .borderRadius (m/BorderRadius.vertical .top (m/Radius.circular 16.0)))
+     .builder
+     (fn [b-ctx]
+       (m/SafeArea
+        .child
+        (m/Row
+         .mainAxisSize m/MainAxisSize.min
+         .children
+         (vec
+          (keep identity
+           [(when-not is-self?
+              (mgl/MongolListTile
+               .leading (m/Icon m/Icons.block_rounded .color theme/error-red)
+               .title (mgl/MongolText (str "@" (get author "handle") " хэрэглэгчийг блоклох")
+                                      .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold .color theme/error-red .fontSize 16.0))
+               .onTap (fn []
+                        (nav/pop! b-ctx)
+                        (profile-ctrl/block-user! ctx author-id author-name 
+                                                  #(when on-mutate 
+                                                     (on-mutate (fn [p] (assoc p "is_blocked_optimistic" true))))))))
+            
+            (when-not is-self?
+              (mgl/MongolListTile
+               .leading (m/Icon m/Icons.report_problem_rounded .color theme/text-primary)
+               .title (mgl/MongolText "Мэдээлэх (Report)" 
+                                      .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold .fontSize 16.0))
+               .onTap (fn []
+                        (nav/pop! b-ctx)
+                        (toast/info ctx "Гомдол илгээгдлээ."))))
+            
+            (when is-self?
+              (mgl/MongolListTile
+               .leading (m/Icon m/Icons.delete_outline_rounded .color theme/error-red)
+               .title (mgl/MongolText "Нийтлэл устгах" 
+                                      .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold .color theme/error-red .fontSize 16.0))
+               .onTap (fn []
+                        (nav/pop! b-ctx)
+                        (when on-delete (on-delete)))))]))))))))
+
+(defn- show-repost-options! 
+  [ctx post-data on-mutate author-name]
+  (let [reposted? (get post-data "is_reposted_by_me" false)
+        post-id (get post-data "id")]
+    (m/showModalBottomSheet
+     .context ctx
+     .backgroundColor m/Colors.white
+     .shape (m/RoundedRectangleBorder .borderRadius (m/BorderRadius.vertical .top (m/Radius.circular 16.0)))
+     .builder
+     (fn [b-ctx]
+       (m/SafeArea
+        .child
+        (m/Row
+         .mainAxisSize m/MainAxisSize.min
+         .children
+         [(mgl/MongolListTile
+           .leading (m/Icon m/Icons.repeat_rounded .color (if reposted? theme/error-red theme/text-primary))
+           .title (mgl/MongolText (if reposted? "Дахин нийтлэхийг болих" "Дахин нийтлэх")
+                                  .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold .fontSize 16.0))
+           .onTap (fn []
+                    (nav/pop! b-ctx)
+                    (feed-ctrl/toggle-repost! ctx post-data on-mutate)))
+          
+          (mgl/MongolListTile
+           .leading (m/Icon m/Icons.format_quote_rounded .color theme/text-primary)
+           .title (mgl/MongolText "Иш татах" 
+                                  .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold .fontSize 16.0))
+           .onTap (fn []
+                    (nav/pop! b-ctx)
+                    (nav/push-fullscreen! ctx "/feed/compose"
+                                          {:quote-id post-id
+                                           :quote-author-name author-name
+                                           :quote-post post-data})))]))))))
+
+;; =============================================================================
+;; 3. The Main Post Card Widget
+;; =============================================================================
+
+(defn post-card 
+  "The primary rendering unit. 
+   ⚡ Stateless, thoroughly adapted for traditional Left-to-Right horizontal accumulation."
+  [ctx post-data & {:keys [is-detail-view is-reply on-mutate on-bookmark-change on-delete root-post-id]
+                    :or {is-detail-view false
+                         is-reply false}}]
+  
+  (let [post-id (get post-data "id")
+        author (get post-data "author" {})
+        author-id (get author "id")
+        
+        blocked-optimistic? (get post-data "is_blocked_optimistic" false)
+        is-blocked? (or blocked-optimistic? (get author "is_blocked_by_me" false))]
+    
+    (if is-blocked?
+      ;; --- The Blocked Stub ---
+      (m/Container
+       .decoration (m/BoxDecoration .color m/Colors.white .border (m/Border .right (m/BorderSide .color theme/border-color .width 1.0)))
+       .padding (m/EdgeInsets.all 16.0)
+       .child
+       (m/Column
+        .crossAxisAlignment m/CrossAxisAlignment.center
+        .children
+        [(m/Icon m/Icons.block_rounded .color theme/text-secondary .size 20.0)
+         (m/SizedBox .height 8.0)
+         (m/Flexible
+          .child (mgl/MongolText (str "@" (get author "handle" "user") " хэрэглэгчийг блоклосон байна.")
+                                 .style (m/TextStyle .fontFamily "OyunQaganTig" .color theme/text-secondary .fontWeight m/FontWeight.bold)))]))
+      
+      ;; --- 正常帖子 UI: 三柱式横向流架构 (Three-Pillar Horizontal Flow) ---
+      (let [content (get post-data "content" "")
+            entities (get post-data "entities" [])
+            media-urls (mapv media/absolute-media-url (get post-data "media" []))
+            created-at (get post-data "created_at" "")
+            quoted-post (get post-data "quoted_post")
+            
+            liked? (get post-data "is_liked_by_me" false)
+            like-count (get post-data "like_count" 0)
+            reposted? (get post-data "is_reposted_by_me" false)
+            repost-count (get post-data "repost_count" 0)
+            reply-count (get post-data "reply_count" 0)
+            bookmarked? (get post-data "is_bookmarked_by_me" false)]
+        
+        (m/Container
+         .decoration (m/BoxDecoration 
+                      .color m/Colors.white
+                      .border (m/Border .right (m/BorderSide .color theme/border-color .width 1.0)))
+         .padding (m/EdgeInsets.only .top 16.0 .bottom 16.0 .left 12.0 .right 8.0)
+         .child
+         (m/Row
+          .crossAxisAlignment m/CrossAxisAlignment.stretch
+          .mainAxisSize m/MainAxisSize.min
+          .children
+          [           ;; ----------------------------------------------------
+           ;; Pillar 1. Author Pillar (Left-Most)
+           ;; ----------------------------------------------------
+           (m/Container
+            .width 40.0
+            .child
+            (m/Column
+             .crossAxisAlignment m/CrossAxisAlignment.center
+             .mainAxisSize m/MainAxisSize.max
+             .children
+             [(m/GestureDetector
+               .onTap #(nav/push! ctx "/profile/view" {:user-id author-id})
+               .child
+               (smart-avatar/smart-avatar ctx author-id (get author "avatar_url") :size 40.0))
+
+              (if is-reply
+                (m/Container .margin (m/EdgeInsets.only .top 6.0) .width 2.0 .height 16.0 .color theme/border-color)
+                (m/SizedBox .height 12.0))
+
+              (m/Expanded
+               .child
+               (m/Align
+                .alignment m/Alignment.topCenter
+                .child
+                (m/GestureDetector
+                 .onTap #(nav/push! ctx "/profile/view" {:user-id author-id})
+                 .child
+                 (mgl/MongolText (get author "name" "Unknown")
+                                 .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 16.0 .fontWeight m/FontWeight.bold .color theme/text-primary)
+                                 .maxLines 1
+                                 .overflow m/TextOverflow.ellipsis))))
+
+              (mgl/MongolText (time-format/format-relative created-at)
+                              .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 12.0 .color theme/text-secondary))]))
+
+           (m/SizedBox .width 12.0)
+           (m/Container .width 0.5 .color theme/border-color)
+           (m/SizedBox .width 12.0)
+
+           ;; ----------------------------------------------------
+           ;; Pillar 2. Main Content Area (Middle)
+           ;; ----------------------------------------------------
+           (m/Flexible
+            .child
+            (m/Row
+             .crossAxisAlignment m/CrossAxisAlignment.stretch
+             .mainAxisSize m/MainAxisSize.min
+             .children
+             [;; A. 垂直富文本
+              (m/GestureDetector
+               .onTap (when-not is-detail-view #(open-post-detail! ctx post-id))
+               .behavior m/HitTestBehavior.opaque
+               .child
+               (m/Container
+                .constraints (m/BoxConstraints .minWidth 60.0)
+                .child
+                (rich-text-parser/rich-text-view
+                 ctx content entities
+                 :base-size (if is-detail-view 18.0 15.0)
+                 :max-lines (if is-detail-view nil 3)
+                 :overflow (if is-detail-view nil m/TextOverflow.ellipsis))))
+
+              ;; B. 引用卡片
+              (if quoted-post
+                (m/Padding
+                 .padding (m/EdgeInsets.only .left 16.0)
+                 .child
+                 (m/GestureDetector
+                  .onTap (when-not is-detail-view #(open-post-detail! ctx (get quoted-post "id")))
+                  .child
+                  (quoted-post-widget/quoted-post-card ctx quoted-post)))
+                (m/SizedBox.shrink))
+
+              ;; C. 高级多图矩阵
+              (if (not-empty media-urls)
+                (m/Padding
+                 .padding (m/EdgeInsets.only .left 16.0)
+                 .child (m/Align
+                         .alignment m/Alignment.topCenter
+                         .child (post-media-gallery/multi-media-gallery ctx media-urls)))
+                (m/SizedBox.shrink))]))
+
+           (m/SizedBox .width 12.0)
+           (m/Container .width 0.5 .color theme/border-color)
+           (m/SizedBox .width 4.0)
+
+           ;; ----------------------------------------------------
+           ;; Pillar 3. Action Pillar (Right-Most)
+           ;; ----------------------------------------------------
+           (m/Container
+            .width 48.0
+            .child
+            (m/Column
+             .mainAxisAlignment m/MainAxisAlignment.end
+             .crossAxisAlignment m/CrossAxisAlignment.center
+             .children
+             [(m/IconButton
+               .padding m/EdgeInsets.zero
+               .constraints (m/BoxConstraints)
+               .icon (m/Icon m/Icons.more_horiz_rounded .color theme/text-secondary .size 20.0)
+               .onPressed #(show-post-options! ctx post-data on-mutate on-delete))
+
+              (action-button m/Icons.chat_bubble_outline_rounded reply-count false theme/brand-blue
+                             #(nav/push-fullscreen! ctx "/feed/compose"
+                                                    {:reply-to-id (if root-post-id root-post-id post-id)
+                                                     :reply-to-author-id author-id
+                                                     :reply-to-name (get author "handle" (get author "name"))}))
+
+              (action-button m/Icons.repeat_rounded repost-count reposted? theme/success-green
+                             #(show-repost-options! ctx post-data on-mutate (get author "name")))
+
+              (action-button (if liked? m/Icons.favorite_rounded m/Icons.favorite_outline_rounded)
+                             like-count liked? theme/error-red
+                             #(feed-ctrl/toggle-like! ctx post-data on-mutate))
+
+              (action-button (if bookmarked? m/Icons.bookmark_rounded m/Icons.bookmark_border_rounded)
+                             0 bookmarked? theme/brand-blue
+                             #(feed-ctrl/toggle-bookmark! ctx post-data on-mutate :on-change on-bookmark-change))]))]))))))

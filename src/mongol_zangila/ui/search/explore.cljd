@@ -1,0 +1,170 @@
+(ns mongol-zangila.ui.search.explore
+  "The 'Discovery' or 'Explore' viewport.
+   Serves as the root tab for search. Features a dummy search bar that routes to 
+   the active search view, allowing this page to focus purely on content discovery
+   via trending topics and recommended pillars.
+   ⚡ Fully refactored to use a native vertical Mongolian dummy search pill."
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
+   
+   ;; Centralized Dart Interop Interceptor
+   ["package:mongol_zangila/post_frame_trigger.dart" :as pft]
+   
+   [cljd.flutter :as f]
+   [clojure.string :as str]
+   
+   ;; System Controllers
+   [mongol-zangila.controllers.search-ctrl :as search-ctrl]
+   
+   ;; Shared UI Components (Removed external search-bar dependency)
+   [mongol-zangila.ui.theme :as theme]
+   [mongol-zangila.utils.nav :as nav]
+   [mongol-zangila.ui.layout.scaffold :as scaffold]))
+
+;; =============================================================================
+;; 1. Sub-components
+;; =============================================================================
+
+(defn- dummy-search-bar 
+  "A visual component that perfectly mimics the vertical search-input styling.
+   Acts purely as a tactical navigation button to the active search route."
+  [ctx]
+  (m/GestureDetector
+   .onTap #(nav/push! ctx "/search/active")
+   .child
+   (m/Container
+    .width 64.0 ;; 与 active-search 的侧边栏宽度保持一致
+    .padding (m/EdgeInsets.symmetric .vertical 16.0 .horizontal 12.0)
+    .decoration (m/BoxDecoration 
+                 .color m/Colors.white ;; 放在偏灰的背景上使用纯白可以凸显输入框
+                 .borderRadius (m/BorderRadius.circular 24.0)
+                 .border (m/Border.all .color (.withOpacity theme/border-color 0.5) .width 1.0)
+                 .boxShadow [(m/BoxShadow .color (m/Color 0x0A000000) .blurRadius 8.0 .offset (m/Offset 0.0 2.0))])
+    .child
+    (m/Column
+     .mainAxisSize m/MainAxisSize.min
+     .children
+     [(m/Padding 
+       .padding (m/EdgeInsets.only .top 12.0)
+       .child (m/Icon m/Icons.search_rounded .color theme/text-secondary .size 20.0))
+      
+      (m/SizedBox .height 12.0)
+      
+      (mgl/MongolText "Хайх..."
+                      .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                          .fontSize 15.0 
+                                          .color theme/text-secondary))]))))
+
+(defn- trending-tile 
+  "Transforms trending topics into modular vertical pillars for the discovery gallery."
+  [ctx topic-data]
+  (let [topic-name (str/replace-first (get topic-data "name" "") #"^#" "")
+        post-count (get topic-data "post_count" 0)]
+    (m/InkWell
+     .onTap #(when-not (str/blank? topic-name)
+               (nav/push! ctx "/search/topic" {:topic-name topic-name}))
+     .child
+     (m/Container
+      .width 110.0
+      .padding (m/EdgeInsets.symmetric .vertical 24.0 .horizontal 8.0)
+      .decoration (m/BoxDecoration 
+                   .color m/Colors.white
+                   .border (m/Border .right (m/BorderSide .color theme/border-color .width 0.5)))
+      .child
+      (m/Column
+       .children
+       [;; Semantic Icon Anchor (Top)
+        (m/Container
+         .padding (m/EdgeInsets.all 12.0)
+         .decoration (m/BoxDecoration .color theme/bg-color .shape m/BoxShape.circle)
+         .child (m/Icon m/Icons.tag_rounded .color theme/brand-blue .size 20.0))
+        
+        (m/SizedBox .height 24.0)
+        
+        ;; Topic Metadata (Middle)
+        (m/Expanded
+         .child
+         (m/Row
+          .mainAxisAlignment m/MainAxisAlignment.center
+          .crossAxisAlignment m/CrossAxisAlignment.start
+          .children
+          [(mgl/MongolText (str "#" topic-name)
+                           .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                               .fontSize 16.0 
+                                               .fontWeight m/FontWeight.bold 
+                                               .color theme/text-primary))
+           (m/SizedBox .width 8.0)
+           (mgl/MongolText (str post-count " нийтлэл") ;; "X posts"
+                           .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                               .fontSize 13.0
+                                               .color theme/text-secondary))]))])))))
+
+;; =============================================================================
+;; 2. Main Explore Screen Widget
+;; =============================================================================
+
+(defn explore-screen
+  "The primary discovery feed without keyboard interference."
+  []
+  (let [!trends (atom [])
+        !loading-trends? (atom true)]
+
+    (f/widget
+     :context ctx
+     :watch [trends !trends
+             loading? !loading-trends?]
+
+     (pft/PostFrameTrigger
+      .onLayout #(search-ctrl/load-trending-topics! ctx !trends !loading-trends?)
+      .child
+      (scaffold/app-scaffold
+       ctx "/search"
+       (m/Scaffold
+        .backgroundColor theme/bg-color
+        .appBar (m/AppBar .title (m/Text " ") .backgroundColor theme/bg-color .elevation 0.0)
+        .body
+        (m/SafeArea
+         .child
+         (m/CustomScrollView
+          .scrollDirection m/Axis.horizontal
+          .physics (m/BouncingScrollPhysics.)
+          .slivers
+          [(m/SliverToBoxAdapter
+            .child
+            (m/Padding
+             .padding (m/EdgeInsets.only .left 16.0 .right 8.0 .top 16.0 .bottom 16.0)
+             .child
+             ;; ⚡ 直接使用我们刚刚手写的垂直 LTR 风格假搜索框
+             (dummy-search-bar ctx)))
+
+           (if loading?
+             (m/SliverToBoxAdapter
+              .child
+              (m/Container
+               .width 100.0
+               .child (m/Center .child (m/CircularProgressIndicator .color theme/brand-blue))))
+             (m/SliverToBoxAdapter .child (m/SizedBox.shrink)))
+
+           (if (not loading?)
+             (m/SliverToBoxAdapter
+              .child
+              (m/Container
+               .width 56.0
+               .padding (m/EdgeInsets.only .top 24.0)
+               .alignment m/Alignment.topCenter
+               .child (mgl/MongolText "Тренд сэдвүүд"
+                                      .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                                          .fontSize 14.0
+                                                          .fontWeight m/FontWeight.bold
+                                                          .color theme/text-secondary))))
+             (m/SliverToBoxAdapter .child (m/SizedBox.shrink)))
+
+           (if (and (not loading?) (seq trends))
+             (m/SliverList
+              .delegate
+              (m/SliverChildBuilderDelegate
+               (f/build [i]
+                        (trending-tile ctx (nth trends i)))
+               .childCount (count trends)))
+             (m/SliverToBoxAdapter .child (m/SizedBox.shrink)))]))))))))

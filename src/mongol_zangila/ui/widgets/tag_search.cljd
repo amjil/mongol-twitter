@@ -1,0 +1,295 @@
+(ns mongol-zangila.ui.widgets.tag-search
+  "A dedicated modal widget for searching and selecting users or topics.
+   Performs application-specific API calls and integrates seamlessly 
+   with the custom vertical rich text editor."
+  (:require 
+   ["package:flutter/material.dart" :as m]
+   ["package:flutter/foundation.dart" :as foundation]
+   ["package:mongol/mongol.dart" :as mgl]
+   ["dart:core" :as dc]
+   [cljd.flutter :as f]
+   [clojure.string :as str]
+   
+   ;; System Infrastructure & UI
+   [mongol-zangila.infrastructure.api :as api]
+   [mongol-zangila.ui.theme :as theme]
+   [mongol-zangila.utils.nav :as nav]
+   
+   ;; Custom Editor & IME Components
+   [rich-editor.components.text-field :as custom-tf]
+   [virtual-keyboard.keyboard :as keyboard]
+   [virtual-keyboard.options :as options]
+   [shared-ime.overlay-view :as overlay]))
+
+;; =============================================================================
+;; 1. Platform Utils (Internal)
+;; =============================================================================
+
+(defn- use-virtual-keyboard? 
+  []
+  (let [p foundation/defaultTargetPlatform]
+    (not (or (= p foundation/TargetPlatform.macOS)
+             (= p foundation/TargetPlatform.windows)
+             (= p foundation/TargetPlatform.linux)))))
+
+;; =============================================================================
+;; 2. Per-modal Editor State Factory
+;; =============================================================================
+
+(defn- fresh-tag-search-state []
+  (atom {:root ["search-block"]
+         :blocks {"search-block" {:id "search-block" :type :paragraph :content ""}}
+         :active-block-id "search-block"
+         :cursor-visible true
+         :external-keyboard-delegate nil
+         :history {:undo-stack [] :redo-stack [] :max-depth 100}}))
+
+;; =============================================================================
+;; 3. Modal Content View
+;; =============================================================================
+
+(defn- tag-search-view
+  [modal-h !search-state on-insert-fn]
+  (let [!raw-results (atom [])
+        !loading? (atom false)
+        !search-type (atom :user)
+        ;; 移动端虚拟键盘只更新 TextEditingController，不同步 rich-editor block content
+        !query (atom "")
+        
+        do-search! 
+        (fn [q]
+          (let [clean-q (-> q str/trim (str/replace-first #"^[@#]" ""))]
+            (if (str/blank? clean-q)
+              (do
+                (reset! !raw-results [])
+                (reset! !loading? false)
+                nil)
+              (do
+                (reset! !loading? true)
+                (let [encoded-q (dc/Uri.encodeComponent clean-q)
+                      endpoint (if (= @!search-type :user)
+                                 (str "/search/users?q=" encoded-q "&limit=20")
+                                 (str "/search/topics?q=" encoded-q "&limit=20"))]
+                  (-> (api/get-req endpoint)
+                      (.then (fn [data]
+                               (let [items (try 
+                                             (let [d (get data "data")]
+                                               (if (some? d) d data))
+                                             (catch dc/dynamic _ data))]
+                                 (reset! !raw-results (try (vec items) (catch dc/dynamic _ [])))
+                                 (reset! !loading? false)
+                                 nil)))
+                      (.catchError (fn [_]
+                                     (reset! !loading? false)
+                                     nil))))))))
+
+        sync-query! (fn [text]
+                      (reset! !query text)
+                      (do-search! text))]
+    
+    (f/widget
+     :context local-ctx
+     :managed [search-ctrl (m/TextEditingController.)
+               search-focus-node (m/FocusNode.)]
+
+     :watch [results !raw-results
+             loading? !loading?
+             search-type !search-type
+             query !query]
+
+     :let [info (merge options/keyboard-option {:keyboard/mongol-font-family "OyunQaganTig"
+                                                :keyboard/key-container-color m/Colors.grey.shade500
+                                                :keyboard/font-size 16})
+           is-blank? (str/blank? (-> query str/trim (str/replace-first #"^[@#]" "")))
+
+           main-content
+           (m/Container
+            .color theme/bg-color
+            .child
+            (m/Row
+             .children
+             [;; --- A. Sidebar Category Switcher ---
+              (m/Container
+               .width 80.0
+               .margin (m/EdgeInsets.only .left 16.0 .top 64.0 .bottom 16.0)
+               .decoration (m/BoxDecoration
+                            .color m/Colors.white
+                            .borderRadius (m/BorderRadius.circular 40.0)
+                            .boxShadow [(m/BoxShadow .color (m/Color 0x1A000000) .blurRadius 8.0 .offset (m/Offset 0.0 4.0))]
+                            .border (m/Border.all .color (.withOpacity theme/brand-blue 0.1) .width 1.0))
+               .child
+               (m/Column
+                .children
+                [(m/Padding .padding (m/EdgeInsets.only .top 16.0 .bottom 16.0)
+                            .child (m/IconButton
+                                    .icon (m/Icon m/Icons.keyboard_arrow_down_rounded .color theme/text-primary)
+                                    .onPressed #(nav/pop! local-ctx)))
+                 (m/Expanded
+                  .child
+                  (m/Padding
+                   .padding (m/EdgeInsets.only .bottom 16.0)
+                   .child
+                   (custom-tf/text-field
+                    !search-state
+                    {:controller search-ctrl
+                     :focus-node search-focus-node
+                     :autofocus true
+                     :hint "Хайх..."
+                     :max-lines 1
+                     :on-changed sync-query!
+                     :on-submitted sync-query!
+                     :style (m/TextStyle .fontFamily "OyunQaganTig" .color theme/text-primary .fontSize 18.0)})))
+
+                 ;; --- Switch Tab (User/Topic) ---
+                 (m/Container
+                  .padding (m/EdgeInsets.symmetric .vertical 16.0)
+                  .decoration (m/BoxDecoration .border (m/Border .top (m/BorderSide .color (.withOpacity theme/text-secondary 0.2) .width 1.0)))
+                  .child
+                  (m/Column
+                   .mainAxisSize m/MainAxisSize.min
+                   .children
+                   [(m/InkWell
+                     .onTap (fn []
+                              (reset! !search-type :user)
+                              (do-search! @!query)
+                              nil)
+                     .child (m/Padding
+                             .padding (m/EdgeInsets.symmetric .vertical 16.0 .horizontal 8.0)
+                             .child (mgl/MongolText "Хэрэглэгч"
+                                                    .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 14.0
+                                                                        .fontWeight (if (= search-type :user) m/FontWeight.bold m/FontWeight.normal)
+                                                                        .color (if (= search-type :user) theme/brand-blue theme/text-secondary)))))
+                    (m/InkWell
+                     .onTap (fn []
+                              (reset! !search-type :topic)
+                              (do-search! @!query)
+                              nil)
+                     .child (m/Padding
+                             .padding (m/EdgeInsets.symmetric .vertical 16.0 .horizontal 8.0)
+                             .child (mgl/MongolText "Сэдэв"
+                                                    .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 14.0
+                                                                        .fontWeight (if (= search-type :topic) m/FontWeight.bold m/FontWeight.normal)
+                                                                        .color (if (= search-type :topic) theme/brand-blue theme/text-secondary)))))]))]))
+
+              (m/SizedBox .width 32.0)
+
+              ;; --- B. Horizontal Results List ---
+              (m/Expanded
+               .child
+               (cond
+                 is-blank?
+                 (m/Center .child (mgl/MongolText "Хайх үгээ оруулна уу..." .style (m/TextStyle .color theme/text-secondary .fontFamily "OyunQaganTig" .fontSize 16.0)))
+
+                 loading?
+                 (m/Center .child (m/CircularProgressIndicator .color theme/brand-blue))
+
+                 (empty? results)
+                 (m/Center .child (mgl/MongolText "Илэрц алга" .style (m/TextStyle .color theme/text-secondary .fontFamily "OyunQaganTig" .fontSize 16.0)))
+
+                 :else
+                 (m/ListView.builder
+                  .scrollDirection m/Axis.horizontal
+                  .physics (m/BouncingScrollPhysics.)
+                  .padding (m/EdgeInsets.only .top 64.0 .bottom 16.0 .right 32.0)
+                  .itemCount (count results)
+                  .itemBuilder
+                  (fn [_ i]
+                    (let [item (nth results i)
+                          display-title (if (= search-type :user)
+                                          (str "@" (get item "handle" (get item "username" "user")))
+                                          (str "#" (get item "name" "topic")))
+                          display-subtitle (if (= search-type :user)
+                                             (get item "name" "")
+                                             (str (get item "post_count" 0) " нийтлэл"))
+                          icon-data (if (= search-type :user) m/Icons.person_rounded m/Icons.tag_rounded)]
+                      (m/Padding
+                       .padding (m/EdgeInsets.only .right 16.0)
+                       .child
+                       (m/InkWell
+                        .onTap (fn []
+                                 (on-insert-fn display-title (get item "id"))
+                                 (nav/pop! local-ctx)
+                                 nil)
+                        .borderRadius (m/BorderRadius.circular 16.0)
+                        .child
+                        (m/Container
+                         .padding (m/EdgeInsets.all 24.0)
+                         .decoration (m/BoxDecoration
+                                      .color m/Colors.white
+                                      .border (m/Border.all .color (.withOpacity theme/border-color 0.5) .width 1.0)
+                                      .borderRadius (m/BorderRadius.circular 16.0))
+                         .child
+                         (m/Column
+                          .crossAxisAlignment m/CrossAxisAlignment.start
+                          .children
+                          [(m/Icon icon-data .color theme/brand-blue .size 24.0)
+                           (m/SizedBox .height 16.0)
+                           (m/Expanded
+                            .child
+                            (mgl/MongolText display-title
+                                            .style (m/TextStyle .fontSize 18.0 .color theme/text-primary .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold)
+                                            .maxLines 5 .overflow m/TextOverflow.ellipsis))
+                           (m/SizedBox .height 16.0)
+                           (m/Divider .color theme/border-color)
+                           (m/SizedBox .height 16.0)
+                           (mgl/MongolText display-subtitle .style (m/TextStyle .fontSize 13.0 .color theme/text-secondary .fontFamily "OyunQaganTig"))])))))))))]))]
+
+     :bind {:info info}
+
+     (m/Container
+      .height modal-h
+      .child
+      (m/ClipRRect
+       .borderRadius (m/BorderRadius.vertical .top (m/Radius.circular 24.0))
+       .child
+       (m/Scaffold
+        .backgroundColor theme/bg-color
+        .resizeToAvoidBottomInset false
+        .body
+        (if (use-virtual-keyboard?)
+          (m/Column
+           .children
+           [(m/Expanded
+             .child
+             (m/Stack
+              .children
+              [main-content
+               (keyboard/candidates nil)]))
+            (m/SafeArea
+             .top false
+             .child
+             (keyboard/keyboard
+              {:custom-fns {:on-return #(when-let [cb (:on-return (:external-keyboard-delegate @!search-state))] (cb))
+                            :on-backspace #(when-let [cb (:on-backspace (:external-keyboard-delegate @!search-state))] (cb))}}))])
+          (overlay/ime-global-wrapper main-content "tag-modal-ime"))))))))
+
+;; =============================================================================
+;; 4. Public Entry Point API
+;; =============================================================================
+
+(defn show-tag-modal!
+  [ctx !target-editor-state on-insert-fn]
+  (let [!search-state (fresh-tag-search-state)
+        captured-active-id (:active-block-id @!target-editor-state)
+        media-q (m/MediaQuery.of ctx)
+        screen-h (.-height (.-size media-q))
+        top-padding (.-top (.-padding media-q))
+        safe-top (if (> top-padding 0) (+ top-padding 12.0) (if foundation/kIsWeb 24.0 48.0))
+        modal-h (- screen-h safe-top)]
+    
+    (swap! !target-editor-state assoc :active-block-id nil :cursor-visible false)
+    (when-let [primary-focus (.-primaryFocus m/FocusManager.instance)] (.unfocus primary-focus))
+             
+    (-> (m/showModalBottomSheet
+         .context ctx
+         .isScrollControlled true
+         .backgroundColor m/Colors.transparent
+         .builder (fn [_sheet-ctx]
+                    (tag-search-view modal-h !search-state
+                                     (fn [display-text entity-id]
+                                       (on-insert-fn !target-editor-state display-text entity-id)))))
+        (.whenComplete
+         (fn []
+           (when (nil? (:active-block-id @!target-editor-state))
+             (swap! !target-editor-state assoc :active-block-id captured-active-id :cursor-visible true))
+           nil)))))

@@ -1,0 +1,244 @@
+(ns mongol-zangila.ui.profile.connections
+  "Social graph exploration viewport.
+   Features a vertical TabBar on the left edge and a horizontally expanding
+   TabBarView on the right, fully immersing the UI in LTR vertical typography."
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
+   ["dart:core" :as dc]
+   
+   ;; Centralized Dart Interop Interceptor
+   ["package:mongol_zangila/post_frame_trigger.dart" :as pft]
+   
+   [cljd.flutter :as f]
+   
+   ;; System Infrastructure
+   [mongol-zangila.infrastructure.api :as api]
+   [mongol-zangila.state :as state]
+   
+   ;; UI & Shared Components
+   [mongol-zangila.ui.theme :as theme]
+   [mongol-zangila.utils.nav :as nav]
+   [mongol-zangila.ui.widgets.avatar :as smart-avatar]
+   [mongol-zangila.ui.widgets.empty-state :as empty-state]
+   [components.toast :as toast]))
+
+;; =============================================================================
+;; 1. Core Data Fetching & Mutations
+;; =============================================================================
+
+(defn- load-network-graph! 
+  "Concurrently fetches both the followers and following lists for the target user."
+  [ctx target-user-id !followers !following !loading?]
+  
+  (reset! !loading? true)
+  
+  (let [fetch-followers (api/get-req (str "/users/" target-user-id "/followers"))
+        fetch-following (api/get-req (str "/users/" target-user-id "/following"))]
+    
+    (-> (dc/Future.wait [fetch-followers fetch-following])
+        (.then (fn [results]
+                 (let [followers-res (first results)
+                       following-res (second results)]
+                   (reset! !followers (get followers-res "data" []))
+                   (reset! !following (get following-res "data" []))
+                   (reset! !loading? false))))
+        (.catchError (fn [err]
+                       (reset! !loading? false)
+                       (toast/error ctx (str "Мэдээлэл татахад алдаа гарлаа: " err)))))))
+
+(defn- toggle-connection-follow! 
+  "Optimistically toggles the follow status of a user directly from the list."
+  [ctx target-user-id !list-atom]
+  
+  (let [original-list @!list-atom]
+    (swap! !list-atom (fn [users]
+                        (mapv (fn [u]
+                                (if (= (get u "id") target-user-id)
+                                  (assoc u "is_followed_by_me" (not (get u "is_followed_by_me")))
+                                  u)) 
+                              users)))
+    
+    (let [target-user (first (filter #(= (get % "id") target-user-id) original-list))
+          was-following? (get target-user "is_followed_by_me" false)
+          action (if was-following? "unfollow" "follow")]
+      
+      (-> (api/post-req (str "/users/" target-user-id "/follow") {"action" action})
+          (.catchError (fn [_err]
+                         (reset! !list-atom original-list)
+                         (toast/error ctx "Сүлжээний алдаа." :fade)))))))
+
+;; =============================================================================
+;; 2. Sub-components (Vertical List Pillars)
+;; =============================================================================
+
+(defn- connection-list-tile 
+  "A specialized vertical pillar representing a single user in the social graph."
+  [ctx user !list-atom current-user-id]
+  
+  (let [user-id (get user "id")
+        name (get user "name" "Unknown")
+        handle (get user "handle" "user")
+        avatar-url (get user "avatar_url" "")
+        is-following? (get user "is_followed_by_me" false)
+        is-me? (= user-id current-user-id)]
+    
+    (m/InkWell
+     .onTap #(nav/push! ctx "/profile/view" {:user-id user-id})
+     .child
+     (m/Container
+      .width 120.0
+      .padding (m/EdgeInsets.symmetric .vertical 24.0 .horizontal 8.0)
+      .decoration (m/BoxDecoration 
+                   .color m/Colors.white
+                   .border (m/Border .right (m/BorderSide .color theme/border-color .width 0.5)))
+      .child
+      (m/Column
+       .crossAxisAlignment m/CrossAxisAlignment.center
+       .children
+       [
+        (smart-avatar/smart-avatar ctx user-id avatar-url :size 64.0)
+        (m/SizedBox .height 24.0)
+        
+        (m/Expanded
+         .child
+         (m/Row
+          .mainAxisAlignment m/MainAxisAlignment.center
+          .crossAxisAlignment m/CrossAxisAlignment.start
+          .children
+          [(mgl/MongolText name 
+                           .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                               .fontSize 16.0 
+                                               .fontWeight m/FontWeight.bold 
+                                               .color theme/text-primary))
+           (m/SizedBox .width 8.0)
+           (mgl/MongolText (str "@" handle)
+                           .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                               .fontSize 14.0 
+                                               .color theme/text-secondary))]))
+        
+        (m/SizedBox .height 16.0)
+        
+        (if is-me?
+          (m/SizedBox .height 64.0)
+          (m/ElevatedButton
+           .onPressed #(toggle-connection-follow! ctx user-id !list-atom)
+           .style (m/ElevatedButton.styleFrom
+                   .backgroundColor (if is-following? m/Colors.white theme/text-primary)
+                   .foregroundColor (if is-following? theme/text-primary m/Colors.white)
+                   .elevation 0.0
+                   .minimumSize (m/Size 40.0 80.0)
+                   .padding (m/EdgeInsets.symmetric .vertical 16.0 .horizontal 8.0)
+                   .side (when is-following? (m/BorderSide .color theme/border-color))
+                   .shape (m/RoundedRectangleBorder .borderRadius (m/BorderRadius.circular 24.0)))
+           .child (mgl/MongolText (if is-following? "Дагаж байна" "Дагах") ;; "Following" / "Follow"
+                                  .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                                      .fontSize 13.0 
+                                                      .fontWeight m/FontWeight.bold))))])))))
+
+(defn- connection-list-view 
+  "A horizontally scrollable list wrapper equipped with a contextual empty state."
+  [ctx users !list-atom current-user-id empty-icon empty-title empty-subtitle]
+  (if (empty? users)
+    (empty-state/empty-view ctx 
+                            :icon-data empty-icon
+                            :title empty-title
+                            :subtitle empty-subtitle)
+    (m/ListView.builder
+     .scrollDirection m/Axis.horizontal
+     .physics (m/BouncingScrollPhysics.)
+     .itemCount (count users)
+     .itemBuilder (fn [_ i]
+                    (connection-list-tile ctx (nth users i) !list-atom current-user-id)))))
+
+;; =============================================================================
+;; 3. The Main Connections Screen Widget
+;; =============================================================================
+
+(defn connections-screen 
+  "The primary viewport for browsing followers and following networks."
+  [target-user-id & {:keys [initial-index] :or {initial-index 0}}]
+  
+  (let [resolved-user-id (if (= target-user-id "self")
+                           (get @state/current-user "id")
+                           target-user-id)
+        !followers (atom [])
+        !following (atom [])
+        !loading? (atom true)
+        current-user-id (get @state/current-user "id")]
+    
+    (f/widget
+     :context ctx
+     :watch [followers !followers
+             following !following
+             loading? !loading?]
+     
+     (pft/PostFrameTrigger
+      .onLayout #(load-network-graph! ctx resolved-user-id !followers !following !loading?)
+      .child
+      (m/DefaultTabController
+       .length 2
+       .initialIndex initial-index
+       .child
+       (m/Scaffold
+        .backgroundColor theme/bg-color
+        
+        ;; --- Top App Bar ---
+        .appBar
+        (m/AppBar
+         .backgroundColor m/Colors.white
+         .elevation 0.5
+         .leading (m/IconButton 
+                   .icon (m/Icon m/Icons.arrow_back_rounded .color theme/text-primary)
+                   .onPressed #(nav/pop! ctx))
+         .title (m/Text "Холболтууд" ;; "Connections"
+                        .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                            .fontSize 18.0 
+                                            .fontWeight m/FontWeight.bold 
+                                            .color theme/text-primary)))
+        
+        ;; --- Main Body: Left Rotated TabBar & Right Expanded TabBarView ---
+        .body
+        (if loading?
+          (m/Center .child (m/CircularProgressIndicator .color theme/brand-blue))
+          
+          ;; ⚡ Core structural flip: Row layout for left-aligned vertical tabs
+          (m/Row
+           .children
+           [
+            ;; Left Side: Rotated Tab Navigation
+            (m/Container
+             .decoration (m/BoxDecoration 
+                          .color m/Colors.white
+                          .border (m/Border .right (m/BorderSide .color theme/border-color .width 1.0)))
+             .child
+             ;; Quarter turns = 1 equates to a 90-degree clockwise rotation, perfect for LTR vertical reading
+             (m/RotatedBox
+              .quarterTurns 1
+              .child
+              (m/TabBar
+               .labelColor theme/brand-blue
+               .unselectedLabelColor theme/text-secondary
+               .indicatorColor theme/brand-blue
+               .indicatorWeight 3.0
+               .labelStyle (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold .fontSize 15.0)
+               .tabs [(m/Tab .text "Дагагчид")     ;; "Followers"
+                      (m/Tab .text "Дагаж буй")]))) ;; "Following"
+            
+            ;; Right Side: The Content Gallery
+            (m/Expanded
+             .child
+             (m/TabBarView
+              .children
+              [
+               ;; Tab 1: Followers List
+               (connection-list-view ctx followers !followers current-user-id
+                                     m/Icons.people_outline_rounded
+                                     "Дагагч алга" ;; "No followers"
+                                     "Одоогоор энэ хэрэглэгчийг дагасан хүн байхгүй байна.")
+               
+               ;; Tab 2: Following List
+               (connection-list-view ctx following !following current-user-id
+                                     m/Icons.person_add_alt_1_rounded
+                                     "Дагасан хүн алга" ;; "Not following anyone"
+                                     "Одоогоор өөр хэрэглэгч дагаагүй байна.")]))]))))))))

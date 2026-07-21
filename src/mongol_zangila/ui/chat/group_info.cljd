@@ -1,0 +1,264 @@
+(ns mongol-zangila.ui.chat.group-info
+  "Group conversation specifications and administration console.
+   Architected as a horizontal gallery of vertical pillars for LTR Mongolian typography.
+   Enables owners (admin) to dynamically change group names and hard-kick members."
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
+   ["dart:core" :as dc]
+   
+   ;; Centralized Dart Interop Interceptor
+   ["package:mongol_zangila/post_frame_trigger.dart" :as pft]
+   
+   [cljd.flutter :as f]
+   [clojure.string :as str]
+   
+   ;; System Infrastructure
+   [mongol-zangila.infrastructure.api :as api]
+   [mongol-zangila.state :as state]
+   
+   ;; UI & Shared Components
+   [mongol-zangila.ui.theme :as theme]
+   [mongol-zangila.utils.nav :as nav]
+   [mongol-zangila.ui.widgets.avatar :as smart-avatar]
+   [components.toast :as toast]))
+
+;; =============================================================================
+;; 1. Core Data Fetching & Network Mutations
+;; =============================================================================
+
+(defn- load-group-details! 
+  "Fetches the group metadata, including the full list of participants."
+  [ctx group-id !group-data !members !loading?]
+  (reset! !loading? true)
+  (-> (api/get-req (str "/chat/groups/" group-id "/details"))
+      (.then (fn [res]
+               (let [data (get res "data" {})]
+                 (reset! !group-data data)
+                 (reset! !members (get data "members" []))
+                 (reset! !loading? false))))
+      (.catchError (fn [err]
+                     (reset! !loading? false)
+                     (toast/error ctx (str "Группийн мэдээлэл татахад алдаа гарлаа: " err))))))
+
+(defn- rename-group-dialog!
+  "Presents a formal dialog containing a MongolTextField to re-configure group name."
+  [ctx group-id current-name !group-data]
+  (m/showDialog
+   .context ctx
+   .builder
+   (fn [d-ctx]
+     (f/widget
+      ;; ⚡ 修正：放入 :managed 托管，彻底解决内存泄漏与宏编译陷阱
+      :managed [!name-ctrl (m/TextEditingController. .text current-name)
+                :dispose .dispose]
+      (m/AlertDialog.
+       .title (mgl/MongolText "Группийн нэр өөрчлөх")
+       .content (m/Container
+                 .width 100.0 .height 150.0
+                 .child (mgl/MongolTextField 
+                         .controller !name-ctrl
+                         .autofocus true
+                         .decoration (m/InputDecoration .hintText "Шинэ нэр...")))
+       .actions [(m/TextButton.
+                  .onPressed #(nav/pop! d-ctx)
+                  .child (m/Text "Цуцлах")) ;; Cancel
+                 (m/TextButton.
+                  .onPressed (fn []
+                               (let [new-name (str/trim (.-text !name-ctrl))]
+                                 (if (str/blank? new-name)
+                                   (toast/warn ctx "Нэр хоосон байж болохгүй.")
+                                   (do
+                                     (nav/pop! d-ctx)
+                                     (-> (api/post-req (str "/chat/groups/" group-id "/update") {"name" new-name})
+                                         (.then (fn [res]
+                                                  (swap! !group-data assoc "name" (get-in res ["data" "name"]))
+                                                  (toast/success ctx "Группийн нэр шинэчлэгдлээ.")))
+                                         (.catchError (fn [err]
+                                                        (toast/error ctx (str "Алдаа гарлаа: " err)))))))))
+                  .child (m/Text "Хадгалах"))]))))) ;; Save
+
+(defn- kick-member!
+  "Hard-kicks a member from the group. Applies optimistic eviction instantly."
+  [ctx group-id target-user-id target-name !members]
+  (let [original-members @!members]
+    ;; Optimistic Eviction
+    (reset! !members (vec (remove #(= (get % "user_id") target-user-id) original-members)))
+    (toast/success ctx (str target-name " хэрэглэгчийг группээс хаслаа."))
+    
+    (-> (api/post-req (str "/chat/groups/" group-id "/kick") {"user_id" target-user-id})
+        (.catchError (fn [err]
+                       ;; Rollback on hard network failures
+                       (reset! !members original-members)
+                       (toast/error ctx (str "Үйлдэл амжилтгүй боллоо: " err)))))))
+
+(defn- leave-group! 
+  "Removes the current user from the group."
+  [ctx group-id]
+  (-> (api/post-req (str "/chat/groups/" group-id "/leave") {})
+      (.then (fn [_]
+               (toast/success ctx "Группээс гарлаа.") ;; "Left group."
+               (nav/pop-until! ctx "/feed/home")))
+      (.catchError (fn [_] (toast/error ctx "Группээс гарах боломжгүй байна." :fade)))))
+
+;; =============================================================================
+;; 2. Sub-components (Pillars & Cards)
+;; =============================================================================
+
+(defn- group-hero-pillar
+  "The fixed anchor pillar displaying primary metadata and structural operational triggers."
+  [ctx group-id group-name member-count is-owner? !group-data]
+  (m/Container
+   .width 170.0
+   .padding (m/EdgeInsets.only .top 32.0 .bottom 32.0 .left 16.0 .right 16.0)
+   .decoration (m/BoxDecoration .color m/Colors.white .border (m/Border .right (m/BorderSide .color theme/border-color .width 1.0)))
+   .child
+   (m/Column
+    .crossAxisAlignment m/CrossAxisAlignment.center
+    .children
+    [(m/Container
+      .width 80.0 .height 80.0
+      .decoration (m/BoxDecoration .color (.withOpacity theme/brand-blue 0.1) .shape m/BoxShape.circle)
+      .child (m/Icon m/Icons.groups_rounded .color theme/brand-blue .size 40.0))
+     (m/SizedBox .height 24.0)
+     
+     ;; Group Name Stack
+     (m/Expanded
+      .child
+      (m/Row
+       .mainAxisAlignment m/MainAxisAlignment.center
+       .crossAxisAlignment m/CrossAxisAlignment.start
+       .children
+       [(mgl/MongolText group-name 
+                        .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 20.0 .fontWeight m/FontWeight.bold .color theme/text-primary))
+        (m/SizedBox .width 6.0)
+        (mgl/MongolText (str member-count " гишүүн") 
+                        .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 14.0 .color theme/text-secondary))]))
+     
+     ;; Contextual Control Buttons
+     (m/Column
+      .children
+      [(when is-owner?
+         (m/Padding
+          .padding (m/EdgeInsets.only .bottom 12.0)
+          .child
+          (mgl/MongolOutlinedButton
+           .style (m/OutlinedButton.styleFrom .foregroundColor theme/brand-blue .side (m/BorderSide .color theme/brand-blue) .padding (m/EdgeInsets.symmetric .vertical 16.0 .horizontal 4.0))
+           .onPressed #(rename-group-dialog! ctx group-id group-name !group-data)
+           .child (mgl/MongolText "Нэр өөрчлөх" .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold)))))
+       
+       (mgl/MongolOutlinedButton
+        .style (m/OutlinedButton.styleFrom .foregroundColor theme/error-red .side (m/BorderSide .color theme/error-red) .padding (m/EdgeInsets.symmetric .vertical 24.0 .horizontal 4.0))
+        .onPressed #(leave-group! ctx group-id)
+        .child (mgl/MongolText "Группээс гарах" .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold)))])])))
+
+(defn- member-vertical-card
+  "A singular vertical gallery pillar mapping user public identities and eviction controls."
+  [ctx group-id member-node is-i-owner? !members]
+  (let [user-map (get member-node "user" {})
+        u-id (get user-map "id")
+        name (get user-map "name" "Unknown")
+        handle (get user-map "handle" "user")
+        avatar (get user-map "avatar_url" "")
+        role (get member-node "role" "member")
+        is-owner? (= role "admin")
+        is-me? (= u-id (get @state/current-user "id"))]
+    (m/Container
+     .width 120.0
+     .margin (m/EdgeInsets.only .right 12.0 .top 16.0 .bottom 16.0)
+     .decoration (m/BoxDecoration .color m/Colors.white .borderRadius (m/BorderRadius.circular 16.0) .border (m/Border.all .color theme/border-color .width 1.0))
+     .padding (m/EdgeInsets.symmetric .vertical 20.0 .horizontal 8.0)
+     .child
+     (m/Column
+      .crossAxisAlignment m/CrossAxisAlignment.center
+      .children
+      [;; Hard-Kick Control Trigger (Only visible to Owner, and cannot kick oneself)
+       (if (and is-i-owner? (not is-me?))
+         (m/IconButton
+          .icon (m/Icon m/Icons.remove_circle_outline_rounded .color theme/error-red .size 22.0)
+          .onPressed #(kick-member! ctx group-id u-id name !members))
+         (m/SizedBox .height 48.0))
+       
+       (m/SizedBox .height 12.0)
+       (m/GestureDetector
+        .onTap #(nav/push! ctx "/profile/view" {:user-id u-id})
+        .child (smart-avatar/smart-avatar ctx u-id avatar :size 52.0))
+       (m/SizedBox .height 16.0)
+       
+       ;; Content Identity Block
+       (m/Expanded
+        .child
+        (m/Row
+         .mainAxisAlignment m/MainAxisAlignment.center
+         .crossAxisAlignment m/CrossAxisAlignment.start
+         .children
+         [(mgl/MongolText name .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold .fontSize 15.0 .color theme/text-primary) .maxLines 1 .overflow m/TextOverflow.ellipsis)
+          (m/SizedBox .width 4.0)
+          (mgl/MongolText (str "@" handle) .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 13.0 .color theme/text-secondary) .maxLines 1 .overflow m/TextOverflow.ellipsis)]))
+       
+       ;; Semantic Role Badges
+       (cond
+         is-me?    (m/Container .padding (m/EdgeInsets.symmetric .horizontal 8.0 .vertical 4.0) .decoration (m/BoxDecoration .color theme/bg-color .borderRadius (m/BorderRadius.circular 8.0)) .child (m/Text "Би" .style (m/TextStyle .fontSize 10.0 .fontWeight m/FontWeight.bold .color theme/text-secondary)))
+         is-owner? (m/Container .padding (m/EdgeInsets.symmetric .horizontal 8.0 .vertical 4.0) .decoration (m/BoxDecoration .color (.withOpacity theme/warning-yellow 0.1) .borderRadius (m/BorderRadius.circular 8.0)) .child (m/Text "Админ" .style (m/TextStyle .fontSize 10.0 .fontWeight m/FontWeight.bold .color theme/warning-yellow)))
+         :else     (m/SizedBox.shrink))]))))
+
+;; =============================================================================
+;; 3. The Central Architecture Entrypoint
+;; =============================================================================
+
+(defn group-info-screen 
+  [group-id]
+  (let [!group-data (atom nil)
+        !members (atom [])
+        !loading? (atom true)
+        current-user-id (get @state/current-user "id")]
+    
+    (f/widget
+     :context ctx
+     :watch [group-data !group-data
+             members !members
+             loading? !loading?]
+     
+     (pft/PostFrameTrigger
+      .onLayout #(load-group-details! ctx group-id !group-data !members !loading?)
+      .child
+      (m/Scaffold
+       .backgroundColor theme/bg-color
+       
+       .appBar
+       (m/AppBar
+        .backgroundColor theme/bg-color
+        .elevation 0.0
+        .leading (m/IconButton 
+                  .icon (m/Icon m/Icons.arrow_back_rounded .color theme/text-primary)
+                  .onPressed #(nav/pop! ctx))
+        .title (m/Text "Группийн тохиргоо" ;; "Group Settings"
+                       .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 18.0 .fontWeight m/FontWeight.bold .color theme/text-primary)))
+       
+       .body
+       (if loading?
+         (m/Center .child (m/CircularProgressIndicator .color theme/brand-blue))
+         
+         (let [group-name (get group-data "name" "Unknown Group")
+               ;; Locate current user's profile node inside the member roster to evaluate admin powers
+               my-node (first (filter #(= (get % "user_id") current-user-id) members))
+               is-i-owner? (= (get my-node "role") "admin")]
+           
+           (m/Row
+            .crossAxisAlignment m/CrossAxisAlignment.stretch
+            .children
+            [;; Pillar 1: Group Control Center
+             (group-hero-pillar ctx group-id group-name (count members) is-i-owner? !group-data)
+             
+             ;; Pillar 2: Smooth Horizontal Scroll Manifest Gallery
+             (m/Expanded
+              .child
+              (m/ListView.builder
+               .scrollDirection m/Axis.horizontal
+               .physics (m/BouncingScrollPhysics.)
+               .padding (m/EdgeInsets.only .left 16.0 .right 16.0)
+               .itemCount (count members)
+               .itemBuilder
+               (fn [_ i]
+                 (let [m-node (nth members i)]
+                   (member-vertical-card ctx group-id m-node is-i-owner? !members)))))]))))))))

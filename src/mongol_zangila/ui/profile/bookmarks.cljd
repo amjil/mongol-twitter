@@ -1,0 +1,127 @@
+(ns mongol-zangila.ui.profile.bookmarks
+  "User bookmarks and saved posts viewport.
+   Provides a dedicated horizontal timeline feed for curated content, 
+   fully adapted for Left-to-Right vertical Mongolian typography."
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["dart:core" :as dc]
+   
+   ;; Centralized Dart Interop Interceptor
+   ["package:mongol_zangila/post_frame_trigger.dart" :as pft]
+   
+   [cljd.flutter :as f]
+   
+   ;; System Infrastructure & Controllers
+   [mongol-zangila.controllers.feed-ctrl :as feed-ctrl]
+   
+   ;; UI & Shared Components
+   [mongol-zangila.ui.theme :as theme]
+   [mongol-zangila.utils.nav :as nav]
+   [mongol-zangila.ui.widgets.empty-state :as empty-state]
+   
+   ;; Domain Components
+   [mongol-zangila.ui.feed.components.post-card :as post-card]))
+
+;; =============================================================================
+;; 1. The Main Bookmarks Screen Widget
+;; =============================================================================
+
+(defn bookmarks-screen 
+  "The primary viewport for browsing saved and bookmarked posts.
+   ⚡ Upgraded: Integrates generic feed pagination and horizontal infinite scroll."
+  []
+  (let [!posts (atom [])
+        !page (atom 1)
+        !has-more? (atom true)
+        !initial-loading? (atom true)
+        !refresh-loading? (atom false)
+        !pagination-loading? (atom false)
+        endpoint "/users/bookmarks"]
+    
+    (f/widget
+     :context ctx
+     
+     ;; ⚡ 核心升级 1：挂载横向滚动监听器以触发分页
+     :managed [scroll-ctrl (let [ctrl (m/ScrollController.)]
+                             (.addListener ctrl
+                                           (fn []
+                                             (let [pos (.-position ctrl)
+                                                   pixels (.-pixels pos)
+                                                   max-ext (.-maxScrollExtent pos)]
+                                               (when (and (>= pixels (- max-ext 200.0))
+                                                          (not @!pagination-loading?)
+                                                          (not @!refresh-loading?)
+                                                          @!has-more?)
+                                                 (feed-ctrl/load-page! ctx endpoint !posts !page !has-more? !pagination-loading? false)))))
+                             ctrl)
+               :dispose .dispose]
+     
+     :watch [posts !posts
+             init-loading? !initial-loading?
+             page-loading? !pagination-loading?]
+     
+     (pft/PostFrameTrigger
+      ;; ⚡ 核心升级 2：复用 feed-ctrl 中健壮的加载引擎
+      .onLayout (fn []
+                  (reset! !initial-loading? false)
+                  (feed-ctrl/load-page! ctx endpoint !posts !page !has-more? !initial-loading? true))
+      .child
+      (m/Scaffold
+       .backgroundColor theme/bg-color
+       
+       ;; --- Top App Bar ---
+       .appBar
+       (m/AppBar
+        .backgroundColor m/Colors.white
+        .elevation 0.5
+        .leading (m/IconButton 
+                  .icon (m/Icon m/Icons.arrow_back_rounded .color theme/text-primary)
+                  .onPressed #(nav/pop! ctx))
+        .title (m/Text "Хадгалсан"
+                       .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                           .fontSize 18.0 
+                                           .fontWeight m/FontWeight.bold 
+                                           .color theme/text-primary))
+        .actions [(m/IconButton
+                   .icon (m/Icon m/Icons.refresh_rounded .color theme/brand-blue)
+                   .onPressed #(feed-ctrl/load-page! ctx endpoint !posts !page !has-more? !refresh-loading? true))])
+       
+       ;; --- Main Body: The Bookmarks Feed ---
+       .body
+       (if init-loading?
+         (m/Center .child (m/CircularProgressIndicator .color theme/brand-blue))
+         
+         (if (empty? posts)
+           (empty-state/empty-view ctx 
+                                   :icon-data m/Icons.bookmark_border_rounded
+                                   :title "Хадгалсан нийтлэл алга"
+                                   :subtitle "Та нийтлэл хадгалах үед энд харагдах болно.")
+           
+           (m/ListView.builder
+            .controller scroll-ctrl
+            .scrollDirection m/Axis.horizontal
+            .physics (m/BouncingScrollPhysics.)
+            .padding (m/EdgeInsets.only .left 16.0 .right 32.0)
+            ;; ⚡ 核心升级 3：如果有更多数据且正在分页加载，多渲染一个加载指示器占位
+            .itemCount (if (and @!has-more? page-loading?) (inc (count posts)) (count posts))
+            .itemBuilder
+            (fn [_ i]
+              (if (and page-loading? (= i (count posts)))
+                (m/Padding
+                 .padding (m/EdgeInsets.symmetric .horizontal 24.0)
+                 .child (m/Center .child (m/CircularProgressIndicator .strokeWidth 2.0 .color theme/brand-blue)))
+                
+                (let [post-data (nth posts i)
+                      post-id (get post-data "id")]
+                  (m/Container
+                   .width 340.0
+                   .margin (m/EdgeInsets.only .right 16.0 .top 16.0 .bottom 16.0)
+                   .child (post-card/post-card 
+                           ctx post-data
+                           :on-mutate (fn [mutator]
+                                        (swap! !posts (fn [ps]
+                                                        (mapv #(if (= (get % "id") post-id) (mutator %) %) ps))))
+                           :on-bookmark-change
+                           (fn [bookmarked?]
+                             (when-not bookmarked?
+                               (swap! !posts #(vec (remove (fn [p] (= (get p "id") post-id)) %))))))))))))))))))

@@ -1,0 +1,198 @@
+(ns mongol-zangila.ui.search.active-search
+  "The 'Active Search' viewport.
+   A lightweight typeahead panel that only searches for users and tags in real-time.
+   Provides an entry point to route to a full 'Post Search Results' page."
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
+   
+   [cljd.flutter :as f]
+   [clojure.string :as str]
+
+   [components.toast :as toast]
+   
+   ;; System Controllers
+   [mongol-zangila.controllers.search-ctrl :as search-ctrl]
+   [mongol-zangila.controllers.chat-ctrl :as chat-ctrl]
+   [mongol-zangila.state :as state]
+   
+   ;; UI & Shared Components
+   [mongol-zangila.ui.theme :as theme]
+   [mongol-zangila.utils.nav :as nav]
+   [mongol-zangila.ui.widgets.empty-state :as empty-state]
+   [mongol-zangila.ui.widgets.avatar :as smart-avatar]
+   [mongol-zangila.ui.search.components.search-input :as search-input]
+   
+   ;; Keyboard Options
+   [virtual-keyboard.keyboard :as keyboard]
+   [virtual-keyboard.options :as options]))
+
+;; =============================================================================
+;; 1. Sub-components (Action Tiles & User Tiles)
+;; =============================================================================
+
+(defn- user-result-tile 
+  "Transforms user search hits into high-contrast vertical account vectors."
+  [ctx user-data current-user-id]
+  (let [user-id (get user-data "id")
+        user-name (get user-data "name" "Unknown")
+        handle (get user-data "handle" "user")
+        is-self? (= user-id current-user-id)]
+    (m/Container
+     .width 120.0
+     .padding (m/EdgeInsets.symmetric .vertical 24.0 .horizontal 8.0)
+     .decoration (m/BoxDecoration 
+                  .color m/Colors.white
+                  .border (m/Border .right (m/BorderSide .color theme/border-color .width 0.5)))
+     .child
+     (m/Column
+      .crossAxisAlignment m/CrossAxisAlignment.center
+      .children
+      [;; Avatar Cluster (Top)
+       (smart-avatar/smart-avatar ctx user-id (get user-data "avatar_url") :size 56.0)
+       
+       (m/SizedBox .height 24.0)
+       
+       ;; Account Metadata (Middle)
+       (m/Expanded
+        .child
+        (m/Row
+         .mainAxisAlignment m/MainAxisAlignment.center
+         .crossAxisAlignment m/CrossAxisAlignment.start
+         .children
+         [(mgl/MongolText user-name
+                          .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                              .fontSize 15.0 
+                                              .fontWeight m/FontWeight.bold 
+                                              .color theme/text-primary))
+          (m/SizedBox .width 6.0)
+          (mgl/MongolText (str "@" handle)
+                          .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                              .fontSize 13.0
+                                              .color theme/text-secondary))]))
+       
+       (m/SizedBox .height 16.0)
+       
+       ;; Native Tactical Action Button (Bottom)
+       (mgl/MongolElevatedButton
+        .style (m/ElevatedButton.styleFrom 
+                .backgroundColor theme/bg-color
+                .elevation 0.0
+                .minimumSize (m/Size 40.0 64.0)
+                .shape (m/RoundedRectangleBorder .borderRadius (m/BorderRadius.circular 16.0)))
+        .onPressed #(nav/push! ctx "/profile/view" {:user-id user-id})
+        .child (mgl/MongolText "Үзэх" .style (m/TextStyle .fontFamily "OyunQaganTig" .color theme/brand-blue)))
+       
+       ;; ⚡ 核心修复：用 if 配合 SizedBox.shrink 彻底杜绝 nil 混入渲染树！
+       (if is-self?
+         (m/SizedBox.shrink)
+         (m/Column
+          .children
+          [(m/SizedBox .height 8.0)
+           (mgl/MongolOutlinedButton
+            .style (m/OutlinedButton.styleFrom
+                    .foregroundColor theme/brand-blue
+                    .side (m/BorderSide .color theme/brand-blue)
+                    .minimumSize (m/Size 40.0 64.0)
+                    .shape (m/RoundedRectangleBorder .borderRadius (m/BorderRadius.circular 16.0)))
+            .onPressed #(chat-ctrl/open-dm-with-user! ctx user-id user-name)
+            .child (mgl/MongolText "Зурвас илгээх"
+                                   .style (m/TextStyle .fontFamily "OyunQaganTig" .color theme/brand-blue)))]))]))))
+
+;; =============================================================================
+;; 2. The Main Active Search Screen Widget
+;; =============================================================================
+
+(defn active-search-screen 
+  "The active search viewport. A lightweight typeahead panel."
+  []
+  (let [!query (atom "")
+        !user-results (atom [])
+        !loading-users? (atom false)
+        
+        keyboard-info (merge options/keyboard-option 
+                             {:keyboard/mongol-font-family "OyunQaganTig" 
+                              :keyboard/key-container-color m/Colors.grey.shade500 
+                              :keyboard/font-size 16})]
+    
+    (f/widget
+     :context ctx
+     :managed [search-ctrl (m/TextEditingController.)]
+     :bind {:info keyboard-info}
+     
+     :watch [query !query
+             user-results !user-results
+             loading-users? !loading-users?
+             current-user state/current-user]
+     
+     (m/Scaffold
+      .backgroundColor theme/bg-color
+      
+      .appBar
+      (m/AppBar
+       .backgroundColor m/Colors.white
+       .elevation 0.5
+       .leading (m/IconButton 
+                 .icon (m/Icon m/Icons.arrow_back_rounded .color theme/text-primary)
+                 .onPressed #(nav/pop! ctx))
+       .title (m/Text "Хайлт"
+                      .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                          .fontSize 18.0 
+                                          .fontWeight m/FontWeight.bold 
+                                          .color theme/text-primary)))
+      
+      .body
+      (m/SafeArea
+       .child
+       (m/Column
+        .children
+        [
+         ;; Layer 1. Upper Content Viewport
+         (m/Expanded
+          .child
+          (m/Stack
+           .children
+           [
+            ;; Base Content Layer
+            (m/Row
+             .children
+             [              ;; A. Left Rail: Scaled Vertical Search Box Component
+              (m/Container
+               .width 64.0
+               .padding (m/EdgeInsets.only .top 8.0 .bottom 24.0 .left 8.0 .right 8.0)
+               .decoration (m/BoxDecoration
+                            .color m/Colors.white
+                            .border (m/Border .right (m/BorderSide .color theme/border-color .width 1.0)))
+               .child (search-input/search-field
+                       search-ctrl
+                       (fn [val]
+                         (reset! !query val)
+                         (when-not (str/blank? val)
+                           ;; 仅实时搜索用户，减轻后端和 UI 负担
+                           (search-ctrl/search-users! ctx val !user-results !loading-users?)))
+                       :on-clear #(reset! !query "")))
+
+              ;; B. Right Content Flow: Lightweight Results Panel
+              (m/Expanded
+               .child
+               (cond
+                 (str/blank? query)
+                 (m/Center .child (mgl/MongolText "Хайх үгээ оруулна уу..." .style (m/TextStyle .fontFamily "OyunQaganTig" .color theme/text-secondary)))
+
+                 loading-users?
+                 (m/Center .child (m/CircularProgressIndicator .color theme/brand-blue))
+
+                 :else
+                 (m/ListView.builder
+                  .scrollDirection m/Axis.horizontal
+                  .physics (m/BouncingScrollPhysics.)
+                  .padding (m/EdgeInsets.only .right 32.0)
+                  .itemCount (count user-results)
+                  .itemBuilder (fn [_ i]
+                                 (user-result-tile ctx (nth user-results i) (get current-user "id"))))))])
+            
+            ;; Floating Overlay: Custom Input Predictor Row
+            (keyboard/candidates {:widget-key (m/ValueKey. "search-cand")})]))
+         
+         ;; Layer 2. Lower Viewport: Custom Static Input Engine Daemon
+         (keyboard/keyboard {:widget-key (m/ValueKey. "search-kb")})]))))))

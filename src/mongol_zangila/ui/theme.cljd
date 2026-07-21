@@ -1,0 +1,126 @@
+(ns mongol-zangila.ui.theme
+  "Centralized design system and theme configuration.
+   Defines the visual identity, typography (OyunQaganTig), and color palette,
+   optimized for native LTR vertical Mongolian script."
+  (:require
+   ["package:flutter/material.dart" :as m]))
+
+;; =============================================================================
+;; 1. Core Color Palette (The Tenger Design System)
+;; =============================================================================
+
+(def ^:const brand-blue 
+  "Primary brand color. Represents the eternal blue sky (Tenger)."
+  (m/Color 0xFF1D9BF0))
+
+(def ^:const bg-color 
+  "Default background color for scaffolds and major viewports."
+  (m/Color 0xFFF7F9FA))
+
+(def ^:const text-primary 
+  "High-contrast text color for primary headings and body copy."
+  (m/Color 0xFF0F1419))
+
+(def ^:const text-secondary 
+  "Low-contrast text color for metadata, timestamps, and subtitles."
+  (m/Color 0xFF536471))
+
+(def ^:const border-color 
+  "Subtle gray used for dividers, card borders, and input outlines."
+  (m/Color 0xFFEFF3F4))
+
+(def ^:const error-red 
+  "Semantic color for destructive actions, errors, and validation warnings."
+  (m/Color 0xFFF4212E))
+
+(def ^:const success-green 
+  "Semantic color for confirmations, active states, and success toasts."
+  (m/Color 0xFF00BA7C))
+
+(def ^:const warning-yellow
+  "Semantic color for warnings, pending states, and non-critical alerts."
+  (m/Color 0xFFFFAD1F))
+
+;; =============================================================================
+;; 2. Global ThemeData Configuration
+;; =============================================================================
+
+(def app-theme
+  "The global ThemeData object injected into the root MaterialApp."
+  (m/ThemeData
+
+   ;; All descendant Text widgets will default to this unless explicitly overridden.
+   .fontFamily "OyunQaganTig"
+
+   .primaryColor brand-blue
+
+
+   .scaffoldBackgroundColor bg-color
+
+   ;; Maps the custom palette to Material 3 semantics
+   .colorScheme (m/ColorScheme.light
+                 .primary brand-blue
+                 .secondary brand-blue
+                 .surface m/Colors.white
+                 .error error-red
+                 .onPrimary m/Colors.white
+                 .onSurface text-primary)
+
+   ;; --- Global Component Overrides ---
+
+   .appBarTheme (m/AppBarTheme
+                 .backgroundColor m/Colors.white
+                 .foregroundColor text-primary
+                 .elevation 0.0
+                 .centerTitle true
+                 .iconTheme (m/IconThemeData .color text-primary)
+                 .titleTextStyle (m/TextStyle
+                                  .fontFamily "OyunQaganTig"
+                                  .fontSize 18.0
+                                  .fontWeight m/FontWeight.bold ;; ⚡ Standardized enum syntax
+                                  .color text-primary))
+
+   .elevatedButtonTheme (m/ElevatedButtonThemeData
+                         .style (m/ElevatedButton.styleFrom
+                                 .backgroundColor brand-blue
+                                 .foregroundColor m/Colors.white
+                                 .elevation 0.0
+                                 ;; ⚡ Flipped padding (Vertical > Horizontal) to accommodate LTR vertical typography constraints
+                                 .padding (m/EdgeInsets.symmetric .vertical 24.0 .horizontal 12.0)
+                                 .shape (m/RoundedRectangleBorder
+                                         .borderRadius (m/BorderRadius.circular 24.0))))
+
+   .outlinedButtonTheme (m/OutlinedButtonThemeData
+                         .style (m/OutlinedButton.styleFrom
+                                 .foregroundColor brand-blue
+                                 .side (m/BorderSide .color brand-blue .width 1.5)
+                                 ;; ⚡ Flipped padding (Vertical > Horizontal) to accommodate LTR vertical typography constraints
+                                 .padding (m/EdgeInsets.symmetric .vertical 24.0 .horizontal 12.0)
+                                 .shape (m/RoundedRectangleBorder
+                                         .borderRadius (m/BorderRadius.circular 24.0))))
+
+   .textButtonTheme (m/TextButtonThemeData
+                     .style (m/TextButton.styleFrom
+                             .foregroundColor brand-blue
+                             .textStyle (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold))) ;; ⚡ Standardized enum syntax
+
+   .dividerTheme (m/DividerThemeData
+                  .color border-color
+                  .space 1.0
+                  .thickness 1.0)
+
+   ;; Input fields (e.g., Auth screens, Settings)
+   .inputDecorationTheme (m/InputDecorationTheme
+                          .filled true
+                          .fillColor m/Colors.white
+                          .hintStyle (m/TextStyle .color text-secondary)
+                          .contentPadding (m/EdgeInsets.all 16.0)
+                          .enabledBorder (m/OutlineInputBorder
+                                          .borderRadius (m/BorderRadius.circular 12.0)
+                                          .borderSide (m/BorderSide .color border-color))
+                          .focusedBorder (m/OutlineInputBorder
+                                          .borderRadius (m/BorderRadius.circular 12.0)
+                                          .borderSide (m/BorderSide .color brand-blue .width 2.0))
+                          .errorBorder (m/OutlineInputBorder
+                                        .borderRadius (m/BorderRadius.circular 12.0)
+                                        .borderSide (m/BorderSide .color error-red .width 1.0)))))

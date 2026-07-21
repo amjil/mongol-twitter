@@ -1,0 +1,214 @@
+(ns mongol-zangila.infrastructure.write-buffer
+  "Local-first outbox daemon.
+   Reads from Drift DB, queues mutations locally when offline, and automatically 
+   flushes them to the backend using exponential backoff when connectivity is restored.
+   Utilizes a Handler Registry to safely trigger UI updates without circular dependencies."
+  (:require
+   ["dart:core" :as dc]
+   ["dart:async" :as async]
+   ["dart:math" :as math]
+   ["dart:convert" :as convert]
+   [clojure.string :as str]
+
+   ;; System Infrastructure
+   [mongol-zangila.state :as state]
+   [mongol-zangila.infrastructure.api :as api]
+   [mongol-zangila.infrastructure.db :as db]))
+
+;; =============================================================================
+;; 1. Internal State & Handler Registry
+;; =============================================================================
+
+(def ^:private !retry-timer (atom nil))
+
+(def ^:private max-retries 5)
+(def ^:private base-backoff-ms 1000)
+
+;; Format: {"mutation-type" (fn [payload-map server-response-data] ...)}
+(defonce ^:private !success-handlers (atom {}))
+
+;; ⚡ FIXED: Shared memory lock set to track outbox IDs currently in mid-flight API transits
+(defonce ^:private !active-outbox-ids (atom #{}))
+
+(defn register-handler!
+  "Registers a callback to execute when a specific mutation type succeeds syncing.
+   Prevents circular dependencies between the buffer and UI controllers."
+  [mutation-type handler-fn]
+  (swap! !success-handlers assoc mutation-type handler-fn))
+
+;; ⚡ FIXED: Public query utility to allow UI controllers to inspect daemon locks
+(defn processing-outbox-id?
+  "Checks if a specific outbox transaction is currently being transmitted by the daemon."
+  [id]
+  (contains? @!active-outbox-ids id))
+
+;; =============================================================================
+;; 2. Task Dispatch Mapping
+;; =============================================================================
+
+(defn- dispatch-task!
+  "Maps a queued outbox task to its corresponding API network request.
+   Extracts dynamic endpoints and payloads configured by the UI controllers."
+  [m-type payload]
+  (case m-type
+    "create-post"
+    (api/post-req "/tweets" payload)
+
+    "like-tweet"
+    (api/post-req (str "/tweets/" (get payload "post_id") "/like") 
+                  (dissoc payload "post_id")) ;; ⚡ 透传包含 idempotency_key 在内的所有参数
+
+    "repost-tweet"
+    (api/post-req (str "/tweets/" (get payload "post_id") "/repost") 
+                  (dissoc payload "post_id")) ;; ⚡ 透传包含 idempotency_key 在内的所有参数
+
+    "bookmark-tweet"
+    (api/post-req (str "/tweets/" (get payload "post_id") "/bookmark")
+                  (dissoc payload "post_id")) ;; ⚡ 透传包含 idempotency_key 在内的所有参数
+
+    "block-user"
+    (api/post-req (str "/users/" (get payload "user_id") "/block") {})
+
+    "unblock-user"
+    (api/post-req (str "/users/" (get payload "user_id") "/unblock") {})
+    
+    "delete-post"
+    (api/delete-req (str "/tweets/" (get payload "post_id")))
+
+    "send-message"
+    (api/post-req (get payload "endpoint") (get payload "payload"))
+
+    (dc/Future.error (dc/Exception. (str "Unknown task type: " m-type)))))
+
+;; =============================================================================
+;; 3. The Flush Engine (Exponential Backoff)
+;; =============================================================================
+
+(declare flush-outbox!)
+
+(defn- network-flushable?
+  "Outbox flush uses REST, not WebSocket — only explicit :offline blocks the queue."
+  []
+  (not= @state/network-status :offline))
+
+(defn- calculate-backoff [attempt-count]
+  (let [multiplier (math/pow 2 attempt-count)]
+    (int (* base-backoff-ms multiplier))))
+
+(defn- permanent-client-error? [err]
+  (let [msg (str err)]
+    (or (str/includes? msg "HTTP_422")
+        (str/includes? msg "HTTP_400")
+        (str/includes? msg "HTTP_403"))))
+
+(defn- process-next-task!
+  "Recursively processes the Drift queue one item at a time.
+   Applies exponential backoff for transient network errors and 
+   safely drops poison-pill payloads after maximum retries."
+  []
+  (if (not (network-flushable?))
+    (reset! state/sync-in-progress? false)
+    
+    (-> (db/get-next-pending-task)
+        (.then (fn [task]
+                 (if (nil? task)
+                   (reset! state/sync-in-progress? false)
+                   
+                   (let [id (.-id task)
+                         m-type (.-mutationType task)
+                         payload (try (convert/jsonDecode (.-payloadJson task)) (catch dc/Exception _ {}))
+                         retries (.-retryCount task)]
+                     
+                     ;; ⚡ FIXED: Acquire the memory lock immediately before dropping into async yields
+                     (swap! !active-outbox-ids conj id)
+                     
+                     (if (empty? payload)
+                       (-> (db/delete-from-outbox! id)
+                           (.then (fn [_] 
+                                    (swap! !active-outbox-ids disj id)
+                                    (process-next-task!))))
+                       
+                       (-> (dispatch-task! m-type payload)
+                           (.then (fn [res]
+                                    (dc/print (str "[Daemon] Successfully synced task: " m-type))
+                                    
+                                    (let [server-data (get res "data")]
+                                      (when-let [handler (get @!success-handlers m-type)]
+                                        (try
+                                          (handler payload server-data)
+                                          (catch dc/Exception e
+                                            (dc/print (str "⚠️ [Outbox] Handler execution error: " e))))))
+                                    
+                                    (-> (db/delete-from-outbox! id)
+                                        (.then (fn [_] 
+                                                 ;; ⚡ FIXED: Release lock only after SQLite file confirms erasure
+                                                 (swap! !active-outbox-ids disj id)
+                                                 (process-next-task!))))))
+                           
+                           (.catchError (fn [err]
+                                          ;; ⚡ FIXED: Release lock upon failure states to avoid deadlocking row updates
+                                          (swap! !active-outbox-ids disj id)
+                                          (if (or (>= retries max-retries)
+                                                  (permanent-client-error? err))
+                                            (do
+                                              (dc/print (str "[Daemon] Task failed permanently, dropping: " id " - " err))
+                                              (-> (db/delete-from-outbox! id)
+                                                  (.then (fn [_] (process-next-task!)))))
+                                            
+                                            (let [next-retries (inc retries)
+                                                  delay-ms (calculate-backoff next-retries)]
+                                              (dc/print (str "[Daemon] Task failed. Retrying in " delay-ms "ms. Attempt " next-retries))
+                                              
+                                              (-> (db/increment-retry-count! id retries)
+                                                  (.then (fn [_]
+                                                           (reset! state/sync-in-progress? false)
+                                                           (reset! !retry-timer
+                                                                   (async/Timer. (dc/Duration. .milliseconds delay-ms)
+                                                                                 #(flush-outbox!)))))))))))))))))))
+
+(defn flush-outbox!
+  "Ignites the queue processing engine if it isn't already running."
+  []
+  (when (and (not @state/sync-in-progress?)
+             (network-flushable?))
+    (reset! state/sync-in-progress? true)
+    (process-next-task!)))
+
+;; =============================================================================
+;; 4. Public API 
+;; =============================================================================
+
+(defn enqueue!
+  "Adds a mutation task to the Drift outbox and immediately attempts to flush.
+   ⚡ FIXED: Upgraded signature to accept and bind idempotency-key."
+  [action-type payload idempotency-key]
+  (-> (db/add-to-outbox! action-type payload idempotency-key)
+      (.then (fn [_]
+               (dc/print (str "[Daemon] Task queued securely in Drift: " action-type))
+               (flush-outbox!)))))
+
+(defn force-sync!
+  "Public alias for manual sync overrides from the UI (e.g., pulling down an Outbox Screen)."
+  []
+  (flush-outbox!))
+
+(defn start-daemon!
+  "Boots the background daemon. Listens globally to network state changes."
+  []
+  (add-watch state/network-status :write-buffer-daemon
+             (fn [_ _ old-status new-status]
+               (when (and (not= new-status :offline)
+                          (= old-status :offline))
+                 (dc/print "[Daemon] Connectivity restored. Initiating Drift queue flush.")
+                 (flush-outbox!))))
+  (flush-outbox!))
+
+(defn stop-daemon!
+  "Halts all queue processing and cleans up memory watchers. 
+   Invoked during user logout sequences."
+  []
+  (remove-watch state/network-status :write-buffer-daemon)
+  (reset! state/sync-in-progress? false)
+  (when-let [^async/Timer t @!retry-timer]
+    (.cancel t)
+    (reset! !retry-timer nil)))

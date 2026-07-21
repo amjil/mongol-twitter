@@ -1,0 +1,205 @@
+(ns mongol-zangila.router
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["dart:core" :as dc]
+   
+   ;; 🚀 Core & Auth
+   [mongol-zangila.ui.splash :as splash]
+   [mongol-zangila.ui.auth.login :as login]
+   [mongol-zangila.ui.auth.register :as register]
+   [mongol-zangila.ui.auth.otp-verification :as otp]
+   [mongol-zangila.ui.auth.forgot-password :as forgot-password]
+   [mongol-zangila.ui.auth.reset-password :as reset-password]
+   
+   ;; 📜 Feed Domain
+   [mongol-zangila.ui.feed.home :as home]
+   [mongol-zangila.ui.feed.post-detail :as post-detail]
+   [mongol-zangila.ui.feed.outbox :as outbox]
+   [mongol-zangila.ui.feed.compose :as compose]
+   
+   ;; 🔍 Search & Discovery Domain
+   [mongol-zangila.ui.search.explore :as explore]
+   [mongol-zangila.ui.search.active-search :as active-search]
+   [mongol-zangila.ui.search.topic-feed :as topic-feed]
+   [mongol-zangila.ui.scanner.view :as scanner]
+   
+   ;; 💬 Chat & IM Domain
+   [mongol-zangila.ui.chat.inbox :as inbox]
+   [mongol-zangila.ui.chat.dm :as dm]
+   [mongol-zangila.ui.chat.group :as group]
+   [mongol-zangila.ui.chat.dm-info :as dm-info]
+   [mongol-zangila.ui.chat.group-info :as group-info]
+   [mongol-zangila.ui.chat.admin :as chat-admin]
+   [mongol-zangila.ui.chat.create-group :as create-group] ;; ⚡ 引入建群视图
+   
+   ;; 🖼 Media
+   [mongol-zangila.ui.media.viewer :as media-viewer]
+   
+   ;; 🧑 Profile & Settings Domain
+   [mongol-zangila.ui.profile.view :as profile-view]
+   [mongol-zangila.ui.profile.edit-profile :as edit-profile]
+   [mongol-zangila.ui.profile.qr-card :as qr-card]
+   [mongol-zangila.ui.profile.connections :as connections]
+   [mongol-zangila.ui.profile.bookmarks :as bookmarks]
+   [mongol-zangila.ui.profile.blocklist :as blocklist]
+   [mongol-zangila.ui.profile.change-password :as change-password]
+   [mongol-zangila.ui.settings.panel :as settings-panel]
+   
+   ;; 🔔 Notifications Domain
+   [mongol-zangila.ui.notifications.view :as notifications-view]))
+
+;; =============================================================================
+;; Fallback Route (404 Page) - Protects against invalid Deep Links
+;; =============================================================================
+(defn- route-not-found 
+  "A safe fallback screen when an invalid route is requested."
+  [route-name]
+  (m/Scaffold
+   .appBar (m/AppBar .title (m/Text "Route Error"))
+   .body (m/Center
+          .child (m/Text (str "404 - Page not found:\n" route-name)
+                         .textAlign m.TextAlign/center
+                         .style (m/TextStyle .color m/Colors.redAccent .fontSize 16.0)))))
+
+;; =============================================================================
+;; Main Routing Dispatcher
+;; =============================================================================
+(defn- strip-nav-meta
+  "Removes navigation-only keys before passing args to screen builders."
+  [args]
+  (dissoc args :fullscreen?))
+
+;; ⚡ FIXED: Added ^m/Route explicit return type hint to satisfy Dart's strict generic bounds
+(defn ^m/Route on-generate-route 
+  "Central switchboard for all app navigation. 
+   Intercepts route names, unpacks typed arguments safely, and builds target screens."
+  [^m/RouteSettings settings-obj]
+  
+  (let [route-name (.-name settings-obj)
+        ;; Safely extract arguments, defaulting to an empty map if nil to prevent crashes
+        raw-args (or (.-arguments settings-obj) {})
+        fullscreen? (boolean (get raw-args :fullscreen?))
+        args (strip-nav-meta raw-args)]
+    
+    (m/MaterialPageRoute
+     .settings settings-obj
+     .fullscreenDialog fullscreen?
+     .builder
+     (fn [ctx]
+       (cond
+         ;; --------------------------------------------------------------------
+         ;; 1. Initialization & Auth
+         ;; --------------------------------------------------------------------
+         (= route-name "/splash")   (splash/splash-screen)
+         (= route-name "/login")    (login/login-screen)
+         (= route-name "/register") (register/register-screen)
+         
+         ;; Expects {:phone "+976..." :intent :register/:reset-password :name :password}
+         (= route-name "/auth/otp")
+         (otp/otp-screen (get args :phone) (get args :intent)
+                         :name (get args :name)
+                         :password (get args :password))
+         
+         (= route-name "/auth/forgot-password") (forgot-password/forgot-password-screen)
+         
+         ;; Expects {:phone "..." :code "..."}
+         (= route-name "/auth/reset-password")
+         (reset-password/reset-password-screen (get args :phone) (get args :code))
+         
+         ;; --------------------------------------------------------------------
+         ;; 2. Feed & Content
+         ;; --------------------------------------------------------------------
+         (= route-name "/feed/home")   (home/home-screen)
+         (= route-name "/feed/outbox") (outbox/outbox-screen)
+         
+         (= route-name "/feed/compose")
+         (compose/compose-screen args)
+         
+         ;; ⚡ 动态深链匹配 (Dynamic Deep Link for Post Detail)
+         ;; 匹配类似 "/post/12345-uuid" 的路径，截取 ID 并传递
+         (and route-name (clojure.string/starts-with? route-name "/post/"))
+         (post-detail/post-detail-screen (subs route-name 6))
+         
+         ;; 内部标准跳转，Expects {:post-id "123"}
+         (= route-name "/feed/post-detail") 
+         (post-detail/post-detail-screen (get args :post-id))
+         
+         ;; --------------------------------------------------------------------
+         ;; 3. Search & Discovery
+         ;; --------------------------------------------------------------------
+         (= route-name "/search")         (explore/explore-screen)
+         (= route-name "/search/active")  (active-search/active-search-screen)
+         (= route-name "/search/scanner") (scanner/scanner-screen)
+         
+         ;; Expects {:topic-name "MongolZangila"}
+         (= route-name "/search/topic")   
+         (topic-feed/topic-feed-screen (get args :topic-name ""))
+         
+         ;; --------------------------------------------------------------------
+         ;; 4. Real-time Chat & IM
+         ;; --------------------------------------------------------------------
+         (= route-name "/chat/inbox") (inbox/inbox-screen)
+         (= route-name "/chat/admin") (chat-admin/group-admin-screen (get args :group-id))
+         
+         ;; ⚡ 新增建群路由
+         (= route-name "/chat/create-group") (create-group/create-group-screen)
+         
+         ;; Expects {:thread-id "t1" :partner-name "Bat"}
+         (= route-name "/chat/dm")
+         (dm/dm-screen (or (get args :thread-id) (get args :target-id))
+                       (or (get args :partner-name) (get args :target-name))
+                       (get args :partner-id))
+         
+         ;; Expects {:thread-id "t1" :partner-id "u99" :initial-name "Bat"}
+         (= route-name "/chat/dm-info")
+         (dm-info/dm-info-screen (or (get args :thread-id) (get args :target-id))
+                                 (or (get args :partner-id) (get args :target-id))
+                                 (or (get args :initial-name) (get args :partner-name) (get args :target-name)))
+         
+         ;; Expects {:group-id "g1" :group-name "Tech Group"}
+         (= route-name "/chat/group")
+         (group/group-chat-screen (get args :group-id) (get args :group-name) (get args :member-count))
+         
+         ;; Expects {:group-id "g1"}
+         (= route-name "/chat/group-info")
+         (group-info/group-info-screen (get args :group-id))
+         
+         ;; Expects {:media-urls [...] :initial-index 0}
+         (= route-name "/media/viewer")
+         (media-viewer/media-viewer-screen (get args :media-urls [])
+                                           :initial-index (get args :initial-index 0))
+         
+         ;; --------------------------------------------------------------------
+         ;; 5. User Assets, Profile & Settings
+         ;; --------------------------------------------------------------------
+         (= route-name "/profile/edit")      (edit-profile/edit-profile-screen)
+         (= route-name "/profile/qr-card")   (qr-card/qr-card-screen)
+         (= route-name "/profile/bookmarks") (bookmarks/bookmarks-screen)
+         (= route-name "/profile/blocklist") (blocklist/blocklist-screen)
+         (= route-name "/profile/change-password") (change-password/change-password-screen)
+         (= route-name "/settings")          (settings-panel/settings-panel-screen)
+         
+         ;; Expects {:user-id "self" or specific ID}
+         (= route-name "/profile/view")
+         (profile-view/profile-screen {:user-id (get args :user-id "self")})
+         
+         ;; Expects {:user-id "self", :initial-tab :followers/:following}
+         ;; or {:user-id "...", :initial-index 0/1}
+         (= route-name "/profile/connections")
+         (connections/connections-screen (get args :user-id "self")
+                                         :initial-index (or (get args :initial-index)
+                                                            (if (= (get args :initial-tab :followers) :following) 1 0)))
+         
+         ;; --------------------------------------------------------------------
+         ;; 6. Notifications
+         ;; --------------------------------------------------------------------
+         (or (= route-name "/notifications") 
+             (= route-name "/notifications/view")) (notifications-view/notifications-screen)
+
+         ;; 7. Scanner
+         (= route-name "/scanner/view") (scanner/scanner-screen)
+         
+         ;; --------------------------------------------------------------------
+         ;; 404 Fallback
+         ;; --------------------------------------------------------------------
+         :else (route-not-found route-name))))))

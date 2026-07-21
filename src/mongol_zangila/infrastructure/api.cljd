@@ -1,0 +1,176 @@
+(ns mongol-zangila.infrastructure.api
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:http/http.dart" :as http]
+   ["dart:convert" :as convert]
+   ["dart:core" :as dc]
+   [clojure.string :as str]
+   
+   [mongol-zangila.state :as state]
+   [mongol-zangila.infrastructure.config :as config]
+   [mongol-zangila.infrastructure.session :as session]
+   [mongol-zangila.utils.nav :as nav]))
+
+;; =============================================================================
+;; 1. Environment & Global Keys
+;; =============================================================================
+
+(def base-url config/base-url)
+
+(def global-navigator-key (#/(m/GlobalKey m/NavigatorState)))
+
+;; =============================================================================
+;; 2. Interceptors & Header Injection
+;; =============================================================================
+
+(defn- get-headers 
+  "Returns standard JSON headers, injecting Bearer token from global state when present."
+  []
+  (let [base-headers {"Content-Type" "application/json"
+                      "Accept" "application/json"}
+        token @state/auth-token]
+    (if-not (str/blank? token)
+      (assoc base-headers "Authorization" (str "Bearer " token))
+      (into {} base-headers))))
+
+(defn- get-auth-header
+  "Authorization only — used for multipart where Content-Type must include boundary."
+  []
+  (when-let [token @state/auth-token]
+    {"Authorization" (str "Bearer " token)}))
+
+(defn- transport-error? [err]
+  (let [type-name (str (.-runtimeType err))
+        msg (str err)]
+    (or (str/includes? type-name "SocketException")
+        (str/includes? type-name "ClientException")
+        (str/includes? type-name "HandshakeException")
+        (str/includes? msg "Failed host lookup")
+        (str/includes? msg "Connection refused")
+        (str/includes? msg "Network is unreachable"))))
+
+(defn- with-connectivity-tracking [future]
+  (-> future
+      (.then (fn [res]
+               (reset! state/network-status :online)
+               res))
+      (.catchError (fn [err]
+                     (when (transport-error? err)
+                       (reset! state/network-status :offline))
+                     (throw err)))))
+
+(defn- trigger-logout-kick! 
+  "Executes a forced logout when the backend rejects a token (e.g., 401 Unauthorized)."
+  []
+  (dart:core/print "🚨 [API] 401 Unauthorized detected. Executing forced kick...")
+  (if (session/has-force-logout-handler?)
+    (session/force-logout!)
+    (-> (session/destroy-session!)
+        (.then (fn [_]
+                 (when-let [ctx (.-currentContext global-navigator-key)]
+                   (nav/reset-to! ctx "/login")))))))
+
+(defn- format-error-message
+  "Builds a human-readable API error string, including validation field details."
+  [decoded status]
+  (let [base (get decoded "message" (str "HTTP Error: " status))
+        errors (get decoded "errors")]
+    (if (map? errors)
+      (let [details (->> errors
+                         vals
+                         (mapcat #(if (sequential? %) % [%]))
+                         (filter string?)
+                         distinct
+                         (str/join ", "))]
+        (if (str/blank? details)
+          base
+          (str base ": " details)))
+      base)))
+
+(defn- handle-response 
+  "Centralized response parser and error interceptor."
+  [^http/Response response]
+  (let [status (.-statusCode response)
+        body (.-body response)]
+    
+    (cond
+      ;; 1. Success Range (200 - 299)
+      (and (>= status 200) (< status 300))
+      (if (empty? body)
+        {}
+        (convert/jsonDecode body))
+      
+      ;; 2. Unauthorized / Token Expired (401)
+      (= status 401)
+      (do
+        (trigger-logout-kick!)
+        (throw (dc/Exception. "Unauthorized: Session expired.")))
+      
+      ;; 3. General Client/Server Errors
+      :else
+      (let [decoded (try
+                       (convert/jsonDecode body)
+                       (catch dc/Exception _ {}))
+            error-msg (format-error-message decoded status)]
+        (dart:core/print (str "❌ [API] Error " status ": " error-msg))
+        (throw (dc/Exception. (str "HTTP_" status " " error-msg)))))))
+
+;; =============================================================================
+;; 3. Core REST Verbs
+;; =============================================================================
+
+(defn get-req 
+  "Performs a GET request to the specified endpoint."
+  [endpoint]
+  (let [uri (dc/Uri.parse (str base-url endpoint))]
+    (with-connectivity-tracking
+      (-> (http/get uri .headers (get-headers))
+          (.then handle-response)))))
+
+(defn post-req 
+  "Performs a POST request with a JSON payload."
+  [endpoint payload]
+  (let [uri (dc/Uri.parse (str base-url endpoint))
+        body (convert/jsonEncode payload)]
+    (dart:core/print (str "📤 [API POST] " endpoint " " body))
+    (with-connectivity-tracking
+      (-> (http/post uri .headers (get-headers) .body body)
+          (.then handle-response)))))
+
+(defn put-req 
+  "Performs a PUT request with a JSON payload."
+  [endpoint payload]
+  (let [uri (dc/Uri.parse (str base-url endpoint))
+        body (convert/jsonEncode payload)]
+    (with-connectivity-tracking
+      (-> (http/put uri .headers (get-headers) .body body)
+          (.then handle-response)))))
+
+(defn delete-req 
+  "Performs a DELETE request."
+  [endpoint]
+  (let [uri (dc/Uri.parse (str base-url endpoint))]
+    (with-connectivity-tracking
+      (-> (http/delete uri .headers (get-headers))
+          (.then handle-response)))))
+
+;; =============================================================================
+;; 4. Multipart Media Uploads (Images / Voice)
+;; =============================================================================
+
+(defn multipart-upload! 
+  "Streams binary files to the backend. Crucial for the offline outbox and media attachments."
+  [endpoint file-path & {:keys [field-name] :or {field-name "file"}}]
+  (let [uri (dc/Uri.parse (str base-url endpoint))
+        request (http/MultipartRequest. "POST" uri)]
+    
+    (when-let [auth (get-auth-header)]
+      (.addAll (.-headers request) auth))
+    
+    (with-connectivity-tracking
+      (-> (http/MultipartFile.fromPath field-name file-path)
+          (.then (fn [^http/MultipartFile multipart-file]
+                   (.add (.-files request) multipart-file)
+                   (-> (.send request)
+                       (.then http/Response.fromStream)
+                       (.then handle-response))))))))

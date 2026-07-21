@@ -1,0 +1,5 @@
+(ns mongol-zangila.infrastructure.config
+  "Shared environment constants. Kept separate to avoid circular namespace dependencies.")
+
+(def base-url
+  "http://localhost:4000/api/v1")

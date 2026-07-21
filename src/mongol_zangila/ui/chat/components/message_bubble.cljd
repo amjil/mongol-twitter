@@ -1,0 +1,213 @@
+(ns mongol-zangila.ui.chat.components.message-bubble
+  "A highly reusable, polymorphic chat bubble component.
+   ⚡ Horizontal Flow MVP: Completely restructured to thrive inside an infinite-width horizontal ListView.
+   Uses MainAxisSize.min and removes Flexible to prevent Unbounded Constraints crashes."
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
+   ["dart:core" :as dc]
+   [cljd.flutter :as f]
+   [clojure.string :as str]
+   
+   ;; UI & Shared Components
+   [mongol-zangila.ui.theme :as theme]
+   [mongol-zangila.ui.widgets.avatar :as smart-avatar]
+   [mongol-zangila.ui.widgets.cached-image :as cached-image]
+   [mongol-zangila.infrastructure.media :as media]
+   [mongol-zangila.ui.media.viewer :as media-viewer]
+   
+   ;; ⚡ 引入富文本解析器以支持 @提及 和 #话题
+   [mongol-zangila.utils.rich-text-parser :as rich-parser]))
+
+;; =============================================================================
+;; 1. Helper Functions
+;; =============================================================================
+
+(defn- format-message-time 
+  "Extracts the HH:mm portion from an ISO 8601 timestamp for concise bubble rendering."
+  [iso-string]
+  (if (str/blank? iso-string) 
+    ""
+    (try
+      (let [dt (dc/DateTime.parse iso-string)
+            h (str (.toString (.hour dt)) ":")
+            m (.padLeft (.toString (.minute dt)) 2 "0")]
+        (str h m))
+      (catch dc/Exception _ ""))))
+
+;; =============================================================================
+;; 2. System Event Bubble
+;; =============================================================================
+
+(defn system-bubble 
+  "Renders inline semantic events (e.g., 'Bataa joined the group', 'Date: Today').
+   Uses a neutral, pill-shaped design to distinguish it from conversational text."
+  [content]
+  (m/Center
+   .child
+   (m/Container
+    .margin (m/EdgeInsets.symmetric .vertical 12.0)
+    .padding (m/EdgeInsets.symmetric .horizontal 14.0 .vertical 6.0)
+    .decoration (m/BoxDecoration 
+                 .color (.withOpacity theme/text-secondary 0.1)
+                 .borderRadius (m/BorderRadius.circular 16.0))
+    .child (mgl/MongolText content
+                           .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                               .fontSize 12.0 
+                                               .fontWeight m/FontWeight.w600
+                                               .color theme/text-secondary)))))
+
+;; =============================================================================
+;; 3. The Main Chat Bubble Component
+;; =============================================================================
+
+(defn chat-bubble 
+  "Renders a standard conversational message bubble supporting Text and Image payloads.
+   
+   Parameters:
+   - ctx: Flutter BuildContext.
+   - message-data: The message payload map.
+   - current-user-id: Used to determine if the message belongs to 'me' (align right).
+   - show-sender-info?: (Optional) If true, renders the sender's avatar and name.
+   - on-retry!: (Optional) `(fn [message-data])` triggered when the user taps a failed status icon."
+  [ctx message-data current-user-id & {:keys [show-sender-info? on-retry!] :or {show-sender-info? false}}]
+  
+  (let [sender (get message-data "sender" {})
+        sender-id (get sender "id" (get message-data "sender_id"))
+        sender-name (get sender "name" "Unknown")
+        
+        sender-avatar (media/absolute-media-url (get sender "avatar_url" ""))
+        
+        is-me? (or (= sender-id current-user-id) (= sender-id "self"))
+        
+        msg-type (get message-data "type" "text") 
+        content (get message-data "content" "")
+        ;; ⚡ 提取实体坐标数据
+        entities (get message-data "entities" [])
+        
+        media-url (media/absolute-media-url (get message-data "media_url" ""))
+        
+        timestamp (get message-data "created_at" "")
+        status (get message-data "status" "delivered")]
+    
+    (m/Padding
+     .padding (m/EdgeInsets.only .top 4.0 .bottom (if (and show-sender-info? (not is-me?)) 12.0 4.0) .left 16.0 .right 16.0)
+     .child
+     (m/Row
+      ;; ⚡ 核心修复 1：在水平列表中，Row 的宽度必须尽可能小，绝不能去索要无限空间
+      .mainAxisSize m/MainAxisSize.min
+      ;; ⚡ 在水平流布局里，用交叉轴(纵向)决定对方气泡吸顶，己方气泡沉底
+      .crossAxisAlignment (if is-me? m/CrossAxisAlignment.end m/CrossAxisAlignment.start)
+      .children
+      [
+       ;; --- A. Incoming Avatar ---
+       (if (and show-sender-info? (not is-me?))
+         (m/Padding
+          .padding (m/EdgeInsets.only .right 8.0)
+          .child (smart-avatar/smart-avatar ctx sender-id sender-avatar :size 32.0))
+         (m/SizedBox.shrink))
+       
+       ;; --- B. The Message Container ---
+       ;; ⚡ 核心修复 2：彻底删掉 m/Flexible，靠里面的 Container 的 maxWidth: 280 来限制最大宽度
+       (m/Column
+        .mainAxisSize m/MainAxisSize.min
+        .crossAxisAlignment (if is-me? m/CrossAxisAlignment.end m/CrossAxisAlignment.start)
+        .children
+        [
+         ;; 1. Sender Name 
+         (if (and show-sender-info? (not is-me?))
+           (m/Padding
+            .padding (m/EdgeInsets.only .left 4.0 .bottom 4.0)
+            .child (mgl/MongolText sender-name
+                                    .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                                        .fontSize 12.0 
+                                                        .fontWeight m/FontWeight.bold 
+                                                        .color theme/text-secondary)))
+           (m/SizedBox.shrink))
+         
+         ;; 2. The Bubble Geometry
+         (m/Container
+          .constraints (m/BoxConstraints .maxWidth 280.0)
+          .padding (if (= msg-type "image")
+                     (m/EdgeInsets.all 4.0) 
+                     (m/EdgeInsets.symmetric .horizontal 16.0 .vertical 10.0))
+          .decoration (m/BoxDecoration 
+                       .color (if is-me? theme/brand-blue m/Colors.white)
+                       .borderRadius (m/BorderRadius.only
+                                      .topLeft (m/Radius.circular 16.0)
+                                      .topRight (m/Radius.circular 16.0)
+                                      .bottomLeft (m/Radius.circular (if is-me? 16.0 0.0))
+                                      .bottomRight (m/Radius.circular (if is-me? 0.0 16.0)))
+                       .border (when-not is-me? (m/Border.all .color theme/border-color .width 0.5))
+                       .boxShadow (when-not is-me? 
+                                    [(m/BoxShadow .color (.withOpacity m/Colors.black 0.02) 
+                                                  .blurRadius 4.0 
+                                                  .offset (m/Offset 0.0 2.0))]))
+          .child
+          (m/Column
+           .mainAxisSize m/MainAxisSize.min
+           .crossAxisAlignment (if is-me? m/CrossAxisAlignment.end m/CrossAxisAlignment.start)
+           .children
+           [
+            ;; Core Branch: Render static payload content
+            (if (= msg-type "image")
+              ;; A. Image Variant (统一调用全局 viewer 组件)
+              (m/GestureDetector
+               .onTap (fn []
+                        (m/Navigator.push
+                         ctx
+                         (m/MaterialPageRoute.
+                          .builder (fn [_]
+                                     (media-viewer/media-viewer-screen [media-url]))))
+                        nil)
+               .child (m/ClipRRect
+                       .borderRadius (m/BorderRadius.circular 12.0)
+                       .child (cached-image/cached-img media-url :width 220.0 :height 180.0 :fit m/BoxFit.cover)))
+
+              ;; B. Vertical Mongol Text Variant (使用新的富文本渲染引擎)
+              (rich-parser/rich-text-view ctx content entities :is-me? is-me?))
+
+            (m/SizedBox .height 4.0)
+
+            ;; Metadata Row (Time + Delivery Status)
+            (m/Row
+             .mainAxisSize m/MainAxisSize.min
+             .children
+             [(mgl/MongolText (format-message-time timestamp)
+                              .style (m/TextStyle .fontSize 10.0
+                                                  .color (if is-me? (.withOpacity m/Colors.white 0.7) theme/text-secondary)))
+
+              ;; Optimistic Delivery Indicator (Only for outgoing messages)
+              (if is-me?
+                (m/Padding
+                 .padding (m/EdgeInsets.only .left 4.0)
+                 .child (cond
+                          ;; ⚡ 0. Offline Queue Phase (无网排队中)
+                          (= status "queued")
+                          (m/Icon m/Icons.cloud_off_rounded .size 12.0 .color (.withOpacity m/Colors.white 0.5))
+
+                          ;; 1. Encoding / Transporting Phase (有网发送中)
+                          (= status "sending")
+                          (m/Icon m/Icons.access_time_rounded .size 12.0 .color (.withOpacity m/Colors.white 0.5))
+
+                          ;; 2. Local Hardware / Network Failure (失败可重试)
+                          (= status "failed")
+                          (m/GestureDetector
+                           .onTap #(when on-retry! (on-retry! message-data))
+                           .behavior m/HitTestBehavior.opaque
+                           .child (m/Padding
+                                   .padding (m/EdgeInsets.symmetric .horizontal 4.0 .vertical 2.0)
+                                   .child (m/Icon m/Icons.error_outline_rounded .size 14.0 .color theme/warning-yellow)))
+
+                          ;; 3. Arrived at Elixir Backend (已发往服务器 - 单勾)
+                          (= status "sent")
+                          (m/Icon m/Icons.done_rounded .size 12.0 .color (.withOpacity m/Colors.white 0.6))
+
+                          ;; 4. Delivered to Peer Device but Unread (对方已收到 - 灰色双勾)
+                          (= status "delivered")
+                          (m/Icon m/Icons.done_all_rounded .size 12.0 .color (.withOpacity m/Colors.white 0.6))
+
+                          ;; 5. Peer Read Acknowledged (对方已读 - 纯白亮色双勾)
+                          :else
+                          (m/Icon m/Icons.done_all_rounded .size 12.0 .color m/Colors.white)))
+                 (m/SizedBox.shrink))])]))])]))))

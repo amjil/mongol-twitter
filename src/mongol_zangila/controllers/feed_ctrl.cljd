@@ -1,0 +1,195 @@
+(ns mongol-zangila.controllers.feed-ctrl
+  "Domain controller for social feed and topic timelines.
+   Home feed uses GET /feed (global timeline, cold-start MVP — not following-only).
+   Manages page-based pagination, data fetching, and network status synchronization."
+  (:require
+   ["dart:async" :as async]
+   ["dart:core" :as dc]
+   ["dart:math" :as math]
+   [clojure.string :as str]
+   
+   [mongol-zangila.infrastructure.api :as api]
+   [mongol-zangila.infrastructure.db :as db]
+   [mongol-zangila.state :as state]
+   [mongol-zangila.infrastructure.write-buffer :as write-buffer]
+   [components.toast :as toast]))
+
+;; =============================================================================
+;; 1. Global Feed Sync Event Bus
+;; =============================================================================
+
+(defonce !feed-refresh-trigger (atom 0))
+
+(defn trigger-feed-refresh! 
+  "Globally broadcasts a signal to active feed viewports to reload their data."
+  []
+  (swap! !feed-refresh-trigger inc))
+
+;; =============================================================================
+;; 2. Feed Fetching Logic
+;; =============================================================================
+
+(defn load-page! 
+  [ctx endpoint !posts !page !has-more? !loading? is-refresh?]
+  (cond
+    @!loading?
+    (do
+      (when is-refresh?
+        (toast/info ctx "Уншиж байна, түр хүлээнэ үү..."))
+      (dc/Future.value true))
+    
+    (not (or is-refresh? @!has-more?))
+    (dc/Future.value true)
+    
+    :else
+    (do
+      (reset! !loading? true)
+      (when is-refresh?
+        (reset! !page 1)
+        (reset! !has-more? true))
+      
+      (let [completer (async/Completer.)
+            current-page (if is-refresh? 1 @!page)
+            query-sep (if (str/includes? endpoint "?") "&" "?")
+            url (str endpoint query-sep "limit=15&page=" current-page)]
+        
+        (-> (api/get-req url)
+            (.then (fn [res]
+                     (let [fetched-posts (get res "data" [])
+                           is-full-page? (= (count fetched-posts) 15)]
+                       
+                       (-> (db/get-blocked-user-ids)
+                           (.then (fn [blocked-ids]
+                                    (let [clean-posts (remove (fn [p] 
+                                                                (let [author-id (get-in p ["author" "id"])]
+                                                                  (or (contains? blocked-ids author-id)
+                                                                      (get-in p ["author" "is_blocked_by_me"] false))))
+                                                              fetched-posts)]
+                                      
+                                      (if is-refresh?
+                                        (reset! !posts (vec clean-posts))
+                                        (swap! !posts (fn [existing]
+                                                        (let [existing-ids (set (map #(get % "id") existing))
+                                                              new-posts (remove #(existing-ids (get % "id")) clean-posts)]
+                                                          (vec (concat existing new-posts))))))
+                                      
+                                      (reset! !page (inc current-page))
+                                      (reset! !has-more? is-full-page?)
+                                      (reset! !loading? false)
+                                      (.complete completer true))))))))
+            
+            (.catchError (fn [err]
+                           (reset! !loading? false)
+                           (.completeError completer err)
+                           (toast/error ctx (str "Алдаа гарлаа: " err)))))
+        
+        (.-future completer)))))
+
+;; =============================================================================
+;; 3. Helpers
+;; =============================================================================
+
+(defn- gen-idk []
+  (str "idk-" (.-millisecondsSinceEpoch (dc/DateTime.now)) "-" (.nextInt (math/Random.) 1000000)))
+
+;; =============================================================================
+;; 4. Mutation Proxies (Unidirectional Data Flow via on-mutate)
+;; =============================================================================
+
+(defn toggle-like!
+  [ctx post-data on-mutate]
+  (let [post-id (get post-data "id")
+        currently-liked? (get post-data "is_liked_by_me" false)
+        original-count (get post-data "like_count" 0)
+        net-status @state/network-status
+        idk (gen-idk)
+        payload {"action" (if currently-liked? "unlike" "like") "idempotency_key" idk}]
+    
+    (when on-mutate
+      (on-mutate (fn [p]
+                   ;; ⚡ 核心修复：(into {} p) 将 Dart Map 转换为 Clojure Map 以支持 assoc
+                   (-> (into {} p)
+                       (assoc "is_liked_by_me" (not currently-liked?))
+                       (assoc "like_count" (if currently-liked? (max 0 (dec original-count)) (inc original-count)))))))
+    
+    (if (= net-status :offline)
+      (write-buffer/enqueue! "like-tweet" (assoc payload "post_id" post-id) idk)
+      (-> (api/post-req (str "/tweets/" post-id "/like") payload)
+          (.catchError (fn [_err]
+                         (when on-mutate
+                           (on-mutate (fn [p]
+                                        (-> (into {} p)
+                                            (assoc "is_liked_by_me" currently-liked?)
+                                            (assoc "like_count" original-count)))))
+                         (toast/error ctx "Үйлдэл амжилтгүй боллоо. Холболтоо шалгана уу.")))))))
+
+(defn toggle-repost!
+  [ctx post-data on-mutate]
+  (let [post-id (get post-data "id")
+        currently-reposted? (get post-data "is_reposted_by_me" false)
+        original-count (get post-data "repost_count" 0)
+        net-status @state/network-status
+        action (if currently-reposted? "unrepost" "repost")
+        idk (gen-idk)
+        payload {"action" action "idempotency_key" idk}]
+    
+    (when on-mutate
+      (on-mutate (fn [p]
+                   ;; ⚡ 核心修复：(into {} p)
+                   (-> (into {} p)
+                       (assoc "is_reposted_by_me" (not currently-reposted?))
+                       (assoc "repost_count" (if currently-reposted? (max 0 (dec original-count)) (inc original-count)))))))
+    
+    (if (= net-status :offline)
+      (write-buffer/enqueue! "repost-tweet" (assoc payload "post_id" post-id) idk)
+      (-> (api/post-req (str "/tweets/" post-id "/repost") payload)
+          (.catchError (fn [_err]
+                         (when on-mutate
+                           (on-mutate (fn [p]
+                                        (-> (into {} p)
+                                            (assoc "is_reposted_by_me" currently-reposted?)
+                                            (assoc "repost_count" original-count)))))
+                         (toast/error ctx "Нийтлэлийг дахин түгээхэд алдаа гарлаа.")))))))
+
+(defn toggle-bookmark!
+  [ctx post-data on-mutate & {:keys [on-change]}]
+  (let [post-id (get post-data "id")
+        currently-bookmarked? (get post-data "is_bookmarked_by_me" false)
+        net-status @state/network-status
+        action (if currently-bookmarked? "unbookmark" "bookmark")
+        idk (gen-idk)
+        payload {"action" action "idempotency_key" idk}]
+
+    (when on-mutate
+      ;; ⚡ 核心修复：(into {} p)
+      (on-mutate (fn [p] (assoc (into {} p) "is_bookmarked_by_me" (not currently-bookmarked?)))))
+    (when on-change (on-change (not currently-bookmarked?)))
+
+    (if (= net-status :offline)
+      (write-buffer/enqueue! "bookmark-tweet" (assoc payload "post_id" post-id) idk)
+      (-> (api/post-req (str "/tweets/" post-id "/bookmark") payload)
+          (.catchError (fn [_err]
+                         (when on-mutate
+                           (on-mutate (fn [p] (assoc (into {} p) "is_bookmarked_by_me" currently-bookmarked?))))
+                         (when on-change (on-change currently-bookmarked?))
+                         (toast/error ctx "Хадгалахад алдаа гарлаа. Дараа дахин оролдоно уу.")))))))
+
+(defn delete-post!
+  [ctx post-id !posts]
+  (let [net-status @state/network-status
+        idk (str "idk-" (.-millisecondsSinceEpoch (dc/DateTime.now)) "-" (.nextInt (math/Random.) 1000000))
+        original-posts @!posts
+        outbox-payload {"post_id" post-id}]
+    
+    (reset! !posts (vec (remove #(= (get % "id") post-id) original-posts)))
+    (toast/success ctx "Нийтлэлийг устгалаа.")
+    
+    (if (= net-status :offline)
+      (write-buffer/enqueue! "delete-post" outbox-payload idk)
+      (-> (api/delete-req (str "/tweets/" post-id))
+          (.catchError (fn [err]
+                         (if (and (.-response err) (not= (.-statusCode (.-response err)) 503))
+                           (do 
+                             (reset! !posts original-posts)
+                             (toast/error ctx "Нийтлэл устгах үйлдэл амжилтгүй боллоо."))
+                           (write-buffer/enqueue! "delete-post" outbox-payload idk))))))))

@@ -1,0 +1,76 @@
+(ns mongol-zangila.ui.search.components.search-input
+  "A highly reusable, styled search input field.
+   Adapted for native vertical Mongolian typography with dynamic clear-button visibility."
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
+   [cljd.flutter :as f]
+   [clojure.string :as str]
+   
+   ;; UI & Theme
+   [mongol-zangila.ui.theme :as theme]))
+
+;; =============================================================================
+;; 1. The Reusable Search Field Component
+;; =============================================================================
+
+(defn search-field 
+  "A vertical pill-shaped text input specifically optimized for LTR search queries.
+   
+   Parameters:
+   - ctrl: A Flutter TextEditingController instance.
+   - on-submit: A callback function triggered with the query string when the user hits 'Search' on the keyboard.
+   - on-clear: An optional callback function triggered when the user taps the clear (X) icon."
+  [^m/TextEditingController ctrl on-submit & {:keys [on-clear]}]
+  
+  (m/Container
+   ;; ⚡ Removed fixed width to allow flexible scaling within parent layouts (like Expanded)
+   .decoration (m/BoxDecoration 
+                .color theme/bg-color
+                .borderRadius (m/BorderRadius.circular 24.0))
+   .child
+   ;; Native Vertical Input Field
+   (mgl/MongolTextField
+    .controller ctrl
+    ;; ⚡ Enforce strict single-line input to prevent layout breaking
+    .maxLines 1
+    .autofocus true
+    ;; Maps the mobile keyboard's bottom right button to a 'Search' magnifying glass
+    .textInputAction m/TextInputAction.search
+    .onSubmitted on-submit
+    .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 15.0 .color theme/text-primary)
+    
+    .decoration 
+    (m/InputDecoration
+     .hintText "Хайх..." ;; "Search..."
+     .hintStyle (m/TextStyle .color theme/text-secondary)
+     
+     ;; In MongolTextField, the prefix icon aligns to the top. 
+     ;; We add top padding to push it away from the rounded border.
+     .prefixIcon (m/Padding 
+                  .padding (m/EdgeInsets.only .top 12.0) 
+                  .child (m/Icon m/Icons.search_rounded .color theme/text-secondary .size 20.0))
+     
+     ;; Reactive Suffix Icon (Clear Button) aligning to the bottom
+     .suffixIcon 
+     (m/ValueListenableBuilder
+      .valueListenable ctrl
+      .builder (fn [_ctx ^m/TextEditingValue val _child]
+                 (if (str/blank? (.-text val))
+                   ;; Return an invisible, zero-size widget if the field is empty
+                   (m/SizedBox.shrink)
+                   
+                   ;; Render the clear button if text exists
+                   (m/Padding
+                    .padding (m/EdgeInsets.only .bottom 8.0)
+                    .child (m/IconButton
+                            .icon (m/Icon m/Icons.cancel_rounded .color theme/text-secondary .size 18.0)
+                            .onPressed (fn []
+                                         (.clear ctrl)
+                                         (when on-clear
+                                           (on-clear))))))))
+     
+     ;; Remove default borders for a seamless pill-shaped look
+     .border m/InputBorder.none
+     ;; Vertical padding ensures text breathes well within the pill
+     .contentPadding (m/EdgeInsets.symmetric .vertical 16.0 .horizontal 12.0)))))

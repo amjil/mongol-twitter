@@ -1,0 +1,189 @@
+(ns mongol-zangila.ui.auth.login
+  "Login screen viewport.
+   Provides a purely declarative interface for user authentication, 
+   delegating all business logic to the auth-ctrl domain controller.
+   ⚡ Refactored to native vertical Mongolian layout with custom keyboard."
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
+   ["dart:core" :as dc]
+   [cljd.flutter :as f]
+   
+   ;; System Controllers
+   [mongol-zangila.controllers.auth-ctrl :as auth-ctrl]
+   
+   ;; UI & Utilities
+   [mongol-zangila.ui.theme :as theme]
+   [mongol-zangila.utils.nav :as nav]
+   
+   ;; Custom Keyboard
+   [virtual-keyboard.keyboard :as keyboard]
+   [virtual-keyboard.options :as options]))
+
+;; =============================================================================
+;; 1. Sub-component: Auth Input Pillar
+;; =============================================================================
+
+(defn- auth-input-pillar 
+  "A styled vertical text field optimized for authentication forms."
+  [^m/TextEditingController ctrl label obscure?]
+  (m/Container
+   .padding (m/EdgeInsets.only .top 24.0 .bottom 24.0 .right 24.0)
+   .child
+   (m/Row
+    .crossAxisAlignment m/CrossAxisAlignment.start
+    .children
+    [;; Vertical Label
+     (mgl/MongolText label
+                     .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                         .fontSize 15.0
+                                         .fontWeight m/FontWeight.bold
+                                         .color theme/text-secondary))
+     (m/SizedBox .width 16.0)
+     
+     ;; Native Vertical Input Field
+     (mgl/MongolTextField
+      .controller ctrl
+      .maxLines 1
+      .obscureText obscure?
+      .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 16.0 .color theme/text-primary)
+      .decoration (m/InputDecoration
+                   .hintStyle (m/TextStyle .color theme/border-color)
+                   .filled true
+                   .fillColor theme/bg-color
+                   .border (m/OutlineInputBorder
+                            .borderRadius (m/BorderRadius.circular 12.0)
+                            .borderSide m/BorderSide.none)))])))
+
+;; =============================================================================
+;; 2. The Main Login Screen Widget
+;; =============================================================================
+
+(defn login-screen 
+  "The primary authentication gateway."
+  []
+  (let [!loading? (atom false)]
+    
+    (f/widget
+     :context ctx
+     :managed [phone-ctrl (m/TextEditingController.)
+               pass-ctrl (m/TextEditingController.)]
+     :watch [loading? !loading?]
+
+     ;; Keyboard options injection for consistent theme and font
+     :let [info (merge options/keyboard-option {:keyboard/mongol-font-family "OyunQaganTig"
+                                                :keyboard/key-container-color m/Colors.grey.shade500
+                                                :keyboard/font-size 16})]
+     :bind {:info info}
+     
+     (m/Scaffold
+      .backgroundColor m/Colors.white
+      
+      ;; --- Top App Bar ---
+      .appBar
+      (m/AppBar
+       .backgroundColor m/Colors.white
+       .elevation 0.0)
+      
+      .body
+      (m/SafeArea
+       .child
+       (m/Column
+        .children
+        [
+         ;; A. Upper Viewport: Form + Floating Candidates
+         (m/Expanded
+          .child
+          (m/Stack
+           .children
+           [(m/SingleChildScrollView
+             .scrollDirection m/Axis.horizontal
+             .padding (m/EdgeInsets.only .left 24.0 .right 48.0 .top 64.0)
+             .physics (m/BouncingScrollPhysics.)
+             .child
+             (m/Row
+              .crossAxisAlignment m/CrossAxisAlignment.start
+              .children
+              [
+               ;; Pillar 1: Brand Anchor & Title
+               (m/Container
+                .width 140.0
+                .padding (m/EdgeInsets.only .top 24.0)
+                .alignment m/Alignment.topCenter
+                .child
+                (m/Column
+                 .mainAxisSize m/MainAxisSize.min
+                 .children
+                 [(m/Container
+                   .padding (m/EdgeInsets.all 16.0)
+                   .decoration (m/BoxDecoration .color theme/bg-color .shape m/BoxShape.circle)
+                   .child (m/Icon m/Icons.water_drop_rounded .color theme/brand-blue .size 32.0))
+                  (m/SizedBox .height 24.0)
+                  (mgl/MongolText "Монгол Зангилаа"
+                                  .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                                      .fontSize 20.0 
+                                                      .fontWeight m/FontWeight.bold 
+                                                      .color theme/text-primary))]))
+
+               (m/VerticalDivider .width 1.0 .thickness 1.0 .color theme/border-color)
+
+               ;; Pillar 2: Phone Input
+               (auth-input-pillar phone-ctrl "Утасны дугаар" false)
+
+               (m/VerticalDivider .width 1.0 .thickness 1.0 .color theme/border-color)
+
+               ;; Pillar 3: Password Input
+               (auth-input-pillar pass-ctrl "Нууц үг" true)
+
+               (m/VerticalDivider .width 1.0 .thickness 1.0 .color theme/border-color)
+
+               ;; Pillar 4: Actions & Navigation Links
+               (m/Padding
+                .padding (m/EdgeInsets.only .top 24.0 .right 24.0)
+                .child
+                (m/Row
+                 .crossAxisAlignment m/CrossAxisAlignment.start
+                 .children
+                 [
+                  ;; 4a. Submit Button
+                  (m/Container
+                   .decoration (m/BoxDecoration .color theme/brand-blue .shape m/BoxShape.circle)
+                   .child
+                   (m/IconButton
+                    .icon (if loading?
+                            (m/SizedBox .width 16.0 .height 16.0 
+                                        .child (m/CircularProgressIndicator .strokeWidth 2.0 .color m/Colors.white))
+                            (m/Icon m/Icons.arrow_forward_rounded .color m/Colors.white .size 18.0))
+                    .onPressed (if loading? 
+                                 nil 
+                                 #(auth-ctrl/perform-login! ctx (.-text phone-ctrl) (.-text pass-ctrl) !loading?))))
+                  
+                  (m/SizedBox .width 40.0)
+                  
+                  ;; 4b. Secondary Links (Forgot Password / Register)
+                  (m/Column
+                   .mainAxisSize m/MainAxisSize.min
+                   .crossAxisAlignment m/CrossAxisAlignment.center
+                   .children
+                   [(mgl/MongolTextButton
+                     .onPressed #(nav/push! ctx "/auth/forgot-password")
+                     .child (mgl/MongolText "Нууц үгээ мартсан уу?" 
+                                            .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                                                .color theme/text-secondary)))
+                    
+                    (m/SizedBox .height 24.0)
+                    (m/Container .width 24.0 .height 1.0 .color theme/border-color)
+                    (m/SizedBox .height 24.0)
+                    
+                    (mgl/MongolTextButton
+                     .onPressed #(nav/push! ctx "/register")
+                     .child (mgl/MongolText "Бүртгэлгүй юу?\nБүртгүүлэх" 
+                                            .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                                                .color theme/brand-blue 
+                                                                .fontWeight m/FontWeight.bold)))])]))]))
+            
+            ;; Floating candidates view for custom IME
+            (keyboard/candidates nil)]))
+
+         ;; B. Lower Viewport: Custom FST Keyboard
+         (keyboard/keyboard {})]))))))

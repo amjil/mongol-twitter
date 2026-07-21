@@ -1,0 +1,153 @@
+(ns mongol-zangila.ui.chat.components.inbox-tile
+  "A highly reusable, standalone list tile for conversation threads.
+   Features dynamic typographic weight and background tinting based on unread status.
+   ⚡ Architected as a Dynamic-Width vertical card with a Top-Avatar LTR flow."
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
+   ["dart:core" :as dc]
+   [cljd.flutter :as f]
+   [clojure.string :as str]
+   
+   ;; UI & Shared Components
+   [mongol-zangila.ui.theme :as theme]
+   [mongol-zangila.utils.nav :as nav]
+   [mongol-zangila.utils.time-format :as time-format]
+   [mongol-zangila.ui.chat.inbox-helpers :as inbox-helpers]
+   [mongol-zangila.ui.widgets.avatar :as smart-avatar]))
+
+;; =============================================================================
+;; 1. Helper Components
+;; =============================================================================
+
+(defn- format-short-time 
+  [iso-string]
+  (time-format/format-inbox-time iso-string))
+
+(defn- unread-badge 
+  "A discrete, bright red counter indicating unread messages in a thread.
+   ⚡ Upgraded to use MongolText and a vertical Pill-shape to fit vertical digits."
+  [count-val]
+  (if (> count-val 0)
+    (m/Container
+     .padding (m/EdgeInsets.symmetric .vertical 8.0 .horizontal 6.0)
+     .decoration (m/BoxDecoration 
+                  .color theme/error-red
+                  .borderRadius (m/BorderRadius.circular 12.0))
+     .child (mgl/MongolText (if (> count-val 99) "99+" (str count-val))
+                            .style (m/TextStyle .color m/Colors.white
+                                                .fontFamily "OyunQaganTig"
+                                                .fontSize 11.0
+                                                .fontWeight m/FontWeight.bold)))
+    (m/SizedBox.shrink)))
+
+;; =============================================================================
+;; 2. The Main Tile Component
+;; =============================================================================
+
+(defn inbox-tile 
+  "Renders a single conversation thread card.
+   Automatically adapts its routing target based on whether it is a DM or a Group chat.
+   
+   Parameters:
+   - ctx: The Flutter BuildContext.
+   - thread-data: A map containing the thread's metadata, latest message, and partner info."
+  [ctx thread-data]
+  
+  (let [thread-id (get thread-data "id")
+        thread-type (get thread-data "type" "dm")
+        partner (get thread-data "partner" {})
+        display-name (get partner "name" (get thread-data "name" "Unknown"))
+        avatar-url (get partner "avatar_url" (get thread-data "avatar_url"))
+        last-msg (inbox-helpers/last-message-preview thread-data)
+        unread-count (get thread-data "unread_count" 0)
+        updated-at (inbox-helpers/thread-updated-at thread-data)
+        
+        has-unread? (> unread-count 0)]
+    
+    (m/Container
+     ;; ⚡ 核心适配 1：移除定宽，宽度由内容自然撑开 (Wrap Content)
+     .margin (m/EdgeInsets.only .top 16.0 .bottom 16.0)
+     .decoration (m/BoxDecoration
+                  .color (if has-unread? m/Colors.white theme/bg-color)
+                  .borderRadius (m/BorderRadius.circular 20.0)
+                  .boxShadow (if has-unread? 
+                               [(m/BoxShadow .color (-> m/Colors.black (.withOpacity 0.04))
+                                             .blurRadius 12.0
+                                             .offset (m/Offset 0.0 4.0))]
+                               [])
+                  .border (m/Border.all .color (.withOpacity theme/border-color 0.8) .width 1.0))
+     .child
+     (m/InkWell
+      .onTap (fn []
+               (if (= thread-type "group")
+                 (nav/push! ctx "/chat/group" 
+                            {:group-id thread-id 
+                             :group-name display-name 
+                             :member-count (get thread-data "member_count" 0)})
+                 (nav/push! ctx "/chat/dm" 
+                            {:thread-id thread-id
+                             :partner-name display-name
+                             :partner-id (get partner "id")})))
+      .borderRadius (m/BorderRadius.circular 20.0)
+      .child
+      (m/Padding
+       .padding (m/EdgeInsets.all 16.0)
+       .child
+       ;; ⚡ 核心适配 2：全局使用 Column 垂直排布，头像在顶，下面挂载横向流
+       (m/Column
+        .crossAxisAlignment m/CrossAxisAlignment.start
+        .children
+        [
+         ;; --- 顶部：头像 (Avatar at the very top) ---
+         (smart-avatar/smart-avatar ctx (get partner "id" thread-id) avatar-url :size 48.0)
+         
+         (m/SizedBox .height 16.0)
+         
+         ;; --- 下方：动态横向信息流 (Dynamic LTR Flow) ---
+         (m/Expanded
+          .child
+          (m/Row
+           .crossAxisAlignment m/CrossAxisAlignment.start
+           .children
+           [            ;; 1. Name Pillar
+            (mgl/MongolText display-name
+                            .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                                .fontSize 16.0
+                                                .fontWeight (if has-unread? m/FontWeight.bold m/FontWeight.w500)
+                                                .color theme/text-primary)
+                            .maxLines 1
+                            .overflow m/TextOverflow.ellipsis)
+
+            (m/SizedBox .width 12.0)
+            (m/Container .width 0.5 .color theme/border-color)
+            (m/SizedBox .width 12.0)
+
+            ;; 2. Last Message Pillar (⚡ 核心适配 3：去掉 Expanded，宽度随字数自然增长)
+            (mgl/MongolText (if (str/blank? last-msg) "Зурвас илгээх..." last-msg)
+                            .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                                .fontSize 14.0
+                                                .height 1.4
+                                                .fontStyle (if (str/blank? last-msg) m/FontStyle.italic m/FontStyle.normal)
+                                                .color (cond
+                                                         (str/blank? last-msg) theme/text-secondary
+                                                         has-unread? theme/text-primary
+                                                         :else theme/text-secondary))
+                            ;; 依然保留最大行数保护，防止几千字的小作文无限往右撑爆屏幕
+                            .maxLines 3
+                            .overflow m/TextOverflow.ellipsis)
+
+            (m/SizedBox .width 12.0)
+
+            ;; 3. Meta Pillar (Unread Badge + Timestamp)
+            (m/Column
+             .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+             .children
+             [(unread-badge unread-count)
+              (if (str/blank? updated-at)
+                (m/SizedBox.shrink)
+                (mgl/MongolText (format-short-time updated-at)
+                                .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                                    .fontSize 12.0
+                                                    .fontWeight (if has-unread? m/FontWeight.bold m/FontWeight.normal)
+                                                    .color (if has-unread? theme/brand-blue theme/text-secondary))))])]))]))))))

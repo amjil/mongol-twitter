@@ -1,0 +1,81 @@
+(ns mongol-zangila.ui.widgets.avatar
+  "Smart user avatar component.
+   Handles offline-first caching, active states, and automatic routing to user profiles."
+  (:require
+   ["package:flutter/material.dart" :as m]
+   [cljd.flutter :as f]
+   [clojure.string :as str]
+   
+   ;; System & Theme
+   [mongol-zangila.utils.nav :as nav]
+   [mongol-zangila.ui.theme :as theme]
+   [mongol-zangila.ui.widgets.cached-image :as cached-image]))
+
+;; =============================================================================
+;; 1. Fallback & Placeholder Strategy
+;; =============================================================================
+
+(defn- default-placeholder 
+  "Renders a clean, branded skeleton when the network fails or no URL is provided."
+  [size]
+  (m/Container
+   .width size 
+   .height size
+   .decoration (m/BoxDecoration 
+                .color m/Colors.grey.shade100 
+                .shape m/BoxShape.circle)
+   .child (m/Icon m/Icons.person_rounded 
+                  .color m/Colors.grey.shade300 
+                  .size (* size 0.6))))
+
+;; =============================================================================
+;; 2. The Smart Avatar Widget
+;; =============================================================================
+
+(defn smart-avatar 
+  "A globally reusable avatar component.
+   By default, tapping it routes the user to the target profile. 
+   This behavior can be overridden via the :on-tap kwargs."
+  [ctx user-id avatar-url & {:keys [size on-tap border-width border-color]
+                             :or {size 40.0
+                                  border-width 0.0
+                                  border-color m/Colors.transparent}}]
+  
+  (let [;; Defensive check against nil or pure whitespace URLs
+        valid-url? (and avatar-url (not (str/blank? avatar-url)))
+        
+        ;; Intelligent Default Routing:
+        ;; Uses the typed nav engine to push the profile view safely.
+        default-tap-fn #(nav/push! ctx "/profile/view" {:user-id user-id})
+        
+        ;; Allow parent components to override the tap behavior if needed
+        actual-tap-fn (or on-tap default-tap-fn)]
+    
+    (m/GestureDetector
+     .onTap actual-tap-fn
+     ;; Ensures taps register even on the transparent parts of the widget bounds
+     .behavior m/HitTestBehavior.opaque
+     .child
+     (m/Container
+      .width size
+      .height size
+      .decoration (m/BoxDecoration 
+                   .shape m/BoxShape.circle
+                   ;; Support for active states or premium borders (e.g., Story rings)
+                   .border (m/Border.all .color border-color .width border-width))
+      .child
+      (m/ClipOval
+       .child
+       (if valid-url?
+         ;; ⚡ Upgraded to use the local-first cached image component
+         (cached-image/cached-img
+          avatar-url
+          :width size
+          :height size
+          :fit m/BoxFit.cover
+          ;; Override the generic placeholder/error with our custom rounded skeleton
+          :placeholder-widget (default-placeholder size)
+          :error-widget (default-placeholder size))
+         
+         ;; Instant fallback for missing data
+         (default-placeholder size)))))))

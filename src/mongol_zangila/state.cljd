@@ -1,0 +1,69 @@
+(ns mongol-zangila.state
+  "Global Application State Tree.
+   Contains purely in-memory reactive atoms. 
+   Persisted data should be handled via infrastructure/storage.cljd."
+  (:require
+   ["dart:core" :as dc]))
+
+(defn- log! [msg]
+  (dc/print msg))
+
+;; =============================================================================
+;; 1. Authentication & Identity
+;; =============================================================================
+
+(defonce auth-token
+  ^{:doc "Holds the current JWT. If nil, the user is unauthenticated.
+          Monitored by infrastructure/api.cljd for injection into HTTP headers."}
+  (atom nil))
+
+(defonce current-user
+  ^{:doc "Holds the profile data of the currently logged-in user.
+          Example: {\"id\" \"u1\", \"name\" \"Bat\", \"avatar_url\" \"...\"}"}
+  (atom nil))
+
+;; =============================================================================
+;; 2. Real-time Badges & Counters (Driven by Phoenix WebSockets)
+;; =============================================================================
+
+(defonce unread-notifications-count
+  ^{:doc "Global counter for unread social notifications (likes, mentions).
+          Drives the red badge on the Bottom Navigation Bar."}
+  (atom 0))
+
+(defonce unread-messages-count
+  ^{:doc "Global counter for unread direct and group messages.
+          Updated silently by infrastructure/socket.cljd."}
+  (atom 0))
+
+;; =============================================================================
+;; 3. System & Environment State (Local-First Architecture)
+;; =============================================================================
+
+(defonce network-status
+  ^{:doc "REST API reachability (not WebSocket).
+          Values: :online, :offline, :connecting.
+          Driven by infrastructure/api.cljd on HTTP success/failure.
+          Used to trigger the offline outbox and UI empty states."}
+  (atom :connecting))
+
+(defonce sync-in-progress?
+  ^{:doc "Indicates if the app is currently pulling/pushing background data 
+          from SQFlite to the Elixir backend."}
+  (atom false))
+
+;; =============================================================================
+;; State Management Utilities
+;; =============================================================================
+
+(defn clear-all-state! 
+  "Wipes all in-memory state. 
+   Crucial for the logout sequence and the account self-destruct mechanism."
+  []
+  (reset! auth-token nil)
+  (reset! current-user nil)
+  (reset! unread-notifications-count 0)
+  (reset! unread-messages-count 0)
+  (reset! sync-in-progress? false)
+  ;; Note: network-status remains unaffected as it reflects hardware state
+  (log! "🧹 [State] Global memory tree cleared."))

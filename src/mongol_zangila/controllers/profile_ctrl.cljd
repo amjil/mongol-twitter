@@ -1,0 +1,217 @@
+(ns mongol-zangila.controllers.profile-ctrl
+  "Domain controller for user identity and profile management.
+   Handles metadata fetching, profile mutations, and user-specific timelines."
+  (:require
+   ["dart:async" :as async]
+   ["dart:core" :as dc]
+   ["dart:math" :as math]
+   [clojure.string :as str]
+   
+   ;; System Infrastructure
+   [mongol-zangila.state :as state]
+   [mongol-zangila.infrastructure.api :as api]
+   [mongol-zangila.infrastructure.db :as db]
+   [mongol-zangila.infrastructure.write-buffer :as write-buffer]
+   
+   ;; UI Utilities
+   [mongol-zangila.utils.nav :as nav]
+   [components.toast :as toast]))
+
+;; =============================================================================
+;; 1. Profile Data Hydration
+;; =============================================================================
+
+(defn load-profile!
+  "Fetches the requested user's metadata. 
+   If target-id is 'self', it fetches the authenticated user's detailed profile.
+   Returns a Future for pull-to-refresh integration."
+  [ctx target-id !profile-data !loading? & [is-refresh?]]
+  
+  (when-not is-refresh?
+    (reset! !loading? true))
+  (let [completer (async/Completer.)
+        resolved-id (if (= target-id "self")
+                      (get @state/current-user "id")
+                      target-id)
+        endpoint (if resolved-id
+                   (str "/users/" resolved-id "/profile")
+                   "/users/me")]
+    (-> (api/get-req endpoint)
+        (.then (fn [res]
+                 (reset! !profile-data (into {} (or (get res "data") res)))
+                 (reset! !loading? false)
+                 (.complete completer true)))
+        (.catchError (fn [err]
+                       (reset! !loading? false)
+                       (toast/error ctx (str "Профайл дуудахад алдаа гарлаа: " err))
+                       (.completeError completer err))))
+    (.-future completer)))
+
+;; =============================================================================
+;; 2. Profile Mutations
+;; =============================================================================
+
+(defn update-profile!
+  "Submits modified user metadata to the backend and synchronizes global state."
+  [ctx name bio avatar-url !loading?]
+  
+  (if (str/blank? (str/trim name))
+    (toast/warn ctx "Нэр хоосон байж болохгүй.")
+    (do
+      (reset! !loading? true)
+      (let [payload (cond-> {"name" (str/trim name)}
+                      (not (str/blank? bio)) (assoc "bio" (str/trim bio))
+                      (not (str/blank? avatar-url)) (assoc "avatar_url" avatar-url))]
+        
+        (-> (api/post-req "/users/profile/update" payload)
+            (.then (fn [res]
+                     (let [updated-user (get res "data")]
+                       (reset! state/current-user updated-user)
+                       (reset! !loading? false)
+                       (toast/success ctx "Профайл шинэчлэгдлээ.")
+                       (nav/pop! ctx))))
+            (.catchError (fn [err]
+                           (reset! !loading? false)
+                           (toast/error ctx (str "Хадгалахад алдаа гарлаа: " err)))))))))
+
+(defn toggle-follow!
+  "Optimistically toggles follow status on another user's profile."
+  [ctx target-user-id !profile-data]
+  (let [original-data @!profile-data
+        was-following? (get original-data "is_followed_by_me" false)
+        action (if was-following? "unfollow" "follow")]
+    (swap! !profile-data (fn [p] (assoc (into {} p) "is_followed_by_me" (not was-following?))))
+    (-> (api/post-req (str "/users/" target-user-id "/follow") {"action" action})
+        (.catchError (fn [_err]
+                       (reset! !profile-data original-data)
+                       (toast/error ctx "Сүлжээний алдаа." :fade))))))
+
+;; =============================================================================
+;; 3. User-Specific Timeline Fetching
+;; =============================================================================
+
+(defn load-user-posts!
+  "Fetches a paginated sequence of posts authored by the target user."
+  [ctx target-id !posts !page !has-more? !loading? is-refresh?]
+  
+  (if (or @!loading? (not (or is-refresh? @!has-more?)))
+    (dc/Future.value true)
+    
+    (do
+      (reset! !loading? true)
+      (when is-refresh?
+        (reset! !page 1)
+        (reset! !has-more? true))
+      
+      (let [completer (async/Completer.)
+            actual-id (if (= target-id "self")
+                        (get @state/current-user "id")
+                        target-id)
+            endpoint (str "/users/" actual-id "/posts")
+            current-page (if is-refresh? 1 @!page)
+            url (str endpoint "?limit=15&page=" current-page)]
+        
+        (-> (api/get-req url)
+            (.then (fn [res]
+                     (let [fetched-posts (get res "data" [])
+                           is-full-page? (= (count fetched-posts) 15)]
+                       
+                       (if is-refresh?
+                         (reset! !posts fetched-posts)
+                         
+                         (swap! !posts (fn [existing]
+                                         (let [existing-ids (set (map #(get % "id") existing))
+                                               new-posts (remove #(existing-ids (get % "id")) fetched-posts)]
+                                           (vec (concat existing new-posts))))))
+                       
+                       (reset! !page (inc current-page))
+                       (reset! !has-more? is-full-page?)
+                       (reset! !loading? false)
+                       (.complete completer true))))
+            
+            (.catchError (fn [err]
+                           (reset! !loading? false)
+                           (toast/error ctx (str "Нийтлэл дуудахад алдаа гарлаа: " err))
+                           (.completeError completer err))))
+        (.-future completer)))))
+
+;; =============================================================================
+;; 4. Resilient Blocking Architecture (With Exact Business Rollbacks)
+;; =============================================================================
+
+(defn block-user!
+  "Optimistically blocks a user, syncs to local DB, and dispatches via Outbox.
+   Rolls back precisely if the server returns a definitive business rejection."
+  [ctx target-user-id target-name on-success & {:keys [on-rollback]}]
+  (let [net-status @state/network-status
+        idk (str "idk-" (.-millisecondsSinceEpoch (dc/DateTime.now)) "-" (.nextInt (math/Random.) 1000000))
+        endpoint (str "/users/" target-user-id "/block")
+        outbox-payload {"user_id" target-user-id}]
+    
+    ;; 1. Local DB Sync (Offline isolation)
+    (db/add-blocked-user! target-user-id)
+    
+    ;; 2. Optimistic UI Mutation
+    (when on-success (on-success))
+    (toast/success ctx (str target-name " хэрэглэгчийг блоклолоо."))
+    
+    ;; 3. Resilient Network Pipeline
+    (if (= net-status :offline)
+      (write-buffer/enqueue! "block-user" outbox-payload idk)
+      (-> (api/post-req endpoint {})
+          (.catchError (fn [err]
+                         ;; ⚡ FIXED: 识别业务错误（如400/403等有Response的具体错误）与网络丢包的区别
+                         (if (and (.-response err) (not= (.-statusCode (.-response err)) 503))
+                           (do 
+                             ;; 确定性业务失败：清空本地拦截缓存，执行回滚回调
+                             (db/remove-blocked-user! target-user-id)
+                             (when on-rollback (on-rollback))
+                             (toast/error ctx "Хүсэлт амжилтгүй. Таны үйлдлийг цуцаллаа."))
+                           
+                           ;; 纯网络崩溃或超时：降级移交离线队列，不回滚 UI，等待后台重试机制自动闭环
+                           (write-buffer/enqueue! "block-user" outbox-payload idk))))))))
+
+(defn unblock-user!
+  "Removes the block constraint, purges local SQLite blocklist, with strict fallback recovery."
+  [ctx target-user-id target-name on-success & {:keys [on-rollback]}]
+  (let [net-status @state/network-status
+        idk (str "idk-" (.-millisecondsSinceEpoch (dc/DateTime.now)) "-" (.nextInt (math/Random.) 1000000))
+        endpoint (str "/users/" target-user-id "/unblock")
+        outbox-payload {"user_id" target-user-id}]
+    
+    ;; 1. Local DB Purge
+    (db/remove-blocked-user! target-user-id)
+    
+    ;; 2. Optimistic UI Mutation
+    (when on-success (on-success))
+    (toast/success ctx (str target-name " хэрэглэгчийг блокоос гаргалаа."))
+    
+    ;; 3. Resilient Network Pipeline
+    (if (= net-status :offline)
+      (write-buffer/enqueue! "unblock-user" outbox-payload idk)
+      (-> (api/post-req endpoint {})
+          (.catchError (fn [err]
+                         (if (and (.-response err) (not= (.-statusCode (.-response err)) 503))
+                           (do 
+                             ;; 确定性业务失败：重新把黑名单加回来并通知 UI 回滚
+                             (db/add-blocked-user! target-user-id)
+                             (when on-rollback (on-rollback))
+                             (toast/error ctx "Үйлдэл амжилтгүй боллоо."))
+                           
+                           (write-buffer/enqueue! "unblock-user" outbox-payload idk))))))))
+
+;; =============================================================================
+;; 5. Background Daemon Sync Task
+;; =============================================================================
+
+(defn sync-blocklist!
+  "Fetches the entire blocklist from the backend and cleanly overwrites the local SQLite cache.
+   Called silently during app boot."
+  []
+  (-> (api/get-req "/users/blocks")
+      (.then (fn [res]
+               (let [users (get res "data" [])
+                     blocked-ids (map #(get % "id") users)]
+                 (db/sync-blocked-users! blocked-ids))))
+      (.catchError (fn [err]
+                     (dc/print (str "Blocklist sync failed: " err))))))

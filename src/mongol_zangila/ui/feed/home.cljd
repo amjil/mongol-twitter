@@ -1,0 +1,209 @@
+(ns mongol-zangila.ui.feed.home
+  "Global chronological home timeline (cold-start MVP).
+   Shows all platform posts via GET /feed — not a following-only stream.
+   Adapted for LTR vertical Mongolian typography with horizontal pull-to-refresh."
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["dart:core" :as dc]
+   
+   ;; Centralized Dart Interop Interceptor
+   ["package:mongol_zangila/post_frame_trigger.dart" :as pft]
+   
+   [cljd.flutter :as f]
+   
+   ;; System Controllers & State
+   [mongol-zangila.state :as state]
+   [mongol-zangila.infrastructure.db :as db] ;; ⚡ 引入本地离线过滤库
+   [mongol-zangila.controllers.feed-ctrl :as feed-ctrl]
+   
+   ;; Shared UI Components
+   [mongol-zangila.ui.theme :as theme]
+   [mongol-zangila.utils.nav :as nav]
+   [mongol-zangila.ui.layout.scaffold :as scaffold] ;; ⚡ 引入全新全局动态角标架构
+   [mongol-zangila.ui.widgets.empty-state :as empty-state]
+   [mongol-zangila.ui.widgets.avatar :as smart-avatar]
+   
+   ;; Domain Specific Components
+   [mongol-zangila.ui.feed.components.post-card :as post-card]
+   
+   ;; The Custom Horizontal Pull-to-Refresh Library
+   [pull-to-refresh.refresh :as ptr]))
+
+;; =============================================================================
+;; 1. Sub-component: Sync & Network Indicator
+;; =============================================================================
+
+(defn- network-status-indicator []
+  (f/widget
+   :watch [net-status state/network-status
+           syncing? state/sync-in-progress?]
+   (cond
+     syncing?
+     (m/Tooltip 
+      .message "Синхрончилж байна..."
+      .child (m/SizedBox .width 20.0 .height 20.0 
+                         .child (m/CircularProgressIndicator .strokeWidth 2.0 .color theme/brand-blue)))
+     
+     (= net-status :offline)
+     (m/Tooltip 
+      .message "Офлайн горим"
+      .child (m/Icon m/Icons.cloud_off_rounded .color theme/error-red .size 24.0))
+     
+     :else
+     (m/SizedBox.shrink))))
+
+(defn- cleanup-refresh-watch [k]
+  (remove-watch feed-ctrl/!feed-refresh-trigger k))
+
+;; =============================================================================
+;; 2. Main Timeline Screen Widget
+;; =============================================================================
+
+(defn home-screen []
+  (let [!posts (atom [])
+        !blocked-ids (atom #{}) ;; ⚡ 响应式黑名单状态
+        !page (atom 1)
+        !has-more? (atom true)
+        !initial-loading? (atom true) 
+        !refresh-loading? (atom false)
+        !pagination-loading? (atom false)]
+
+    (f/widget
+     :context ctx
+
+     :managed [scroll-ctrl (let [ctrl (m/ScrollController.)]
+                             (.addListener ctrl
+                                           (fn []
+                                             (let [pos (.-position ctrl)
+                                                   pixels (.-pixels pos)
+                                                   max-ext (.-maxScrollExtent pos)]
+                                               (when (and (>= pixels (- max-ext 200.0))
+                                                          (not @!pagination-loading?)
+                                                          (not @!refresh-loading?)
+                                                          @!has-more?)
+                                                 (feed-ctrl/load-page! ctx "/feed" !posts !page !has-more? !pagination-loading? false)))))
+                             ctrl)
+               :dispose .dispose
+               
+               sync-watcher (let [key (keyword (str "home-" (.-millisecondsSinceEpoch (dc/DateTime.now))))]
+                              (add-watch feed-ctrl/!feed-refresh-trigger key
+                                         (fn [_ _ old-val new-val]
+                                           (when (> new-val old-val)
+                                             (feed-ctrl/load-page! ctx "/feed" !posts !page !has-more? !refresh-loading? true))))
+                              key)
+               :dispose cleanup-refresh-watch]
+
+     :watch [posts !posts
+             blocked-ids !blocked-ids
+             init-loading? !initial-loading?
+             page-loading? !pagination-loading?
+             current-user state/current-user
+             unread-notes state/unread-notifications-count]
+
+     (let [user-id (get current-user "id")
+           avatar-url (get current-user "avatar_url")
+           on-compose #(nav/push-fullscreen! ctx "/feed/compose")
+           
+           ;; ⚡ 在渲染前：严格过滤掉本地黑名单内的作者帖子
+           visible-posts (vec (remove #(contains? blocked-ids (get-in % ["author" "id"])) posts))]
+
+       (pft/PostFrameTrigger
+        .onLayout (fn [] 
+                    (reset! !initial-loading? false)
+                    (feed-ctrl/load-page! ctx "/feed" !posts !page !has-more? !initial-loading? true)
+                    ;; ⚡ 初始化加载本地黑名单
+                    (-> (db/get-blocked-user-ids) (.then #(reset! !blocked-ids %)))
+                    ;; ⚡ 补上极其重要的 nil 返回值，防止 void Function() 类型崩溃
+                    nil)
+        .child
+        
+        ;; ⚡ 核心替换：使用全新的 app-scaffold 彻底接管全局 Bottom Navigation Bar
+        (scaffold/app-scaffold 
+         ctx "/feed/home"
+         (m/Scaffold
+          .backgroundColor theme/bg-color
+
+          .appBar
+          (m/AppBar
+           .backgroundColor m/Colors.white
+           .elevation 0.5
+           .automaticallyImplyLeading false
+           .leading (m/Padding
+                     .padding (m/EdgeInsets.all 8.0)
+                     .child
+                     (m/GestureDetector
+                      .onTap #(nav/push! ctx "/profile/view" {:user-id "self"})
+                      .child (smart-avatar/smart-avatar ctx user-id avatar-url :size 40.0)))
+
+           .title (m/Icon m/Icons.water_drop_rounded .color theme/brand-blue .size 32.0)
+           .centerTitle true
+
+           .actions [(m/Row
+                      .mainAxisSize m/MainAxisSize.min
+                      .children
+                      [(network-status-indicator)
+                       (m/SizedBox .width 8.0)
+                       (m/IconButton
+                        .icon (m/Badge
+                               .label (m/Text (str unread-notes))
+                               .isLabelVisible (> unread-notes 0)
+                               .child (m/Icon m/Icons.notifications_none_rounded .color theme/text-primary))
+                        .onPressed #(nav/push! ctx "/notifications"))
+                       (m/SizedBox .width 8.0)])])
+
+          .body
+          (if init-loading?
+            (m/Center .child (m/CircularProgressIndicator .color theme/brand-blue))
+
+            (if (empty? visible-posts)
+              (m/Center .child (empty-state/empty-feed-view ctx on-compose))
+
+              (ptr/horizontal-refresh
+               {:on-refresh (fn []
+                              ;; ⚡ 下拉刷新时，也顺便把黑名单更新一下
+                              (-> (db/get-blocked-user-ids) (.then #(reset! !blocked-ids %)))
+                              (feed-ctrl/load-page! ctx "/feed" !posts !page !has-more? !refresh-loading? true))
+                
+                :scroll-controller scroll-ctrl
+                :background-color theme/bg-color
+                
+                :not-armed-text "Татаж шинэчлэх"
+                :armed-text "Суллаж шинэчлэх"
+                :not-armed-color theme/border-color
+                :armed-color theme/brand-blue
+                :text-style (m/TextStyle .fontFamily "OyunQaganTig" .color m/Colors.white .fontSize 14.0 .fontWeight m/FontWeight.bold)
+                
+                ;; ⚡ 替换为计算过滤后的 visible-posts 数量
+                :item-count (if (and @!has-more? page-loading?) (inc (count visible-posts)) (count visible-posts))
+                :separator-builder (fn [_ _] (m/SizedBox .width 0.0))
+                :box-shadow []
+                
+                :item-builder
+                (fn [_ i]
+                  (if (and page-loading? (= i (count visible-posts)))
+                    (m/Padding
+                     .padding (m/EdgeInsets.symmetric .horizontal 32.0)
+                     .child (m/Center .child (m/CircularProgressIndicator .strokeWidth 2.0 .color theme/brand-blue)))
+
+                    ;; ⚡ 使用 visible-posts 进行渲染
+                    (let [post-data (nth visible-posts i)]
+                      (m/Container
+                       ;; ⚡ 核心修改：移除写死的 width，改为 maxWidth 约束，允许卡片根据内容收缩宽度
+                       ;.constraints (m/BoxConstraints .maxWidth 320.0)
+                       .margin (m/EdgeInsets.only .left 16.0 .right 8.0 .top 16.0 .bottom 16.0)
+                       .child (post-card/post-card 
+                               ctx post-data
+                               :on-mutate (fn [mutator]
+                                            (swap! !posts (fn [ps]
+                                                            (mapv #(if (= (get % "id") (get post-data "id"))
+                                                                     (mutator %)
+                                                                     %)
+                                                                  ps))))
+                               :on-delete #(feed-ctrl/delete-post! ctx (get post-data "id") !posts))))))})))
+
+          .floatingActionButton
+          (m/FloatingActionButton
+           .backgroundColor theme/brand-blue
+           .elevation 4.0
+           .onPressed on-compose
+           .child (m/Icon m/Icons.edit_rounded .color m/Colors.white)))))))))

@@ -1,0 +1,69 @@
+(ns mongol-zangila.utils.nav
+  "Centralized navigation utilities.
+   Wraps Flutter's Navigator API to provide a clean, Clojure-idiomatic 
+   interface for routing, stack manipulation, and argument passing."
+  (:require
+   ["package:flutter/material.dart" :as m]))
+
+;; =============================================================================
+;; 1. Forward Navigation
+;; =============================================================================
+
+(defn push!
+  "Pushes a new named route onto the navigator stack.
+   Optionally accepts a Clojure map as arguments to pass to the target screen."
+  ([ctx route-name]
+   (m/Navigator.pushNamed ctx route-name))
+  ([ctx route-name args]
+   (m/Navigator.pushNamed ctx route-name .arguments args)))
+
+(defn push-fullscreen!
+  "Pushes a named route as a fullscreen dialog (slides up from bottom).
+   Navigation metadata (:fullscreen?) is stripped by the router before screen args."
+  ([ctx route-name]
+   (push! ctx route-name {:fullscreen? true}))
+  ([ctx route-name args]
+   (push! ctx route-name (assoc args :fullscreen? true))))
+
+(defn push-replacement!
+  "Replaces the current route with a new named route, dropping the current one.
+   Useful for intermediate screens (e.g., Splash -> Login)."
+  ([ctx route-name]
+   (m/Navigator.pushReplacementNamed ctx route-name))
+  ([ctx route-name args]
+   (m/Navigator.pushReplacementNamed ctx route-name .arguments args)))
+
+;; =============================================================================
+;; 2. Stack Cleansing (Auth Flows)
+;; =============================================================================
+
+(defn reset-to!
+  "Brutally clears the entire navigation history stack and pushes the target route.
+   Mandatory for authentication bounds (e.g., Login -> Home, or Logout -> Login)
+   to prevent users from swiping back into protected/dead areas."
+  ([ctx route-name]
+   (m/Navigator.pushNamedAndRemoveUntil ctx route-name (fn [_] false)))
+  ([ctx route-name args]
+   (m/Navigator.pushNamedAndRemoveUntil ctx route-name (fn [_] false) .arguments args)))
+
+;; =============================================================================
+;; 3. Backward Navigation
+;; =============================================================================
+
+(defn pop!
+  "Pops the topmost route off the navigator stack.
+   Optionally accepts a result value to return to the awaiting previous screen."
+  ([ctx]
+   (m/Navigator.pop ctx))
+  ([ctx result]
+   (m/Navigator.pop ctx result)))
+
+(defn pop-until!
+  "Continuously pops routes off the stack until the specified route-name is exposed.
+   Useful for deep flows (e.g., Checkout Step 4 -> back to Cart)."
+  [ctx target-route-name]
+  (m/Navigator.popUntil 
+   ctx 
+   (fn [^m/Route route]
+     (let [settings (.-settings route)]
+       (= (.-name settings) target-route-name)))))

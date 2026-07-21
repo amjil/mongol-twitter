@@ -1,0 +1,200 @@
+(ns mongol-zangila.ui.auth.otp-verification
+  "OTP Verification screen viewport.
+   A purely declarative UI layer delegating OTP validation and 
+   session hydration to the auth-ctrl domain controller.
+   ⚡ Refactored to native vertical Mongolian layout with custom keyboard."
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:flutter/services.dart" :as services]
+   ["package:mongol/mongol.dart" :as mgl]
+   ["dart:async" :as async]
+   ["dart:core" :as dc]
+   [cljd.flutter :as f]
+
+   ;; System Controllers
+   [mongol-zangila.controllers.auth-ctrl :as auth-ctrl]
+
+   ;; UI & Utilities
+   [mongol-zangila.utils.nav :as nav]
+   [mongol-zangila.ui.theme :as theme]
+   
+   ;; Custom Keyboard
+   [virtual-keyboard.keyboard :as keyboard]
+   [virtual-keyboard.options :as options]))
+
+;; =============================================================================
+;; 1. Sub-component: OTP Input Pillar
+;; =============================================================================
+
+(defn- otp-input-pillar 
+  "A styled vertical text input column strictly for 6-digit OTP codes."
+  [^m/TextEditingController ctrl label]
+  (m/Container
+   .padding (m/EdgeInsets.only .top 24.0 .bottom 24.0 .right 24.0)
+   .child
+   (m/Row
+    .crossAxisAlignment m/CrossAxisAlignment.start
+    .children
+    [;; Vertical Label
+     (mgl/MongolText label
+                     .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                         .fontSize 15.0
+                                         .fontWeight m/FontWeight.bold
+                                         .color theme/text-secondary))
+     (m/SizedBox .width 16.0)
+     
+     ;; Native Vertical Input Field
+     (mgl/MongolTextField
+      .controller ctrl
+      .maxLines 1
+      .maxLength 6
+      .keyboardType m/TextInputType.number
+      .inputFormatters [(services/FilteringTextInputFormatter.digitsOnly)]
+      .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 20.0 .letterSpacing 4.0 .color theme/text-primary)
+      .decoration (m/InputDecoration
+                   .counterText "" ;; Hide the default counter
+                   .hintText "------"
+                   .hintStyle (m/TextStyle .letterSpacing 4.0 .color theme/border-color)
+                   .filled true
+                   .fillColor theme/bg-color
+                   .border (m/OutlineInputBorder
+                            .borderRadius (m/BorderRadius.circular 12.0)
+                            .borderSide m/BorderSide.none)))])))
+
+;; =============================================================================
+;; 2. Main Screen
+;; =============================================================================
+
+(defn otp-screen
+  "The OTP entry view. Expects a phone number string and an intent keyword (:register or :reset-password).
+   For :register, name and password must be supplied from the registration screen."
+  [phone intent & {:keys [name password]}]
+  (let [!loading? (atom false)
+        !resend-countdown (atom 60)]
+
+    (f/widget
+     :context ctx
+
+     ;; ⚡ Native Timer binding with automatic .cancel disposal
+     :managed [otp-ctrl (m/TextEditingController.)
+               countdown-timer (async/Timer.periodic
+                                (dc/Duration. .seconds 1)
+                                (fn [^async/Timer t]
+                                  (when (> @!resend-countdown 0)
+                                    (swap! !resend-countdown dec))))
+               :dispose .cancel]
+               
+     :watch [loading? !loading?
+             countdown !resend-countdown]
+             
+     ;; Keyboard options injection
+     :let [info (merge options/keyboard-option {:keyboard/mongol-font-family "OyunQaganTig"
+                                                :keyboard/key-container-color m/Colors.grey.shade500
+                                                :keyboard/font-size 16})]
+     :bind {:info info}
+
+     (m/Scaffold
+      .backgroundColor m/Colors.white
+
+      ;; --- Top App Bar ---
+      .appBar
+      (m/AppBar
+       .backgroundColor m/Colors.white
+       .elevation 0.5
+       .leading (m/IconButton
+                 .icon (m/Icon m/Icons.arrow_back_ios_new_rounded .color theme/text-primary .size 20.0)
+                 .onPressed #(nav/pop! ctx))
+       .title (mgl/MongolText "Код баталгаажуулах" ;; "Verify Code"
+                              .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                                  .fontSize 18.0
+                                                  .fontWeight m/FontWeight.bold
+                                                  .color theme/text-primary)))
+
+      .body
+      (m/SafeArea
+       .child
+       (m/Column
+        .children
+        [
+         ;; A. Main Viewport
+         (m/Expanded
+          .child
+          (m/Stack
+           .children
+           [(m/SingleChildScrollView
+             .scrollDirection m/Axis.horizontal
+             .padding (m/EdgeInsets.only .left 24.0 .right 48.0 .top 64.0)
+             .physics (m/BouncingScrollPhysics.)
+             .child
+             (m/Row
+              .crossAxisAlignment m/CrossAxisAlignment.start
+              .children
+              [
+               ;; Pillar 1: Visual Anchor & Instructions
+               (m/Container
+                .width 140.0
+                .padding (m/EdgeInsets.only .top 24.0)
+                .alignment m/Alignment.topCenter
+                .child
+                (m/Column
+                 .children
+                 [(m/Container
+                   .padding (m/EdgeInsets.all 16.0)
+                   .decoration (m/BoxDecoration .color theme/bg-color .shape m/BoxShape.circle)
+                   .child (m/Icon m/Icons.message_rounded .color theme/brand-blue .size 28.0))
+                  (m/SizedBox .height 24.0)
+                  (mgl/MongolText "Код баталгаажуулах" 
+                                  .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold .fontSize 16.0))
+                  (m/SizedBox .height 16.0)
+                  (mgl/MongolText (str phone "\nдугаарт илгээсэн\nкодыг оруулна уу.") 
+                                  .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 13.0 .color theme/text-secondary))]))
+
+               (m/VerticalDivider .width 1.0 .thickness 1.0 .color theme/border-color)
+
+               ;; Pillar 2: OTP Input Field
+               (otp-input-pillar otp-ctrl "Баталгаажуулах код")
+
+               (m/VerticalDivider .width 1.0 .thickness 1.0 .color theme/border-color)
+
+               ;; Pillar 3: Actions (Verify + Resend)
+               (m/Padding
+                .padding (m/EdgeInsets.only .top 24.0 .right 24.0)
+                .child
+                (m/Column
+                 .mainAxisSize m/MainAxisSize.min
+                 .crossAxisAlignment m/CrossAxisAlignment.center
+                 .children
+                 [
+                  ;; 3a. Primary Verify Button
+                  (m/Container
+                   .decoration (m/BoxDecoration .color theme/brand-blue .shape m/BoxShape.circle)
+                   .child
+                   (m/IconButton
+                    .icon (if loading?
+                            (m/SizedBox .width 16.0 .height 16.0 
+                                        .child (m/CircularProgressIndicator .strokeWidth 2.0 .color m/Colors.white))
+                            (m/Icon m/Icons.arrow_forward_rounded .color m/Colors.white .size 18.0))
+                    .onPressed (if loading? 
+                                 nil 
+                                 #(auth-ctrl/verify-otp! ctx phone (.-text otp-ctrl) intent !loading?
+                                                         :name name :password password))))
+                  
+                  (m/SizedBox .height 48.0)
+                  
+                  ;; 3b. Resend Cooldown UI
+                  (if (> countdown 0)
+                    (mgl/MongolText (str "Дахин илгээх (" countdown "с)")
+                                    .style (m/TextStyle .fontFamily "OyunQaganTig" .color theme/text-secondary .fontSize 14.0))
+                    (mgl/MongolTextButton
+                     ;; ⚡ Pure UI Delegation: Resend logic managed by controller
+                     .onPressed #(auth-ctrl/resend-otp! ctx phone intent !resend-countdown)
+                     .child (mgl/MongolText "Код ирээгүй юу?\nДахин илгээх" ;; "Didn't receive code? Resend"
+                                            .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                                                .color theme/brand-blue 
+                                                                .fontWeight m/FontWeight.bold))))]))]))
+            
+            ;; Floating candidates view (Needed if using custom keyboard)
+            (keyboard/candidates nil)]))
+
+         ;; B. Keyboard
+         (keyboard/keyboard {})]))))))

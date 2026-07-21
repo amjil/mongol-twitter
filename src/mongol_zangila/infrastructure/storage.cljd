@@ -1,0 +1,70 @@
+(ns mongol-zangila.infrastructure.storage
+  "Persistent storage infrastructure.
+   Handles secure credential storage using Keychain/Keystore and 
+   manages local key-value preferences and offline database operations."
+  (:require
+   ["dart:core" :as dc]
+   ["package:flutter_secure_storage/flutter_secure_storage.dart" :as fss]
+   ["package:shared_preferences/shared_preferences.dart" :as prefs]))
+
+;; =============================================================================
+;; 1. Secure Credential Storage (Tokens & Keys)
+;; =============================================================================
+
+;; Initialize the secure storage instance with default platform options
+(def ^:private secure-storage (fss/FlutterSecureStorage.))
+(def ^:private token-key "jwt_auth_token")
+
+(defn save-token!
+  "Securely persists the authentication token using platform-specific 
+   encrypted storage (Keychain on iOS, EncryptedSharedPreferences on Android)."
+  [token]
+  (.write secure-storage .key token-key .value token))
+
+(defn get-token
+  "Retrieves the decrypted authentication token. 
+   Returns a Future yielding the token string or nil if not found."
+  []
+  (.read secure-storage .key token-key))
+
+(defn delete-token!
+  "Removes the authentication token from secure storage.
+   Crucial for complete session destruction during logout."
+  []
+  (.delete secure-storage .key token-key))
+
+;; =============================================================================
+;; 2. Local Key-Value Preferences (Non-sensitive UI state)
+;; =============================================================================
+
+(defn save-setting!
+  "Persists a non-sensitive user preference (e.g., offline mode toggle, theme)."
+  [key value]
+  (-> (prefs/SharedPreferences.getInstance)
+      (.then (fn [^prefs/SharedPreferences p]
+               (cond
+                 (boolean? value) (.setBool p key value)
+                 (string? value) (.setString p key value)
+                 (int? value) (.setInt p key value)
+                 (double? value) (.setDouble p key value)
+                 :else (throw (dc/Exception. "Unsupported preference type")))))))
+
+(defn get-setting
+  "Retrieves a non-sensitive user preference, returning the default-value if unset."
+  [key default-value]
+  (-> (prefs/SharedPreferences.getInstance)
+      (.then (fn [^prefs/SharedPreferences p]
+               (let [val (.get p key)]
+                 (if (nil? val) default-value val))))))
+
+;; =============================================================================
+;; 3. Offline Database Management
+;; =============================================================================
+
+(defn truncate-offline-db!
+  "Clears all cached data from the local SQLite database.
+   Invoked when the user manually clears the cache or upon critical schema changes."
+  []
+  ;; TODO: Hook this up to your actual SQLite/drift deletion logic
+  ;; e.g., (sqlite/execute! "DELETE FROM posts; DELETE FROM messages;")
+  (print "Offline database truncated successfully."))

@@ -1,0 +1,181 @@
+(ns mongol-zangila.controllers.publish-ctrl
+  "Domain controller for content creation.
+   Manages post composition, media attachments, and offline-first dispatching.
+   ⚡ Fixed: Strict separation between Business Errors (No Queue) and Network Errors (Queue)."
+  (:require
+   ["dart:core" :as dc]
+   [clojure.string :as str]
+
+   ;; System Infrastructure
+   [mongol-zangila.state :as state]
+   [mongol-zangila.infrastructure.api :as api]
+   [mongol-zangila.infrastructure.write-buffer :as write-buffer]
+   [mongol-zangila.infrastructure.db :as db]
+
+   ;; System Controllers
+   [mongol-zangila.controllers.feed-ctrl :as feed-ctrl]
+
+   ;; UI Utilities
+   [mongol-zangila.utils.nav :as nav]
+   [components.toast :as toast]))
+
+;; =============================================================================
+;; 1. Content Publishing
+;; =============================================================================
+
+(defn- client-error? [err]
+  (let [msg (str err)]
+    (or (str/includes? msg "HTTP_422")
+        (str/includes? msg "HTTP_400")
+        (str/includes? msg "HTTP_403"))))
+
+(defn- content-filter-error? [err]
+  (str/includes? (str err) "prohibited content"))
+
+(defn- post-submit-error-toast! [ctx err]
+  (cond
+    (content-filter-error? err)
+    (toast/warn ctx "Таны нийтлэлд хориотой үг байна. Засаад дахин оролдоно уу.")
+
+    (client-error? err)
+    (toast/warn ctx "Нийтлэлийг нийтлэх боломжгүй. Агуулгаа шалгана уу.")
+
+    :else
+    (toast/error ctx (str "Алдаа: " err))))
+
+(defn- handle-post-submit-error!
+  "Handles failed post submission.
+   ⚡ Strict Rule: Client/Validation errors keep the composer open and DO NOT enter the outbox."
+  [ctx err !loading? & {:keys [outbox-fallback payload idempotency-key draft-id on-success]}]
+  (reset! !loading? false)
+  
+  (cond
+    ;; 1. 业务错误 (422/400/403)：数据不合法
+    ;; 绝对不放入离线队列！只弹窗提示，留在编辑页让用户修改。
+    (client-error? err)
+    (post-submit-error-toast! ctx err)
+
+    ;; 2. 网络错误/服务端错误 (5xx/Timeouts)：数据合法，网络不通
+    ;; 接管当前发帖任务，放入离线队列后台重试，清除草稿并关闭页面。
+    outbox-fallback
+    (do
+      (write-buffer/enqueue! "create-post" payload idempotency-key)
+      (when draft-id (db/delete-draft! draft-id))
+      (when on-success (on-success))
+      (toast/warn ctx "Сүлжээний алдаа, хүлээгдэж буй жагсаалтад хадгаллаа.")
+      (nav/pop! ctx))
+
+    ;; 3. 其他未知错误
+    :else
+    (post-submit-error-toast! ctx err)))
+
+(defn submit-post!
+  "Assembles the post payload containing structured entities and dispatches it.
+   Supports full offline-first gracefully via write-buffer integration."
+  [ctx serialized-data media-urls reply-to-id quote-id !loading? 
+   & {:keys [draft-id outbox-id reply-to-name reply-to-author-id quote-author-name quote-post on-success idempotency-key]}]
+  
+  (let [content (get serialized-data "content" "")
+        entities (get serialized-data "entities" [])
+        trimmed-content (clojure.string/trim content)
+        has-media? (not-empty media-urls)
+        net-status @state/network-status]
+    
+    (cond
+      (and (clojure.string/blank? trimmed-content) (not has-media?))
+      (toast/warn ctx "Нийтлэл хоосон байна.")
+      
+      (and outbox-id (write-buffer/processing-outbox-id? outbox-id))
+      (do
+        (toast/info ctx "Нийтлэлийг арын горимд синхрончилж байна...")
+        (nav/pop! ctx))
+      
+      :else
+      (do
+        (reset! !loading? true)
+        
+        (let [payload (cond-> {"content" trimmed-content 
+                               "entities" entities
+                               "idempotency_key" idempotency-key}
+                        has-media? (assoc "media" media-urls)
+                        reply-to-id (assoc "reply_to_id" reply-to-id)
+                        reply-to-name (assoc "reply_to_name" reply-to-name)
+                        reply-to-author-id (assoc "reply_to_author_id" reply-to-author-id)
+                        quote-id (assoc "quote_id" quote-id)
+                        quote-author-name (assoc "quote_author_name" quote-author-name)
+                        quote-post (assoc "quote_post" quote-post))]
+          
+          (if (= net-status :offline)
+            (do
+              (if outbox-id
+                (db/update-outbox-payload! outbox-id payload)
+                (write-buffer/enqueue! "create-post" payload idempotency-key))
+              (when draft-id (db/delete-draft! draft-id))
+              (reset! !loading? false)
+              
+              (when on-success (on-success))
+              (toast/success ctx "Офлайн горим: Нийтлэл шинэчлэгдлээ.")
+              (nav/pop! ctx))
+            
+            (if outbox-id
+              (-> (db/delete-from-outbox! outbox-id)
+                  (.then (fn [_]
+                           (-> (api/post-req "/tweets" payload)
+                               (.then (fn [_res]
+                                        (if draft-id
+                                          (-> (db/delete-draft! draft-id)
+                                              (.then (fn [_]
+                                                       (reset! !loading? false)
+                                                       (when on-success (on-success))
+                                                       (toast/success ctx "Нийтлэгдлээ.")
+                                                       (feed-ctrl/trigger-feed-refresh!)
+                                                       (nav/pop! ctx))))
+                                          (do
+                                            (reset! !loading? false)
+                                            (when on-success (on-success))
+                                            (toast/success ctx "Нийтлэгдлээ.")
+                                            (feed-ctrl/trigger-feed-refresh!)
+                                            (nav/pop! ctx)))))
+                               (.catchError (fn [err]
+                                              (handle-post-submit-error!
+                                               ctx err !loading?
+                                               :outbox-fallback true
+                                               :payload payload
+                                               :idempotency-key idempotency-key
+                                               :draft-id draft-id
+                                               :on-success on-success)))))))
+              
+              (-> (api/post-req "/tweets" payload)
+                  (.then (fn [_res]
+                           (if draft-id
+                             (-> (db/delete-draft! draft-id)
+                                 (.then (fn [_]
+                                          (reset! !loading? false)
+                                          (when on-success (on-success))
+                                          (toast/success ctx "Нийтлэгдлээ.")
+                                          (feed-ctrl/trigger-feed-refresh!)
+                                          (nav/pop! ctx))))
+                             (do
+                               (reset! !loading? false)
+                               (when on-success (on-success))
+                               (toast/success ctx "Нийтлэгдлээ.")
+                               (feed-ctrl/trigger-feed-refresh!)
+                               (nav/pop! ctx)))))
+                  (.catchError (fn [err]
+                                 (handle-post-submit-error! 
+                                  ctx err !loading?
+                                  :outbox-fallback true
+                                  :payload payload
+                                  :idempotency-key idempotency-key
+                                  :draft-id draft-id
+                                  :on-success on-success)))))))))))
+
+;; =============================================================================
+;; 2. Daemon Callbacks
+;; =============================================================================
+
+(write-buffer/register-handler!
+ "create-post"
+ (fn [_payload _server-data]
+   (dc/print "📡 [PublishCtrl] Offline post synced successfully. Broadcasting refresh signal.")
+   (feed-ctrl/trigger-feed-refresh!)))

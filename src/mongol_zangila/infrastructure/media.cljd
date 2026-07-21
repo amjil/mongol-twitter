@@ -1,0 +1,184 @@
+(ns mongol-zangila.infrastructure.media
+  "Core infrastructure for media handling.
+   Provides unified utilities for selecting, compressing, recording, 
+   and uploading images and audio assets to the backend storage layer."
+  (:require
+   ["package:image_picker/image_picker.dart" :as picker]
+   ["package:record/record.dart" :as audio-record]
+   ["package:path_provider/path_provider.dart" :as path-provider]
+   ["dart:core" :as dc]
+   ["dart:async" :as async]
+   ["dart:io" :as io] ;; ⚡ Added dart:io for physical file deletion
+   [clojure.string :as str]
+   
+   ;; System Dependencies
+   [mongol-zangila.infrastructure.api :as api]
+   [mongol-zangila.infrastructure.config :as config]
+   [components.toast :as toast]))
+
+;; =============================================================================
+;; 1. Media URL Resolution
+;; =============================================================================
+
+(defn local-media-path?
+  "True when `path` points at a device-local file (not a server `/uploads/...` path)."
+  [path]
+  (and (not (str/blank? path))
+       (or (str/starts-with? path "file://")
+           (and (str/starts-with? path "/")
+                (not (str/starts-with? path "/uploads/"))))))
+
+(defn- strip-file-scheme [path]
+  (str/replace path #"^file://" ""))
+
+(defn absolute-media-url
+  "Resolves relative media paths returned by the backend into absolute URLs.
+   Safely handles empty strings, already-absolute URLs, and local file paths."
+  [path]
+  (cond
+    (str/blank? path) ""
+    (str/starts-with? path "http") path
+    (local-media-path? path) (strip-file-scheme path)
+    ;; Strip the trailing /api/v1 suffix from the base URL if necessary
+    ;; to point directly to the media serving endpoint.
+    :else (str (str/replace config/base-url #"/api/v1$" "") path)))
+
+;; =============================================================================
+;; 2. Image Picker & Upload Pipeline
+;; =============================================================================
+
+(defn pick-and-upload!
+  "Opens the native device gallery, prompts the user to select an image,
+   applies client-side compression (quality 85), and pipes the file to the upload API.
+   Invokes the `on-success` callback with the resolved absolute URL upon completion."
+  [ctx on-success]
+  (let [ip (picker/ImagePicker.)]
+    (-> (.pickImage ip .source picker/ImageSource.gallery .imageQuality 85)
+        (.then (fn [^picker/XFile file]
+                 (when file
+                   ;; File selected, initiate the multipart upload to the Elixir backend
+                   (-> (api/multipart-upload! "/media/upload" (.-path file))
+                       (.then (fn [res]
+                                (let [url (absolute-media-url (get-in res ["data" "url"]))]
+                                  (when-not (str/blank? url)
+                                    (on-success url)))))
+                       (.catchError (fn [err]
+                                      (toast/error ctx (str "Image upload failed: " err))))))))
+        ;; Silently catch errors if the user cancels the native picker dialog
+        (.catchError (fn [_] nil)))))
+
+;; =============================================================================
+;; 3. Hardware Audio Recording & Upload Pipeline
+;; =============================================================================
+
+(defonce ^:private !recorder (atom nil))
+(defonce ^:private !max-duration-timer (atom nil))
+
+(defn- get-recorder 
+  "Lazily initializes and caches the AudioRecorder singleton instance."
+  []
+  (or @!recorder (reset! !recorder (audio-record/AudioRecorder.))))
+
+(defn- cancel-timer! 
+  "Safely cancels and clears the active recording timer."
+  []
+  (when-let [t @!max-duration-timer]
+    (.cancel ^async/Timer t)
+    (reset! !max-duration-timer nil)))
+
+(defn cancel-voice-record! 
+  "Silently stops the hardware recording session and physically deletes 
+   the residual temporary audio file to prevent storage leaks."
+  []
+  (cancel-timer!)
+  (let [rec (get-recorder)]
+    (-> (.stop rec)
+        (.then (fn [path]
+                 (when path
+                   (dc/print (str "🗑️ Deleting discarded audio file: " path))
+                   ;; ⚡ Physically delete the orphaned M4A file
+                   (-> (.delete (io/File. path))
+                       ;; Silently catch file-system errors (e.g. file already gone)
+                       (.catchError (fn [_] nil))))))
+        (.catchError (fn [_] nil)))))
+
+(defn start-voice-record! 
+  "Requests microphone permissions, initializes hardware mic, and starts 
+   buffering audio to a generated local temporary M4A file.
+   ⚡ Returns a Future yielding `true` if recording started successfully, `false` otherwise."
+  [ctx on-limit-reached]
+  (let [rec (get-recorder)]
+    (-> (.hasPermission rec)
+        (.then (fn [has-perm?]
+                 (if has-perm?
+                   (-> (path-provider/getTemporaryDirectory)
+                       (.then (fn [dir]
+                                (let [file-name (str "/voice_" (.-millisecondsSinceEpoch (dc/DateTime.now)) ".m4a")
+                                      path (str (.-path dir) file-name)
+                                      config (audio-record/RecordConfig.)]
+                                  (-> (.start rec config .path path)
+                                      (.then (fn [_]
+                                               (cancel-timer!)
+                                               ;; Start the strictly enforced 60-second countdown
+                                               (reset! !max-duration-timer
+                                                       (async/Timer. (dc/Duration. .seconds 60)
+                                                                     (fn []
+                                                                       (cancel-timer!)
+                                                                       (when on-limit-reached
+                                                                         (on-limit-reached)))))
+                                               ;; Hardware successfully locked, return true to UI
+                                               true)))))))
+                   (do
+                     (toast/error ctx "Microphone permission denied.")
+                     ;; Permission denied, return false
+                     false))))
+        (.catchError (fn [e]
+                       (dc/print (str "Mic error: " e))
+                       ;; Hardware or filesystem error, return false
+                       false)))))
+
+(defn stop-voice-record-and-upload! 
+  "Stops the hardware mic, retrieves the local M4A file path, uploads it 
+   to the backend via the standard multipart API, triggers the UI callback,
+   and securely purges the local temporary file."
+  [ctx duration on-send-voice!]
+  (cancel-timer!)
+  (let [rec (get-recorder)]
+    (-> (.stop rec)
+        (.then (fn [path]
+                 (when path
+                   (dc/print (str "🎤 Saved audio to local path: " path))
+                   ;; Initiate the multipart upload for the audio file
+                   (-> (api/multipart-upload! "/media/upload" path)
+                       (.then (fn [res]
+                                (let [url (get-in res ["data" "url"] "")]
+                                  (when-not (str/blank? url)
+                                    (on-send-voice! url duration)))
+                                
+                                ;; ⚡ 核心修复 1：上传成功后，立刻物理清理本地临时文件
+                                (try
+                                  (let [temp-file (io/File. path)]
+                                    (when (.existsSync temp-file)
+                                      (.delete temp-file)
+                                      (dc/print "♻️ Cleaned up temp voice asset (Upload Success).")))
+                                  (catch dc/Exception err
+                                    (dc/print (str "🔴 Failed to delete temp voice file: " err))))
+                                
+                                res))
+                       (.catchError (fn [err]
+                                      (toast/error ctx (str "Audio upload failed: " err))
+                                      
+                                      ;; ⚡ 核心修复 2：即使上传彻底失败，本地文件也不需要了，顺手清理
+                                      (try
+                                        (let [temp-file (io/File. path)]
+                                          (when (.existsSync temp-file)
+                                            (.delete temp-file)
+                                            (dc/print "♻️ Cleaned up temp voice asset (Upload Failed).")))
+                                        (catch dc/Exception e
+                                          (dc/print (str "🔴 Failed to delete temp voice file: " e))))
+                                      
+                                      ;; 重新抛出异常，让 Composer 捕获以关闭上传转圈动画
+                                      (throw err)))))))
+        (.catchError (fn [err]
+                       (toast/error ctx (str "Failed to stop recording: " err))
+                       (throw err))))))

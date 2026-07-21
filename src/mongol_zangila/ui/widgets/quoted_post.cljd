@@ -1,0 +1,74 @@
+(ns mongol-zangila.ui.widgets.quoted-post
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
+   [mongol-zangila.ui.theme :as theme]
+   [mongol-zangila.ui.widgets.avatar :as smart-avatar]))
+
+(defn quoted-post-card
+  [ctx post-data & {:keys [padding margin avatar-size show-handle? show-divider? bg-color
+                           author-font-size handle-font-size content-font-size max-lines]
+                    :or {padding (m/EdgeInsets.all 12.0)
+                         margin nil
+                         avatar-size 24.0
+                         show-handle? false
+                         show-divider? true
+                         bg-color nil
+                         author-font-size 12.0
+                         handle-font-size 12.0
+                         content-font-size 13.0
+                         max-lines 3}}]
+  (let [author (get post-data "author" {})
+        content (get post-data "content" "")
+        author-id (get author "id")
+        quoted-body
+        (m/Row
+         .mainAxisSize m/MainAxisSize.min
+         .crossAxisAlignment m/CrossAxisAlignment.start
+         .children
+         [(m/Column
+           .mainAxisSize m/MainAxisSize.min
+           .crossAxisAlignment m/CrossAxisAlignment.center
+           .children
+           [(smart-avatar/smart-avatar ctx author-id (get author "avatar_url") :size avatar-size)
+            (m/SizedBox .height 8.0)
+            (mgl/MongolText (get author "name" "Unknown")
+                            .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                                .fontWeight m/FontWeight.bold
+                                                .fontSize author-font-size
+                                                .color theme/text-primary)
+                            .maxLines 1
+                            .overflow m/TextOverflow.ellipsis)
+            (if show-handle?
+              (m/Padding
+               .padding (m/EdgeInsets.only .top 4.0)
+               .child
+               (mgl/MongolText (str "@" (get author "handle" "user"))
+                               .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                                   .fontSize handle-font-size
+                                                   .color theme/text-secondary)))
+              (m/SizedBox.shrink))])
+          (m/SizedBox .width 12.0)
+          (if show-divider?
+            (m/Container .width 0.5 .color theme/border-color)
+            (m/SizedBox.shrink))
+          (if show-divider?
+            (m/SizedBox .width 12.0)
+            (m/SizedBox.shrink))
+          (m/Flexible
+           .child
+           (mgl/MongolText content
+                           .maxLines max-lines
+                           .overflow m/TextOverflow.ellipsis
+                           .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                               .fontSize content-font-size
+                                               .color theme/text-primary)))])]
+    (m/Container
+     .margin margin
+     .padding padding
+     .decoration
+     (m/BoxDecoration
+      .color bg-color
+      .border (m/Border.all .color theme/border-color .width 1.0)
+      .borderRadius (m/BorderRadius.circular 12.0))
+     .child quoted-body)))

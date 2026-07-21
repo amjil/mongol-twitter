@@ -1,0 +1,287 @@
+(ns mongol-zangila.controllers.auth-ctrl
+  "Domain controller managing application initialization, session lifecycle,
+   and real-time socket connection orchestration.
+   Handles the complete authentication suite (Login, OTP, Password Reset)."
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["dart:core" :as dc]
+   [clojure.string :as str]
+   
+   [mongol-zangila.state :as state]
+   [mongol-zangila.infrastructure.api :as api]
+   [mongol-zangila.infrastructure.db :as db] ;; ⚡ 引入底层离线数据库
+   [mongol-zangila.infrastructure.storage :as storage]
+   [mongol-zangila.infrastructure.session :as session]
+   [mongol-zangila.infrastructure.socket :as socket]
+   [mongol-zangila.infrastructure.write-buffer :as write-buffer]
+   [mongol-zangila.controllers.chat-ctrl :as chat-ctrl]
+   [mongol-zangila.utils.nav :as nav]
+   [components.toast :as toast]))
+
+(defn- start-background-services!
+  "Boots realtime socket, offline outbox daemons, and hydrates global state after authentication."
+  []
+  ;; 1. 启动 Outbox 离线队列同步
+  (chat-ctrl/register-outbox-handlers!)
+  (write-buffer/start-daemon!)
+  
+  ;; 2. 建立 WebSocket 长连接
+  (socket/connect!)
+  
+  ;; 3. ⚡ Blocklist Hydration (静默同步全量黑名单，彻底解耦 profile-ctrl)
+  (-> (api/get-req "/users/blocks")
+      (.then (fn [res]
+               (let [users (get res "data" [])
+                     blocked-ids (map #(get % "id") users)]
+                 (db/sync-blocked-users! blocked-ids))))
+      (.catchError (fn [err]
+                     (dc/print (str "Blocklist sync failed: " err))))))
+
+(defn- intent->purpose
+  "Maps UI intent keywords to backend OTP purpose strings."
+  [intent]
+  (case intent
+    :register "register"
+    :reset-password "reset_password"
+    (if (keyword? intent) (name intent) (str intent))))
+
+(defn- auth-data
+  "Reads token/user from API body (top-level or nested under data)."
+  [res]
+  (let [data (get res "data" res)]
+    {:token (get data "token")
+     :user (get data "user")}))
+
+(defn- persist-session-and-go-home!
+  [ctx token user !loading?]
+  (-> (storage/save-token! token)
+      (.then (fn [_]
+               (reset! state/auth-token token)
+               (reset! state/current-user user)
+               (start-background-services!)
+               (when !loading? (reset! !loading? false))
+               (nav/reset-to! ctx "/feed/home")))))
+
+(defn- restore-session!
+  "Hydrates auth state from a stored token and validates it via GET /users/me.
+   On success boots background services and routes home; on failure wipes session."
+  [ctx token]
+  (reset! state/auth-token token)
+  (-> (api/get-req "/users/me")
+      (.then (fn [user]
+               (if user
+                 (do
+                   (reset! state/current-user user)
+                   (start-background-services!)
+                   (nav/reset-to! ctx "/feed/home"))
+                 (throw (dc/Exception. "Хэрэглэгчийн мэдээлэл олдсонгүй.")))))
+      (.catchError (fn [_]
+                     (-> (session/destroy-session!)
+                         (.then (fn [_]
+                                  (nav/reset-to! ctx "/login"))))))))
+
+(defn- handle-verify-otp-success!
+  [ctx phone otp intent res !loading?]
+  (reset! !loading? false)
+  (if (= intent :reset-password)
+    (nav/push-replacement! ctx "/auth/reset-password" {:phone phone :code otp})
+    (let [{:keys [token user]} (auth-data res)]
+      (if (and token user)
+        (persist-session-and-go-home! ctx token user nil)
+        (throw (dc/Exception. "Бүртгэл баталгаажуулалтын токен олдсонгүй."))))))
+
+(defn- handle-verify-otp-error!
+  [ctx err !loading?]
+  (reset! !loading? false)
+  (dc/print (str "❌ [Auth] verify-otp error: " err))
+  (toast/error ctx (str "Алдаа: " err) :fade))
+
+;; =============================================================================
+;; 1. Application Ignition Lifecycle
+;; =============================================================================
+
+(defn boot-application!
+  "Validates the persistent user session during the splash screen sequence.
+   If authenticated, fires up infrastructure engines (socket daemons, outbox)
+   and routes directly to the home feed."
+  [ctx]
+  (-> (storage/get-token)
+      (.then (fn [token]
+               (if (and token (not (empty? token)))
+                 (restore-session! ctx token)
+                 (nav/reset-to! ctx "/login"))))
+      (.catchError (fn [_] (nav/reset-to! ctx "/login")))))
+
+;; =============================================================================
+;; 2. Core Authentication (Login)
+;; =============================================================================
+
+(defn perform-login!
+  "Authenticates the user, saves the secure token, and bootstraps the environment."
+  [ctx phone password !loading?]
+  (if (or (str/blank? phone) (str/blank? password))
+    (toast/error ctx "Утасны дугаар болон нууц үгээ оруулна уу.")
+    (do
+      (reset! !loading? true)
+      (-> (api/post-req "/auth/login" {"phone" phone "password" password})
+          (.then (fn [res]
+                   (let [{:keys [token user]} (auth-data res)]
+                     (if (and token user)
+                       (persist-session-and-go-home! ctx token user !loading?)
+                       (throw (dc/Exception. "Сэрвэрээс баталгаажуулалтын токен ирсэнгүй."))))))
+          (.catchError (fn [err]
+                         (reset! !loading? false)
+                         (toast/error ctx (str "Нэвтрэхэд алдаа: " err) :fade)))))))
+
+;; =============================================================================
+;; 3. Registration & OTP Flow
+;; =============================================================================
+
+(defn request-otp-registration!
+  "Initiates the registration flow by requesting an OTP for the given phone number."
+  [ctx phone name password !loading?]
+  (cond
+    (str/blank? phone)
+    (toast/error ctx "Утасны дугаараа оруулна уу.")
+
+    (str/blank? name)
+    (toast/error ctx "Нэрээ оруулна уу.")
+
+    (str/blank? password)
+    (toast/error ctx "Нууц үгээ оруулна уу.")
+
+    (< (count password) 6)
+    (toast/error ctx "Нууц үг хамгийн багадаа 6 тэмдэгт байх ёстой.")
+
+    :else
+    (do
+      (reset! !loading? true)
+      (-> (api/post-req "/auth/register/request-otp" {"phone" phone})
+          (.then (fn [_]
+                   (reset! !loading? false)
+                   (toast/info ctx "Баталгаажуулах код илгээгдлээ.")
+                   (nav/push! ctx "/auth/otp"
+                              {:phone phone
+                               :intent :register
+                               :name name
+                               :password password})))
+          (.catchError (fn [err]
+                         (reset! !loading? false)
+                         (toast/error ctx (str "Алдаа гарлаа: " err) :fade)))))))
+
+(defn resend-otp!
+  "Silently requests a new OTP without pushing a new route."
+  [ctx phone intent !resend-countdown]
+  (-> (api/post-req "/auth/resend-otp"
+                    {"phone" phone "purpose" (intent->purpose intent)})
+      (.then (fn [_]
+               (reset! !resend-countdown 60)
+               (toast/info ctx "Баталгаажуулах код дахин илгээгдлээ.")))
+      (.catchError (fn [err]
+                     (toast/error ctx (str "Алдаа гарлаа: " err) :fade)))))
+
+(defn verify-otp!
+  "Verifies the OTP code via POST /auth/verify-otp.
+   :register completes registration and logs the user in.
+   :reset-password validates the code server-side, then routes to the reset screen
+   (OTP is consumed when the new password is submitted)."
+  [ctx phone otp intent !loading? & {:keys [name password]}]
+  (cond
+    (str/blank? otp)
+    (toast/error ctx "Кодоо оруулна уу.")
+
+    (and (= intent :register)
+         (or (str/blank? name) (str/blank? password)))
+    (toast/error ctx "Бүртгэлийн мэдээлэл дутуу байна. Дахин бүртгүүлнэ үү.")
+
+    (= intent :register)
+    (do
+      (reset! !loading? true)
+      (-> (api/post-req "/auth/verify-otp"
+                        {"phone" phone
+                         "code" otp
+                         "purpose" "register"
+                         "name" name
+                         "password" password})
+          (.then (fn [res]
+                   (dc/print (str "✅ [Auth] verify-otp response: " res))
+                   (handle-verify-otp-success! ctx phone otp intent res !loading?)))
+          (.catchError (fn [err]
+                         (handle-verify-otp-error! ctx err !loading?)))))
+
+    :else
+    (do
+      (reset! !loading? true)
+      (-> (api/post-req "/auth/verify-otp"
+                        {"phone" phone
+                         "code" otp
+                         "purpose" (intent->purpose intent)})
+          (.then (fn [res]
+                   (dc/print (str "✅ [Auth] verify-otp response: " res))
+                   (handle-verify-otp-success! ctx phone otp intent res !loading?)))
+          (.catchError (fn [err]
+                         (handle-verify-otp-error! ctx err !loading?)))))))
+
+;; =============================================================================
+;; 4. Password Recovery Flow
+;; =============================================================================
+
+(defn request-password-reset-otp!
+  "Initiates the forgot password flow by requesting an OTP."
+  [ctx phone !loading?]
+  (if (str/blank? phone)
+    (toast/error ctx "Утасны дугаараа оруулна уу.")
+    (do
+      (reset! !loading? true)
+      (-> (api/post-req "/auth/password/request-otp" {"phone" phone})
+          (.then (fn [_]
+                   (reset! !loading? false)
+                   (toast/info ctx "Баталгаажуулах код илгээгдлээ.")
+                   (nav/push! ctx "/auth/otp" {:phone phone :intent :reset-password})))
+          (.catchError (fn [err]
+                         (reset! !loading? false)
+                         (toast/error ctx (str "Алдаа гарлаа: " err) :fade)))))))
+
+(defn submit-new-password!
+  "Submits the new password with phone and OTP code (verified server-side)."
+  [ctx phone code new-password !loading?]
+  (cond
+    (str/blank? new-password)
+    (toast/error ctx "Шинэ нууц үгээ оруулна уу.")
+
+    (< (count new-password) 6)
+    (toast/error ctx "Нууц үг хамгийн багадаа 6 тэмдэгт байх ёстой.")
+
+    :else
+    (do
+      (reset! !loading? true)
+      (-> (api/post-req "/auth/password/reset"
+                        {"phone" phone "code" code "password" new-password})
+          (.then (fn [_]
+                   (reset! !loading? false)
+                   (toast/info ctx "Нууц үг амжилттай солигдлоо.")
+                   (nav/reset-to! ctx "/login")))
+          (.catchError (fn [err]
+                         (reset! !loading? false)
+                         (toast/error ctx (str "Алдаа гарлаа: " err) :fade)))))))
+
+;; =============================================================================
+;; 5. Session Destruction Lifecycle
+;; =============================================================================
+
+(defn- teardown-and-goto-login!
+  [ctx]
+  (write-buffer/stop-daemon!)
+  (-> (session/destroy-session!)
+      (.then (fn [_]
+               (nav/reset-to! ctx "/login")))))
+
+(defn logout!
+  "Completely dismantles the active user session."
+  [ctx]
+  (teardown-and-goto-login! ctx))
+
+(session/register-force-logout-handler!
+ (fn []
+   (when-let [ctx (.-currentContext api/global-navigator-key)]
+     (teardown-and-goto-login! ctx))))

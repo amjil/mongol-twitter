@@ -1,0 +1,271 @@
+(ns mongol-zangila.ui.feed.outbox
+  "User-facing outbox viewport.
+   Displays pending offline transactions and drafts powered by Drift.
+   Fully adapted for Left-to-Right vertical Mongolian typography."
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
+   ["dart:core" :as dc]
+   ["dart:convert" :as convert]
+   
+   [cljd.flutter :as f]
+   [clojure.string :as str]
+   
+   ;; System Infrastructure
+   [mongol-zangila.infrastructure.db :as db]
+   [mongol-zangila.infrastructure.write-buffer :as write-buffer]
+   [mongol-zangila.state :as state]
+   
+   ;; UI & Shared Components
+   [mongol-zangila.ui.theme :as theme]
+   [mongol-zangila.utils.nav :as nav]
+   [mongol-zangila.ui.widgets.empty-state :as empty-state]
+   [components.toast :as toast]))
+
+;; =============================================================================
+;; 1. Data Parsing & Actions
+;; =============================================================================
+
+(defn- parse-outbox-row 
+  "Parses a raw Drift outbox row into a standardized map."
+  [row]
+  (let [payload (convert/jsonDecode (.-payloadJson row))]
+    {"kind" "mutation"
+     "id" (.-id row)
+     "mutation_type" (.-mutationType row)
+     "payload" payload
+     "entities" (get payload "entities" [])
+     "retry_count" (.-retryCount row)
+     "idempotency_key" (.-idempotencyKey row)
+     "created_at" (.-createdAt row)}))
+
+(defn- parse-draft-row 
+  "Parses a raw Drift draft row into a standardized map."
+  [draft]
+  (let [media (convert/jsonDecode (.-mediaJson draft))
+        entities (try (convert/jsonDecode (.-entitiesJson draft)) (catch dc/Exception _ []))
+        quote-post (try (when (.-quotePostJson draft) (convert/jsonDecode (.-quotePostJson draft))) (catch dc/Exception _ nil))]
+    {"kind" "draft"
+     "id" (.-id draft)
+     "content" (.-content draft)
+     "media" media
+     "entities" (or entities [])
+     "reply_to_id" (.-replyToId draft)
+     "reply_to_name" (.-replyToName draft)
+     "reply_to_author_id" (.-replyToAuthorId draft)
+     "quote_id" (.-quoteId draft)
+     "quote_author_name" (.-quoteAuthorName draft)
+     "quote_post" quote-post
+     "idempotency_key" (.-idempotencyKey draft)
+     "created_at" (.-createdAt draft)}))
+
+(defn- delete-pending-item! 
+  "Removes a stuck transaction or unwanted draft directly via Drift.
+   No manual UI state update is needed — the Drift stream handles it automatically."
+  [ctx item]
+  (let [item-id (get item "id")
+        kind (get item "kind" "mutation")
+        delete-future (if (= kind "draft")
+                        (db/delete-draft! item-id)
+                        (db/delete-from-outbox! item-id))]
+    (-> delete-future
+        (.then (fn [_]
+                 (toast/success ctx "Устгагдлаа." :fade))) ;; "Deleted"
+        (.catchError (fn [err]
+                       (toast/error ctx (str "Устгаж чадсангүй: " err)))))))
+
+(defn- trigger-manual-sync! 
+  "Initiates a background sync. The UI will inherently react to DB changes."
+  [ctx]
+  (if (= @state/network-status :offline)
+    (toast/warn ctx "Интернет холболтгүй байна.") ;; "No internet connection"
+    (do
+      (toast/info ctx "Синхрончилж эхэллээ...") ;; "Sync started"
+      (write-buffer/force-sync!))))
+
+;; =============================================================================
+;; 2. UI Components
+;; =============================================================================
+
+(defn- outbox-list-item 
+  "Renders a single pending transaction or draft card as a vertical pillar."
+  [ctx item]
+  (let [tx-id (get item "id")
+        kind (get item "kind" "mutation")
+        m-type (get item "mutation_type")
+        payload (get item "payload" {})
+        retries (get item "retry_count" 0)
+        is-draft? (= kind "draft")
+        is-post-mutation? (= m-type "create-post")
+        
+        can-edit? (or is-draft? is-post-mutation?)
+        
+        action (get payload "action")
+        initial-content (if is-draft? (get item "content" "") (get payload "content" ""))
+        initial-media (if is-draft? (get item "media" []) (get payload "media" []))
+        initial-entities (get item "entities" [])
+        initial-idempotency-key (get item "idempotency_key")
+        
+        reply-to-id (if is-draft? (get item "reply_to_id") (get payload "reply_to_id"))
+        reply-to-name (if is-draft? (get item "reply_to_name") (get payload "reply_to_name"))
+        reply-to-author-id (if is-draft? (get item "reply_to_author_id") (get payload "reply_to_author_id"))
+        quote-id (if is-draft? (get item "quote_id") (get payload "quote_id"))
+        quote-author-name (if is-draft? (get item "quote_author_name") (get payload "quote_author_name"))
+        quote-post (if is-draft? (get item "quote_post") (get payload "quote_post"))
+        
+        preview-text (if is-draft?
+                       (get item "content" "Ноорог нийтлэл...")
+                       (cond
+                         (= m-type "create-post") (get payload "content" "Шинэ нийтлэл...")
+                         (= m-type "like-tweet")  (if (= action "unlike") "Таалагдсаныг цуцалсан" "Нийтлэлд таалагдсан")
+                         (= m-type "repost-tweet") (if (= action "unrepost") "Дахин нийтлэхийг цуцалсан" "Нийтлэлийг дахин нийтэлсэн")
+                         (= m-type "bookmark-tweet") (if (= action "unbookmark") "Хадгалсныг цуцалсан" "Нийтлэлийг хадгалсан")
+                         :else "Тодорхойгүй үйлдэл"))
+        
+        has-errors? (and (not is-draft?) (> retries 0))]
+    
+    (m/GestureDetector
+     .onTap (fn []
+              (when can-edit?
+                (nav/push-fullscreen! ctx "/feed/compose"
+                                      (cond-> {:initial-content initial-content
+                                               :initial-media initial-media
+                                               :initial-entities initial-entities
+                                               :initial-idempotency-key initial-idempotency-key}
+                                        is-draft? (assoc :draft-id tx-id)
+                                        is-post-mutation? (assoc :outbox-id tx-id)
+                                        reply-to-id (assoc :reply-to-id reply-to-id)
+                                        reply-to-name (assoc :reply-to-name reply-to-name)
+                                        reply-to-author-id (assoc :reply-to-author-id reply-to-author-id)
+                                        quote-id (assoc :quote-id quote-id)
+                                        quote-author-name (assoc :quote-author-name quote-author-name)
+                                        quote-post (assoc :quote-post quote-post)))))
+     .child
+     (m/Container
+      .width 160.0
+      .margin (m/EdgeInsets.only .right 16.0 .top 16.0 .bottom 16.0)
+      .padding (m/EdgeInsets.all 16.0)
+      .decoration (m/BoxDecoration 
+                   .color m/Colors.white
+                   .borderRadius (m/BorderRadius.circular 12.0)
+                   .border (m/Border.all .color (if has-errors? (.withOpacity theme/error-red 0.3) theme/border-color) .width 1.0)
+                   .boxShadow [(m/BoxShadow .color (.withOpacity m/Colors.black 0.02) .blurRadius 8.0)])
+      .child
+      (m/Column
+       .crossAxisAlignment m/CrossAxisAlignment.center
+       .children
+       [;; 1. Status Icon
+        (m/Padding
+         .padding (m/EdgeInsets.only .bottom 16.0)
+         .child (m/Icon (cond
+                          is-draft? m/Icons.edit_note_rounded
+                          has-errors? m/Icons.error_outline_rounded
+                          :else m/Icons.cloud_upload_outlined)
+                        .color (if has-errors? theme/error-red theme/text-secondary)
+                        .size 32.0))
+        
+        ;; 2. Content Preview
+        (m/Expanded
+         .child
+         (m/Row
+          .crossAxisAlignment m/CrossAxisAlignment.start
+          .mainAxisAlignment m/MainAxisAlignment.center
+          .children
+          [(mgl/MongolText (cond
+                             is-draft? "Ноорог"
+                             (= m-type "create-post") "Нийтлэл"
+                             (= m-type "like-tweet") "Таалагдсан"
+                             (= m-type "repost-tweet") "Дахин нийтлэх"
+                             (= m-type "bookmark-tweet") "Хадгалсан"
+                             :else "Үйлдэл")
+                           .style (m/TextStyle .fontFamily "OyunQaganTig" .color theme/text-secondary .fontSize 14.0))
+           (m/SizedBox .width 8.0)
+           (mgl/MongolText preview-text
+                           .maxLines 2
+                           .overflow m/TextOverflow.ellipsis
+                           .style (m/TextStyle .fontFamily "OyunQaganTig" .color theme/text-primary .fontSize 16.0))
+           (if has-errors?
+             (m/Padding
+              .padding (m/EdgeInsets.only .left 12.0)
+              .child (mgl/MongolText (str "Оролдлого: " retries)
+                                     .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 14.0 .color theme/error-red)))
+             (m/SizedBox.shrink))]))
+        
+        ;; 3. Actions (Delete)
+        (m/Padding
+         .padding (m/EdgeInsets.only .top 16.0)
+         .child
+         (m/IconButton
+          .icon (m/Icon m/Icons.delete_outline_rounded .color theme/text-secondary)
+          .onPressed #(delete-pending-item! ctx item)))])))))
+
+;; =============================================================================
+;; 3. The Main Screen Widget
+;; =============================================================================
+
+(defn outbox-screen 
+  "The primary viewport for managing offline drafts and pending API requests.
+   ⚡ Deeply reactive: Uses cljd.flutter's native stream pipeline pattern."
+  []
+  (f/widget
+   :context ctx
+   
+   ;; ⚡ Pure ClojureDart Native Stream Binding
+   ;; 1. Maps incoming Drift database rows through our parsers.
+   ;; 2. Catches DB stream exceptions, defaulting to an empty list `[]`.
+   ;; 3. Binds directly to the UI rendering context, seamlessly handling disposal.
+   :watch [outbox-items (stream
+                         (map (fn [rows] (mapv parse-outbox-row rows)))
+                         (map (fn [[_er _st]] []))
+                         :as-values (db/watch-outbox))
+           
+           draft-items  (stream
+                         (map (fn [rows] (mapv parse-draft-row rows)))
+                         (map (fn [[_er _st]] []))
+                         :as-values (db/watch-drafts))]
+   
+   (let [;; Data streams initially yield `nil` before their first emission.
+         loading? (or (nil? outbox-items) (nil? draft-items))
+         all-items (concat (or outbox-items []) (or draft-items []))
+         items (vec (sort-by #(get % "created_at") #(compare %2 %1) all-items))]
+     
+     (m/Scaffold
+      .backgroundColor theme/bg-color
+      
+      .appBar
+      (m/AppBar
+       .backgroundColor m/Colors.white
+       .elevation 0.5
+       .leading (m/IconButton 
+                 .icon (m/Icon m/Icons.arrow_back_rounded .color theme/text-primary)
+                 .onPressed #(nav/pop! ctx))
+       .title (m/Text "Хүлээгдэж буй"
+                      .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                          .fontSize 18.0 
+                                          .fontWeight m/FontWeight.bold 
+                                          .color theme/text-primary))
+       .actions [(m/TextButton
+                  .onPressed #(trigger-manual-sync! ctx)
+                  .child (m/Text "Синхрончлох"
+                                 .style (m/TextStyle .fontFamily "OyunQaganTig" .color theme/brand-blue .fontWeight m/FontWeight.bold)))])
+      
+      .body
+      (cond
+        loading?
+        (m/Center .child (m/CircularProgressIndicator .color theme/brand-blue))
+        
+        (empty? items)
+        (empty-state/empty-view ctx 
+                                :icon-data m/Icons.cloud_done_outlined
+                                :title "Бүх мэдээлэл синхрончлогдсон"
+                                :subtitle "Танд хүлээгдэж буй нийтлэл байхгүй байна.")
+        
+        :else
+        (m/ListView.builder
+         .scrollDirection m/Axis.horizontal
+         .padding (m/EdgeInsets.only .left 16.0 .right 32.0)
+         .physics (m/BouncingScrollPhysics.)
+         .itemCount (count items)
+         .itemBuilder
+         (fn [_ i]
+           (outbox-list-item ctx (nth items i)))))))))

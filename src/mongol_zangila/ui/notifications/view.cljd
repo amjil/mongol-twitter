@@ -1,0 +1,227 @@
+(ns mongol-zangila.ui.notifications.view
+  "Notifications viewport.
+   Renders incoming social metrics (likes, follows, mentions, reposts, quotes) as vertical pillars
+   and cleanly triggers instant global unread flushes upon viewport entry.
+   ⚡ Upgraded with Infinite Scroll Pagination, Timestamps, and Content Previews."
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
+   ["dart:core" :as dc]
+   
+   ;; Centralized Dart Interop Interceptor
+   ["package:mongol_zangila/post_frame_trigger.dart" :as pft]
+   
+   [cljd.flutter :as f]
+   [clojure.string :as str]
+   
+   ;; System Controllers & UI Components
+   [mongol-zangila.controllers.notification-ctrl :as note-ctrl]
+   [mongol-zangila.ui.theme :as theme]
+   [mongol-zangila.utils.nav :as nav]
+   [mongol-zangila.ui.layout.scaffold :as scaffold] ;; ⚡ 引入全新的全局布局
+   [mongol-zangila.ui.widgets.avatar :as smart-avatar]))
+
+;; =============================================================================
+;; 1. Helper Functions
+;; =============================================================================
+
+(defn- format-note-time 
+  "Parses an ISO 8601 string into a readable MM-dd HH:mm format."
+  [iso-string]
+  (if (str/blank? iso-string) 
+    ""
+    (try
+      (let [dt (dc/DateTime.parse iso-string)
+            M (.padLeft (.toString (.month dt)) 2 "0")
+            d (.padLeft (.toString (.day dt)) 2 "0")
+            h (.padLeft (.toString (.hour dt)) 2 "0")
+            m-min (.padLeft (.toString (.minute dt)) 2 "0")]
+        (str M "-" d " " h ":" m-min))
+      (catch dc/Exception _ ""))))
+
+;; =============================================================================
+;; 2. Sub-components
+;; =============================================================================
+
+(defn- on-notification-tap
+  "Routes to the relevant post or user profile based on notification type."
+  [ctx note-data]
+  (let [note-type (get note-data "type")
+        entity-id (get note-data "entity_id")
+        actor-id (get-in note-data ["actor" "id"])]
+    (cond
+      (#{"like" "mention" "repost" "quote"} note-type)
+      (when entity-id (nav/push! ctx "/feed/post-detail" {:post-id entity-id}))
+
+      (= note-type "follow")
+      (when actor-id (nav/push! ctx "/profile/view" {:user-id actor-id}))
+
+      :else nil)))
+
+(defn- notification-pillar
+  "Renders an individual notification metadata card wrapped as an LTR horizontal entry."
+  [ctx note-data]
+  (let [actor (get note-data "actor" {})
+        actor-name (get actor "name" "Хэрэглэгч")
+        note-type (get note-data "type" "system")
+        timestamp (get note-data "created_at" "") ;; ⚡ 提取创建时间
+        
+        ;; ⚡ 核心补全：提取后端返回的评论、提及正文或被操作的原帖内容摘要
+        preview-text (get note-data "content" "")
+        has-preview? (and (#{"mention" "quote" "repost" "like"} note-type) 
+                          (not (str/blank? preview-text)))
+        
+        message (case note-type
+                  "like" "таны нийтлэлд лайк дарлаа." ;; "liked your post"
+                  "follow" "таныг дагаж эхэллээ."    ;; "started following you"
+                  "mention" "таныг нийтлэлдээ дурдлаа." ;; "mentioned you"
+                  "repost" "таны нийтлэлийг дахин нийтэллээ." ;; "reposted your post"
+                  "quote" "таны нийтлэлийг иш татлаа." ;; "quoted your post"
+                  "Таныд мэдэгдэл ирлээ.")]
+    (m/Container
+     .margin (m/EdgeInsets.only .right 16.0 .top 16.0 .bottom 16.0)
+     .decoration (m/BoxDecoration 
+                  .color m/Colors.white
+                  .borderRadius (m/BorderRadius.circular 16.0)
+                  .border (m/Border.all .color theme/border-color .width 0.5))
+     .child
+     (m/InkWell
+      .onTap #(on-notification-tap ctx note-data)
+      .borderRadius (m/BorderRadius.circular 16.0)
+      .child
+      (m/Padding
+       .padding (m/EdgeInsets.all 16.0)
+       .child
+       (m/Column
+        .mainAxisSize m/MainAxisSize.min
+        .crossAxisAlignment m/CrossAxisAlignment.start
+        .children
+        [(smart-avatar/smart-avatar ctx (get actor "id") (get actor "avatar_url") :size 40.0)
+         (m/SizedBox .height 16.0)
+         
+         ;; 1. 通知动作行为描述
+         (mgl/MongolText (str actor-name " " message)
+                         .maxLines 2
+                         .overflow m/TextOverflow.ellipsis
+                         .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                             .fontSize 15.0 
+                                             .fontWeight m/FontWeight.bold
+                                             .color theme/text-primary))
+         
+         ;; 2. 若存在转发正文、引用评论或提及内容，渲染轻量预览气泡
+         (if has-preview?
+           (m/Padding
+            .padding (m/EdgeInsets.only .top 12.0)
+            .child
+            (m/Container
+             .padding (m/EdgeInsets.all 10.0)
+             .decoration (m/BoxDecoration
+                          .color (.withOpacity theme/brand-blue 0.04)
+                          .borderRadius (m/BorderRadius.circular 10.0)
+                          .border (m/Border.all .color theme/border-color .width 0.5))
+             .child
+             (mgl/MongolText preview-text
+                             .maxLines 3
+                             .overflow m/TextOverflow.ellipsis
+                             .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                                 .fontSize 13.0
+                                                 .height 1.3
+                                                 .color theme/text-secondary))))
+           (m/SizedBox.shrink))
+         
+         (m/SizedBox .height 12.0)
+         
+         ;; 3. 时间戳
+         (mgl/MongolText (format-note-time timestamp)
+                         .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                             .fontSize 12.0 
+                                             .color theme/text-secondary))]))))))
+
+;; =============================================================================
+;; 3. The Main Screen Widget
+;; =============================================================================
+
+(defn notifications-screen
+  "The primary viewport for active notification streams."
+  []
+  (let [!notifications (atom [])
+        !loading? (atom true)
+        
+        ;; ⚡ 分页核心状态
+        !page (atom 1)
+        !has-more? (atom true)
+        !loading-more? (atom false)]
+    
+    (f/widget
+     :context ctx
+     
+     ;; ⚡ 初始化 ScrollController 并绑定滚动触顶监听
+     :managed [scroll-ctrl (let [sc (m/ScrollController.)]
+                             (.addListener sc 
+                                           (fn []
+                                             (let [pos (.-position sc)]
+                                               ;; 当滑动到距离末尾仅剩 200 像素时，触发下一页预加载
+                                               (when (and (>= (.-pixels pos) (- (.-maxScrollExtent pos) 200.0))
+                                                          (not @!loading-more?)
+                                                          @!has-more?)
+                                                 (note-ctrl/load-notifications! ctx !notifications !page !has-more? !loading-more? false)))))
+                             sc)
+               :dispose .dispose]
+               
+     :watch [notifications !notifications
+             loading? !loading?
+             has-more? !has-more?]
+     
+     (pft/PostFrameTrigger
+      .onLayout (fn []
+                  ;; 1. 发起 HTTP 异步请求获取通知 (⚠️ 注意：控制层需更新入参支持分页)
+                  (-> (note-ctrl/load-notifications! ctx !notifications !page !has-more? !loading? true)
+                      (.then (fn [_]
+                               ;; 2. 成功拿到列表数据后，瞬间执行全部已读（归零全局Atom并异步同步后端）
+                               (note-ctrl/mark-all-read!)))))
+      .child
+      
+      ;; 核心替换：使用全新的 app-scaffold 彻底接管全局 Bottom Navigation Bar
+      (scaffold/app-scaffold
+       ctx "/notifications/view"
+       (m/Scaffold
+        .backgroundColor theme/bg-color
+        
+        .appBar
+        (m/AppBar
+         .backgroundColor m/Colors.white
+         .elevation 0.5
+         ;; 作为底部导肮顶级 Tab，取消后退按钮
+         .automaticallyImplyLeading false
+         .title (m/Text "Мэдэгдэл" ;; "Notifications"
+                        .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                            .fontSize 18.0 
+                                            .fontWeight m/FontWeight.bold 
+                                            .color theme/text-primary)))
+        
+        .body
+        (if loading?
+          (m/Center .child (m/CircularProgressIndicator .color theme/brand-blue))
+          (if (empty? notifications)
+            (m/Center .child (mgl/MongolText "Мэдэгдэл хоосон байна." .style (m/TextStyle .fontFamily "OyunQaganTig" .color theme/text-secondary)))
+            
+            (m/ListView.builder
+             .controller scroll-ctrl ;; ⚡ 绑定滚动控制器
+             .scrollDirection m/Axis.horizontal
+             ;; 强制物理效果，即使数据很少也能滑动
+             .physics (m/AlwaysScrollableScrollPhysics. .parent (m/BouncingScrollPhysics.))
+             .padding (m/EdgeInsets.symmetric .horizontal 16.0)
+             
+             ;; ⚡ 预留一个位置给加载菊花图
+             .itemCount (if has-more? (inc (count notifications)) (count notifications))
+             
+             .itemBuilder 
+             (fn [_ i] 
+               ;; ⚡ 当渲染到最后一个假索引时，显示加载圈
+               (if (= i (count notifications))
+                 (m/Padding 
+                  .padding (m/EdgeInsets.only .right 24.0 .left 24.0)
+                  .child (m/Center .child (m/SizedBox .width 24.0 .height 24.0 
+                                                      .child (m/CircularProgressIndicator .strokeWidth 2.0 .color theme/brand-blue))))
+                 
+                 (notification-pillar ctx (nth notifications i)))))))))))))

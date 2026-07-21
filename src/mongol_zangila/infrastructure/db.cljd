@@ -1,0 +1,253 @@
+(ns mongol-zangila.infrastructure.db
+  "Core database infrastructure utilizing Drift for robust, cross-platform 
+   (Native + Web WASM) offline storage and reactive streams."
+  (:require 
+   ["package:mongol_zangila/database.dart" :as drift]
+   ["package:drift/drift.dart" :as d]
+   ["dart:core" :as dc]
+   ["dart:async" :as async]
+   ["dart:convert" :as convert]
+   [clojure.string :as str]))
+
+;; =============================================================================
+;; 1. Initialization
+;; =============================================================================
+
+(defonce global-db (atom nil))
+
+(defn initialize-database!
+  "Initializes the Drift database. Await this in your main app boot sequence."
+  []
+  (let [instance (await (drift/initDriftDatabase))]
+    (reset! global-db instance)
+    (dc/print "Mongol Zangila Drift database connected successfully!")))
+
+;; =============================================================================
+;; 2. Reactive Queries & Data Fetching (Type-Safe)
+;; =============================================================================
+
+(defn watch-outbox
+  "Returns a reactive stream of all pending outbox transactions, sorted by oldest first."
+  []
+  (if-let [^drift/AppDatabase database @global-db]
+    (let [query (doto (.select database (.-outboxEntries database))
+                  (.orderBy [(fn [tbl] (d/OrderingTerm .expression (.-createdAt tbl) .mode d/OrderingMode.asc))]))]
+      (.watch query))
+    (async/Stream.empty)))
+
+(defn watch-drafts
+  "Returns a reactive stream of all saved drafts, sorted by newest first."
+  []
+  (if-let [^drift/AppDatabase database @global-db]
+    (let [query (doto (.select database (.-drafts database))
+                  (.orderBy [(fn [tbl] (d/OrderingTerm .expression (.-createdAt tbl) .mode d/OrderingMode.desc))]))]
+      (.watch query))
+    (async/Stream.empty)))
+
+(defn get-next-pending-task
+  "Fetches the oldest pending transaction from the outbox."
+  []
+  (if-let [^drift/AppDatabase database @global-db]
+    (let [query (doto (.select database (.-outboxEntries database))
+                  (.orderBy [(fn [tbl] (d/OrderingTerm .expression (.-createdAt tbl) .mode d/OrderingMode.asc))])
+                  (.limit 1))]
+      (.getSingleOrNull query))
+    (dc/Future.value nil)))
+
+(defn get-cached-messages
+  "Fetches all cached messages for a given thread/topic from the local Drift DB."
+  [topic]
+  (if-let [^drift/AppDatabase database @global-db]
+    (let [query (doto (.select database (.-messages database))
+                  (.where (fn [tbl] (.equals (.-topic tbl) topic))))]
+      (-> (.get query)
+          (.then (fn [rows]
+                   (mapv (fn [row] (convert/jsonDecode (.-payloadJson row))) rows)))))
+    (dc/Future.value [])))
+
+(defn fetch-thread-messages
+  "Fetches a paginated list of historical messages for a given thread from the local Drift database.
+   Parses the internal JSON payloads back into Clojure maps."
+  [thread-id limit offset]
+  (if-let [^drift/AppDatabase database @global-db]
+    (let [query (doto (.select database (.-messages database))
+                  (.where (fn [tbl] (.equals (.-topic tbl) thread-id)))
+                  (.orderBy [(fn [tbl] (d/OrderingTerm .expression (.-id tbl) .mode d/OrderingMode.desc))])
+                  (.limit limit .offset offset))]
+      (-> (.get query)
+          (.then (fn [rows]
+                   (mapv (fn [row] 
+                           (convert/jsonDecode (.-payloadJson row))) 
+                         rows)))
+          (.catchError (fn [err]
+                         (dc/print (str "🔴 Drift DB Error (fetch-thread-messages): " err))
+                         []))))
+    (dc/Future.value [])))
+
+;; =============================================================================
+;; 3. Write Operations (CRUD)
+;; =============================================================================
+
+(defn save-messages!
+  "Persists a collection of direct or group messages into the SQLite cache."
+  [topic messages]
+  (if-let [^drift/AppDatabase database @global-db]
+    (.batch database
+      (fn [b]
+        (doseq [msg messages]
+          (let [json-str (convert/jsonEncode msg)
+                companion (drift/MessagesCompanion.insert
+                           .id (get msg "id")
+                           .topic topic
+                           .payloadJson json-str)]
+            (.insert b (.-messages database) companion 
+                     .mode d/InsertMode.insertOrReplace)))))
+    (throw (ex-info "Database not initialized" {}))))
+
+(defn add-to-outbox!
+  "Queues a new mutation transaction into the SQLite outbox."
+  [mutation-type payload-map idempotency-key]
+  (if-let [^drift/AppDatabase database @global-db]
+    (let [json-str (convert/jsonEncode payload-map)
+          companion (drift/OutboxEntriesCompanion.insert
+                     .mutationType (if (empty? mutation-type) (d/Value nil) (d/Value. ^String mutation-type))
+                     .payloadJson (if (empty? json-str) (d/Value nil) (d/Value. ^String json-str))
+                     .idempotencyKey (if (empty? idempotency-key) (d/Value nil) (d/Value. ^String idempotency-key)))]
+      (.insert (.into database (.-outboxEntries database)) companion))
+    (throw (ex-info "Database not initialized" {}))))
+
+(defn delete-from-outbox!
+  "Removes a transaction from the outbox."
+  [id]
+  (if-let [^drift/AppDatabase database @global-db]
+    (.go
+     (doto (.delete database (.-outboxEntries database))
+       (.where (fn [tbl] (.equals (.-id tbl) id)))))
+    (throw (ex-info "Database not initialized" {}))))
+
+(defn increment-retry-count!
+  "Increments the retry count for a failing outbox transaction."
+  [id current-retries]
+  (if-let [^drift/AppDatabase database @global-db]
+    (let [query (doto (.update database (.-outboxEntries database))
+                  (.where (fn [tbl] (.equals (.-id tbl) id))))
+          companion (drift/OutboxEntriesCompanion. 
+                     .retryCount (d/Value. (int (inc current-retries))))]
+      (.write query companion))
+    (throw (ex-info "Database not initialized" {}))))
+
+(defn update-outbox-payload!
+  "Updates the JSON payload and resets retry count for an existing outbox transaction in place."
+  [id payload-map]
+  (if-let [^drift/AppDatabase database @global-db]
+    (let [json-str (convert/jsonEncode payload-map)
+          query (doto (.update database (.-outboxEntries database))
+                  (.where (fn [tbl] (.equals (.-id tbl) id))))
+          companion (drift/OutboxEntriesCompanion. 
+                     .payloadJson (d/Value. (.toString json-str))
+                     .retryCount (d/Value. (int 0)))]
+      (.write query companion))
+    (throw (ex-info "Database not initialized" {}))))
+
+;; =============================================================================
+;; 4. Drafts (Upsert Architecture)
+;; =============================================================================
+
+(defn upsert-draft!
+  "Upserts a draft row by its idempotency-key to prevent duplicate entries across overlapping saves."
+  [content media-urls entities reply-to-id reply-to-name reply-to-author-id quote-id quote-author-name quote-post-json idempotency-key]
+  (if-let [^drift/AppDatabase database @global-db]
+    (let [query (doto (.select database (.-drafts database))
+                  (.where (fn [tbl] (.equals (.-idempotencyKey tbl) idempotency-key))))]
+      (-> (.getSingleOrNull query)
+          (.then (fn [existing]
+                   (let [c (if content content "")
+                         mj (convert/jsonEncode (or media-urls []))
+                         ej (convert/jsonEncode (or entities []))
+                         ;; .content / .mediaJson 是必填项 -> 传原生 String
+                         ;; 其余 nullable 字段 -> 用 d/Value 包装
+                         companion (drift/DraftsCompanion.insert
+                                    .content c
+                                    .idempotencyKey (if (empty? idempotency-key) (d/Value nil) (d/Value. ^String idempotency-key))
+                                    .mediaJson mj
+                                    .entitiesJson (if (empty? ej) (d/Value nil) (d/Value. ^String ej))
+                                    .replyToId (if reply-to-id (d/Value. ^String reply-to-id) (d/Value nil))
+                                    .replyToName (if reply-to-name (d/Value. ^String reply-to-name) (d/Value nil))
+                                    .replyToAuthorId (if reply-to-author-id (d/Value. ^String reply-to-author-id) (d/Value nil))
+                                    .quoteId (if quote-id (d/Value. ^String quote-id) (d/Value nil))
+                                    .quoteAuthorName (if quote-author-name (d/Value. ^String quote-author-name) (d/Value nil))
+                                    .quotePostJson (if quote-post-json (d/Value. ^String quote-post-json) (d/Value nil)))]
+                     
+                     (if existing
+                       ;; Record found: Update in-place
+                       (let [update-query (doto (.update database (.-drafts database))
+                                            (.where (fn [tbl] (.equals (.-id tbl) (.-id existing)))))]
+                         (.write update-query companion))
+                       
+                       ;; Record missing: Insert new row
+                       (.insert (.into database (.-drafts database)) companion)))))))
+    (throw (ex-info "Database not initialized" {}))))
+
+(defn delete-draft!
+  [id]
+  (if-let [^drift/AppDatabase database @global-db]
+    (.go
+     (doto (.delete database (.-drafts database))
+       (.where (fn [tbl] (.equals (.-id tbl) id)))))
+    (throw (ex-info "Database not initialized" {}))))
+
+(defn delete-draft-by-idk!
+  [idk]
+  (if-let [^drift/AppDatabase database @global-db]
+    (.go
+     (doto (.delete database (.-drafts database))
+       (.where (fn [tbl] (.equals (.-idempotencyKey tbl) idk)))))
+    (throw (ex-info "Database not initialized" {}))))
+
+;; =============================================================================
+;; 5. Blocked Users (Offline Filtering)
+;; =============================================================================
+
+(defn add-blocked-user!
+  "Adds a user to the local offline blocklist. Uses insertOrReplace to handle duplicates safely."
+  [user-id]
+  (if-let [^drift/AppDatabase database @global-db]
+    (let [companion (drift/BlockedUsersCompanion.insert .blockedUserId user-id)]
+      (.insert (.into database (.-blockedUsers database)) companion 
+               .mode d/InsertMode.insertOrReplace))
+    (throw (ex-info "Database not initialized" {}))))
+
+(defn remove-blocked-user!
+  "Removes a user from the local offline blocklist."
+  [user-id]
+  (if-let [^drift/AppDatabase database @global-db]
+    (.go
+     (doto (.delete database (.-blockedUsers database))
+       (.where (fn [tbl] (.equals (.-blockedUserId tbl) user-id)))))
+    (throw (ex-info "Database not initialized" {}))))
+
+(defn get-blocked-user-ids
+  "Fetches a set of all blocked user IDs for synchronous offline filtering.
+   Returns a Clojure Set for O(1) lookup speed during Feed/Chat rendering."
+  []
+  (if-let [^drift/AppDatabase database @global-db]
+    (let [query (.select database (.-blockedUsers database))]
+      (-> (.get query)
+          (.then (fn [rows]
+                   (set (map #(.-blockedUserId %) rows))))))
+    (dc/Future.value #{})))
+
+(defn sync-blocked-users!
+  "Completely replaces the local blocklist with the server's source of truth.
+   Executes a clean wipe and batch insert."
+  [user-ids]
+  (if-let [^drift/AppDatabase database @global-db]
+    (-> (.go (.delete database (.-blockedUsers database)))
+        (.then (fn [_]
+                 (when (seq user-ids)
+                   (.batch database
+                     (fn [b]
+                       (doseq [uid user-ids]
+                         (let [companion (drift/BlockedUsersCompanion.insert .blockedUserId uid)]
+                           (.insert b (.-blockedUsers database) companion .mode d/InsertMode.insertOrReplace)))))))))
+    (throw (ex-info "Database not initialized" {}))))

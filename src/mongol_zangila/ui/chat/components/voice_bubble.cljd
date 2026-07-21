@@ -1,0 +1,320 @@
+(ns mongol-zangila.ui.chat.components.voice-bubble
+  "A polymorphic voice message bubble component.
+   ⚡ Vertical Mongolian MVP: Dynamically calculates height based on up to 60s duration, 
+   featuring a top-to-bottom vertical playback slider and layout."
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:just_audio/just_audio.dart" :as ja]
+   ["package:audio_session/audio_session.dart" :as audio-session]
+   ["package:mongol/mongol.dart" :as mgl]
+   ["dart:core" :as dc]
+   [cljd.flutter :as f]
+   [clojure.string :as str]
+   
+   ;; UI & Shared Components
+   [mongol-zangila.ui.theme :as theme]
+   [mongol-zangila.ui.widgets.avatar :as smart-avatar]
+   [mongol-zangila.infrastructure.media :as media]
+   [components.toast :as toast]))
+
+;; =============================================================================
+;; 1. Global State & Formatting Helpers
+;; =============================================================================
+
+;; Tracks the currently playing audio URL to ensure only one bubble plays at a time.
+(defonce !active-playing-url (atom nil))
+
+(defn- format-message-time 
+  "Extracts the HH:mm portion from an ISO 8601 timestamp."
+  [iso-string]
+  (if (str/blank? iso-string) 
+    ""
+    (try
+      (let [dt (dc/DateTime.parse iso-string)
+            h (str (.toString (.hour dt)) ":")
+            m (.padLeft (.toString (.minute dt)) 2 "0")]
+        (str h m))
+      (catch dc/Exception _ ""))))
+
+(defn- ensure-playback-session!
+  "Switches the OS audio session to playback mode (needed after mic recording)."
+  []
+  (-> (audio-session/AudioSession.instance)
+      (.then (fn [session]
+               (-> (.configure session (audio-session/AudioSessionConfiguration.speech))
+                   (.then (fn [_] (.setActive session true))))))))
+
+(defn- bind-player-source!
+  "Loads local recordings via setFilePath, remote files via setUrl.
+   Adds a cache-busting query to avoid stale broken cache on iOS."
+  [^ja/AudioPlayer player url]
+  (if (media/local-media-path? url)
+    (.setFilePath player (str/replace url #"^file://" ""))
+    (let [resolved (media/absolute-media-url url)]
+      (.setUrl player
+               (str resolved
+                    (if (str/includes? resolved "?") "&" "?")
+                    "_t=" (.-millisecondsSinceEpoch (dc/DateTime.now)))))))
+
+;; =============================================================================
+;; 2. The Voice Bubble Component
+;; =============================================================================
+
+(defn voice-bubble 
+  "Renders an interactive, vertically-oriented audio message bubble."
+  [ctx message-data current-user-id & {:keys [show-sender-info? on-retry!] :or {show-sender-info? false}}]
+  
+  (let [sender (get message-data "sender" {})
+        sender-id (get sender "id" (get message-data "sender_id"))
+        sender-name (get sender "name" "Unknown")
+        sender-avatar (get sender "avatar_url" "")
+        
+        is-me? (or (= sender-id current-user-id) (= sender-id "self"))
+        timestamp (get message-data "created_at" "")
+        status (get message-data "status" "delivered")
+        
+        audio-url (or (get message-data "media_url" "")
+                      (get-in message-data ["media" "url"] "")
+                      "")
+        resolved-audio-url (media/absolute-media-url audio-url)
+        
+        ;; ⚡ 安全提取初始秒数，用于静态高度计算
+        raw-duration (get message-data "media_duration" (get-in message-data ["media" "duration"] 1.0))
+        initial-duration (if (number? raw-duration) raw-duration 1.0)
+        
+        !player-state (atom :stopped)
+        !position-ms (atom 0.0)
+        !dynamic-duration-ms (atom (* initial-duration 1000))
+        !source-loaded? (atom false)
+        
+        cleanup-sync! (fn [k] 
+                        (remove-watch !active-playing-url k))]
+    
+    (f/widget
+     :context ctx
+     
+     ;; Manage AudioPlayer instance and streams
+     :managed [player (ja/AudioPlayer.)
+               :dispose .dispose
+               
+               _pos-sub (-> player .-positionStream
+                            (.listen (fn [d]
+                                       (when d (reset! !position-ms (.-inMilliseconds d))))))
+               :dispose .cancel
+               
+               _dur-sub (-> player .-durationStream
+                            (.listen (fn [d]
+                                       (when d (reset! !dynamic-duration-ms (.-inMilliseconds d))))))
+               :dispose .cancel
+               
+               _state-sub (-> player .-playerStateStream
+                              (.listen (fn [^ja/PlayerState s]
+                                         (let [playing? (.-playing s)
+                                               proc-state (.-processingState s)]
+                                           (cond
+                                             (or (= proc-state ja/ProcessingState.loading)
+                                                 (= proc-state ja/ProcessingState.buffering))
+                                             (reset! !player-state :loading)
+                                             
+                                             (= proc-state ja/ProcessingState.completed)
+                                             (do
+                                               (.seek player (dc/Duration. .milliseconds 0))
+                                               (.pause player)
+                                               (reset! !player-state :stopped)
+                                               (reset! !position-ms 0.0))
+                                             
+                                             playing? (reset! !player-state :playing)
+                                             :else (reset! !player-state :paused))))))
+               :dispose .cancel
+               
+               ;; Global synchronization
+               _sync-sub (let [watcher-key (keyword (str (hash player)))]
+                           (add-watch !active-playing-url watcher-key
+                                      (fn [_ _ _ new-url]
+                                        (when (and (not= new-url resolved-audio-url) 
+                                                   (= @!player-state :playing))
+                                          (.pause player))))
+                           watcher-key)
+               :dispose cleanup-sync!]
+               
+     :watch [p-state !player-state
+             pos-ms !position-ms
+             dur-ms !dynamic-duration-ms]
+     
+     (let [progress-ratio (if (> dur-ms 0)
+                            (max 0.0 (min 1.0 (/ pos-ms dur-ms)))
+                            0.0)
+           
+           ;; ⚡ 动态高度算法：基础高度 130 + (最多 60 秒的比例 * 180) => 总高度在 130px ~ 310px 之间
+           duration-ratio (max 0.0 (min 1.0 (/ initial-duration 60.0)))
+           bubble-height (+ 130.0 (* duration-ratio 180.0))
+           
+           load-source! (fn []
+                          (if @!source-loaded?
+                            (dc/Future.value nil)
+                            (if (str/blank? audio-url)
+                              (dc/Future.value nil)
+                              (do
+                                (reset! !source-loaded? true)
+                                (-> (ensure-playback-session!)
+                                    (.then (fn [_] (bind-player-source! player audio-url)))
+                                    (.catchError (fn [err]
+                                                   (reset! !source-loaded? false)
+                                                   (reset! !player-state :stopped)
+                                                   (dc/print (str "🔴 Voice playback load failed: "
+                                                                  resolved-audio-url " -> " err))
+                                                   (toast/error ctx "Аудио уншихад алдаа гарлаа.") 
+                                                   (throw err))))))))
+           
+           toggle-play! (fn []
+                          (when-not (str/blank? audio-url)
+                            (if (= p-state :playing)
+                              (.pause player)
+                              (-> (load-source!)
+                                  (.then (fn [_] 
+                                           (reset! !active-playing-url resolved-audio-url)
+                                           (.play player)))
+                                  (.catchError (fn [_] nil)))))
+                          nil)]
+       
+       (m/Padding
+        .padding (m/EdgeInsets.only .left 4.0 .right (if (and show-sender-info? (not is-me?)) 12.0 4.0) .top 16.0 .bottom 16.0)
+        .child
+        (m/Row
+         .mainAxisSize m/MainAxisSize.min
+         .crossAxisAlignment (if is-me? m/CrossAxisAlignment.end m/CrossAxisAlignment.start)
+         .children
+         [
+          ;; --- A. Incoming Avatar ---
+          (if (and show-sender-info? (not is-me?))
+            (m/Padding
+             .padding (m/EdgeInsets.only .right 8.0)
+             .child (smart-avatar/smart-avatar ctx sender-id sender-avatar :size 32.0))
+            (m/SizedBox.shrink))
+          
+          ;; --- B. The Content Column ---
+          (m/Column
+           .mainAxisSize m/MainAxisSize.min
+           .crossAxisAlignment (if is-me? m/CrossAxisAlignment.end m/CrossAxisAlignment.start)
+           .children
+           [
+            ;; 1. Sender Name
+            (if (and show-sender-info? (not is-me?))
+              (m/Padding
+               .padding (m/EdgeInsets.only .left 4.0 .bottom 4.0)
+               .child (m/Text sender-name
+                              .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                                  .fontSize 12.0 
+                                                  .fontWeight m/FontWeight.bold 
+                                                  .color theme/text-secondary)))
+              (m/SizedBox.shrink))
+            
+            ;; 2. ⚡ The Vertical Bubble Geometry
+            (m/Container
+             .width 56.0
+             .height bubble-height
+             .decoration (m/BoxDecoration 
+                          .color (if is-me? theme/brand-blue m/Colors.white)
+                          .borderRadius (m/BorderRadius.only
+                                         .topLeft (m/Radius.circular 28.0)
+                                         .topRight (m/Radius.circular 28.0)
+                                         .bottomLeft (m/Radius.circular (if is-me? 28.0 4.0))
+                                         .bottomRight (m/Radius.circular (if is-me? 4.0 28.0)))
+                          .border (when-not is-me? (m/Border.all .color theme/border-color .width 0.5))
+                          .boxShadow (when-not is-me? 
+                                       [(m/BoxShadow .color (.withOpacity m/Colors.black 0.02) 
+                                                     .blurRadius 4.0 
+                                                     .offset (m/Offset 0.0 2.0))]))
+             .child
+             (m/Column
+              .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+              .crossAxisAlignment m/CrossAxisAlignment.center
+              .children
+              [
+               ;; Top: Play / Pause Controller
+               (m/Padding
+                .padding (m/EdgeInsets.only .top 8.0)
+                .child
+                (m/GestureDetector
+                 .onTap toggle-play!
+                 .child (m/Container
+                         .padding (m/EdgeInsets.all 10.0)
+                         .decoration (m/BoxDecoration 
+                                      .color (if is-me? (.withOpacity m/Colors.white 0.2) (.withOpacity theme/brand-blue 0.1))
+                                      .shape m/BoxShape.circle)
+                         .child (if (= p-state :loading)
+                                  (m/SizedBox .width 20.0 .height 20.0 
+                                              .child (m/CircularProgressIndicator .strokeWidth 2.0 .color (if is-me? m/Colors.white theme/brand-blue)))
+                                  (m/Icon (if (= p-state :playing) m/Icons.pause_rounded m/Icons.play_arrow_rounded) 
+                                          .color (if is-me? m/Colors.white theme/brand-blue) 
+                                          .size 20.0)))))
+               
+               ;; Middle: ⚡ Vertical Progress Slider
+               (m/Expanded
+                .child (m/RotatedBox
+                        ;; 顺时针旋转3个90度(270度)，使原始水平Slider的0点在底部，Max在顶部
+                        .quarterTurns 3 
+                        .child (m/SliderTheme
+                                .data (m/SliderThemeData.
+                                       .trackHeight 4.0
+                                       .thumbShape (m/RoundSliderThumbShape. .enabledThumbRadius 6.0)
+                                       .overlayShape (m/RoundSliderOverlayShape. .overlayRadius 14.0)
+                                       .activeTrackColor (if is-me? m/Colors.white theme/brand-blue)
+                                       .inactiveTrackColor (if is-me? (.withOpacity m/Colors.white 0.3) theme/border-color)
+                                       .thumbColor (if is-me? m/Colors.white theme/brand-blue))
+                                .child (m/Slider
+                                        .value progress-ratio
+                                        .onChanged (fn [val]
+                                                     (let [target-ms (int (* val dur-ms))]
+                                                       (reset! !position-ms target-ms)
+                                                       (-> (load-source!)
+                                                           (.then (fn [_] (.seek player (dc/Duration. .milliseconds target-ms))))
+                                                           (.catchError (fn [_] nil)))
+                                                       nil))))))
+               
+               ;; Bottom: Duration Seconds (Vertical Mongol Text)
+               (m/Padding
+                .padding (m/EdgeInsets.only .bottom 16.0)
+                .child (mgl/MongolText (str (int initial-duration) "″")
+                                       .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                                           .fontSize 14.0 
+                                                           .fontWeight m/FontWeight.w600
+                                                           .color (if is-me? m/Colors.white theme/text-primary))))]))
+            
+            (m/SizedBox .height 4.0)
+            
+            ;; 3. Metadata Row (Time + Delivery Status)
+            (m/Row
+             .mainAxisSize m/MainAxisSize.min
+             .children
+             [(mgl/MongolText (format-message-time timestamp)
+                              .style (m/TextStyle .fontSize 10.0
+                                                  .color (if is-me? (.withOpacity m/Colors.white 0.7) theme/text-secondary)))
+
+              (if is-me?
+                (m/Padding
+                 .padding (m/EdgeInsets.only .left 4.0)
+                 .child (cond
+                          (= status "sending")
+                          (m/Icon m/Icons.access_time_rounded .size 12.0 .color (.withOpacity m/Colors.white 0.5))
+
+                          (= status "failed")
+                          (m/GestureDetector
+                           .onTap #(when on-retry! (on-retry! message-data))
+                           .behavior m/HitTestBehavior.opaque
+                           .child (m/Padding
+                                   .padding (m/EdgeInsets.symmetric .horizontal 4.0 .vertical 2.0)
+                                   .child (m/Icon m/Icons.error_outline_rounded .size 14.0 .color theme/warning-yellow)))
+
+                          (= status "sent")
+                          (m/Icon m/Icons.done_rounded .size 12.0 .color (.withOpacity m/Colors.white 0.6))
+
+                          (= status "delivered")
+                          (m/Icon m/Icons.done_all_rounded .size 12.0 .color (.withOpacity m/Colors.white 0.6))
+
+                          (= status "queued")
+                          (m/Icon m/Icons.cloud_off_rounded .size 12.0 .color (.withOpacity m/Colors.white 0.5))
+
+                          :else
+                          (m/Icon m/Icons.done_all_rounded .size 12.0 .color m/Colors.white)))
+                (m/SizedBox.shrink))])])]))))))

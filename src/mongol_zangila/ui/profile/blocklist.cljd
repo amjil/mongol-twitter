@@ -1,0 +1,184 @@
+(ns mongol-zangila.ui.profile.blocklist
+  "Screen for managing blocked users.
+   Displays a horizontal gallery of blocked accounts.
+   ⚡ Integrates directly with profile-ctrl for robust, resilient mutations."
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
+   ["dart:core" :as dc]
+   [cljd.flutter :as f]
+   
+   ;; Infrastructure & Controllers
+   [mongol-zangila.infrastructure.api :as api]
+   [mongol-zangila.controllers.profile-ctrl :as profile-ctrl]
+   
+   ;; UI & Utilities
+   [mongol-zangila.ui.theme :as theme]
+   [mongol-zangila.utils.nav :as nav]
+   [components.toast :as toast]
+   [mongol-zangila.ui.widgets.avatar :as smart-avatar]))
+
+;; =============================================================================
+;; 1. Data Fetching & Handlers
+;; =============================================================================
+
+(defn- fetch-blocked-users!
+  "Fetches the list of blocked users from the backend.
+   Safely unpacks the Dart map/list payload."
+  [ctx !users !loading?]
+  (reset! !loading? true)
+  ;; Note: Aligned with the "/users/blocks" endpoint seen in profile-ctrl/sync-blocklist!
+  (-> (api/get-req "/users/blocks")
+      (.then (fn [res]
+               (let [items (try 
+                             (let [d (get res "data")]
+                               (if (some? d) d res))
+                             (catch dc/dynamic _ res))]
+                 (reset! !users (try (vec items) (catch dc/dynamic _ [])))
+                 (reset! !loading? false)
+                 nil)))
+      (.catchError (fn [_err]
+                     (reset! !loading? false)
+                     (toast/error ctx "Жагсаалт дуудахад алдаа гарлаа.") ;; "Failed to load list"
+                     nil))))
+
+(defn- handle-unblock!
+  "Bridges the UI to the robust profile controller.
+   Automatically manages the local UI state vector upon success or rollback."
+  [ctx user !users]
+  (let [user-id (get user "id")
+        user-name (get user "name" "Unknown")]
+    
+    (profile-ctrl/unblock-user! 
+     ctx user-id user-name
+     
+     ;; on-success: Remove from the local atom rendering the list
+     #(swap! !users (fn [current-users] 
+                      (vec (remove (fn [u] (= (get u "id") user-id)) current-users))))
+     
+     ;; on-rollback: Add them back if the business logic strictly rejects it
+     :on-rollback #(swap! !users conj user))))
+
+;; =============================================================================
+;; 2. UI Components
+;; =============================================================================
+
+(defn- blocked-user-card
+  "Renders a single blocked user card in the horizontal list."
+  [ctx user !users]
+  (let [user-id (get user "id")
+        user-name (get user "name" "Unknown")
+        handle (get user "handle" "user")
+        avatar-url (get user "avatar_url")]
+    (m/Container
+     .width 160.0
+     .margin (m/EdgeInsets.only .right 16.0)
+     .padding (m/EdgeInsets.all 24.0)
+     .decoration (m/BoxDecoration 
+                  .color m/Colors.white
+                  .border (m/Border.all .color (.withOpacity theme/border-color 0.5) .width 1.0)
+                  .borderRadius (m/BorderRadius.circular 16.0)
+                  .boxShadow [(m/BoxShadow .color (m/Color 0x0A000000) .blurRadius 8.0 .offset (m/Offset 0.0 2.0))])
+     .child
+     (m/Column
+      .crossAxisAlignment m/CrossAxisAlignment.center
+      .children
+      [;; Avatar
+       (smart-avatar/smart-avatar ctx user-id avatar-url :size 56.0)
+       (m/SizedBox .height 16.0)
+       
+       ;; User Info
+       (m/Expanded
+        .child
+        (m/Column
+         .children
+         [(mgl/MongolText user-name
+                          .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                              .fontSize 16.0 
+                                              .fontWeight m/FontWeight.bold 
+                                              .color theme/text-primary)
+                          .maxLines 2
+                          .overflow m/TextOverflow.ellipsis)
+          (m/SizedBox .height 8.0)
+          (mgl/MongolText (str "@" handle)
+                          .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                              .fontSize 13.0 
+                                              .color theme/text-secondary)
+                          .maxLines 1
+                          .overflow m/TextOverflow.ellipsis)]))
+       
+       (m/SizedBox .height 24.0)
+       
+       ;; Unblock Action Button
+       (m/ElevatedButton
+        .style (m/ElevatedButton.styleFrom
+                .backgroundColor theme/bg-color
+                .elevation 0.0
+                .padding (m/EdgeInsets.symmetric .horizontal 12.0 .vertical 24.0)
+                .shape (m/RoundedRectangleBorder 
+                        .borderRadius (m/BorderRadius.circular 24.0)
+                        .side (m/BorderSide .color theme/border-color .width 1.0)))
+        .onPressed #(handle-unblock! ctx user !users)
+        .child (mgl/MongolText "Блок гаргах" ;; "Unblock"
+                               .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                                   .color theme/text-primary 
+                                                   .fontWeight m/FontWeight.bold)))]))))
+
+;; =============================================================================
+;; 3. Main Screen
+;; =============================================================================
+
+(defn blocklist-screen
+  "The primary viewport for managing blocked accounts."
+  []
+  (let [!users (atom [])
+        !loading? (atom true)]
+    
+    (f/widget
+     :context ctx
+     :watch [users !users
+             loading? !loading?]
+     
+     ;; Trigger network request immediately on mount
+     :managed [init-fetch (fetch-blocked-users! ctx !users !loading?)
+               :dispose nil]
+     
+     (m/Scaffold
+      .backgroundColor theme/bg-color
+      
+      .appBar
+      (m/AppBar
+       .backgroundColor m/Colors.white
+       .elevation 0.5
+       .centerTitle true
+       .leading (m/IconButton 
+                 .icon (m/Icon m/Icons.arrow_back_ios_new_rounded .color theme/text-primary .size 20.0)
+                 .onPressed #(nav/pop! ctx)))
+      
+      .body
+      (m/SafeArea
+       .child
+       (cond
+         loading?
+         (m/Center .child (m/CircularProgressIndicator .color theme/brand-blue))
+         
+         (empty? users)
+         (m/Center
+          .child
+          (m/Column
+           .mainAxisSize m/MainAxisSize.min
+           .children
+           [(m/Icon m/Icons.shield_outlined .size 48.0 .color theme/text-secondary)
+            (m/SizedBox .height 16.0)
+            (mgl/MongolText "Блоклосон хэрэглэгч байхгүй байна." ;; "No blocked users."
+                            .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                                .fontSize 16.0 
+                                                .color theme/text-secondary))]))
+         
+         :else
+         (m/ListView.builder
+          .scrollDirection m/Axis.horizontal
+          .physics (m/BouncingScrollPhysics.)
+          .padding (m/EdgeInsets.all 24.0)
+          .itemCount (count users)
+          .itemBuilder (fn [_ i] (blocked-user-card ctx (nth users i) !users)))))))))

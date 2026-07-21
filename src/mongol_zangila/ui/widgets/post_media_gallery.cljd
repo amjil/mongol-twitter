@@ -1,0 +1,76 @@
+(ns mongol-zangila.ui.widgets.post-media-gallery
+  "Post media gallery widget extracted from post card."
+  (:require
+   ["package:flutter/material.dart" :as m]
+   [mongol-zangila.ui.widgets.cached-image :as cached-image]
+   [mongol-zangila.utils.nav :as nav]))
+
+(defn- media-thumbnail [ctx url urls index border-radius]
+  (m/GestureDetector
+   .onTap #(nav/push! ctx "/media/viewer" {:media-urls urls :initial-index index})
+   .child (cached-image/cached-img url :border-radius border-radius :fit m/BoxFit.cover)))
+
+(defn- build-row
+  [ctx urls start-idx count-in-row total-count border-radius]
+  (m/Row
+   .children
+   (vec (interpose (m/SizedBox .width 4.0)
+                   (for [i (range count-in-row)]
+                     (let [idx (+ start-idx i)
+                           is-last-cell? (and (= idx 8) (> total-count 9))]
+                       (m/Expanded
+                        .child
+                        (if is-last-cell?
+                          (m/Stack
+                           .fit m/StackFit.expand
+                           .children
+                           [(media-thumbnail ctx (nth urls idx) urls idx border-radius)
+                            (m/Positioned.fill
+                             .child
+                             (m/GestureDetector
+                              .onTap #(nav/push! ctx "/media/viewer" {:media-urls urls :initial-index 8})
+                              .child
+                              (m/Container
+                               .decoration (m/BoxDecoration .color (m/Color 0x66000000))
+                               .alignment m/Alignment.center
+                               .child (m/Text (str "+" (- total-count 9))
+                                              .style (m/TextStyle .fontSize 24.0 .color m/Colors.white .fontWeight m/FontWeight.bold)))))])
+                          (media-thumbnail ctx (nth urls idx) urls idx border-radius)))))))))
+
+(defn- build-grid
+  [ctx urls layout border-radius]
+  (let [total-count (count urls)
+        indices (vec (reductions + 0 layout))]
+    (m/Column
+     .children
+     (vec (interpose (m/SizedBox .height 4.0)
+                     (for [i (range (count layout))]
+                       (m/Expanded
+                        .child (build-row ctx urls (nth indices i) (nth layout i) total-count border-radius))))))))
+
+(defn multi-media-gallery
+  [ctx urls]
+  (let [cnt (count urls)
+        layout (cond
+                 (= cnt 1) [1]
+                 (= cnt 2) [1 1]
+                 (= cnt 3) [1 2]
+                 (= cnt 4) [2 2]
+                 (= cnt 5) [1 2 2]
+                 (= cnt 6) [2 2 2]
+                 (= cnt 7) [1 2 2 2]
+                 (= cnt 8) [2 2 2 2]
+                 :else [1 2 2 2 2])
+        thumb-radius (if (= cnt 1) 12.0 0.0)
+        w (if (<= cnt 2) 120.0 240.0)
+        h 240.0]
+    (m/Column
+     .mainAxisSize m/MainAxisSize.min
+     .children
+     [(m/ClipRRect
+       .borderRadius (m/BorderRadius.circular 12.0)
+       .child
+       (m/Container
+        .width w
+        .height h
+       .child (build-grid ctx (take 9 urls) layout thumb-radius)))])))

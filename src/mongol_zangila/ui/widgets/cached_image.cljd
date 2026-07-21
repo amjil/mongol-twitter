@@ -1,0 +1,104 @@
+(ns mongol-zangila.ui.widgets.cached-image
+  "Robust, offline-first high-performance image renderer.
+   Prevents OOM (Out of Memory) by downsampling images at decode time
+   and manages strict disk/memory LRU boundaries."
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:cached_network_image/cached_network_image.dart" :as cni]
+   ["package:flutter_cache_manager/flutter_cache_manager.dart" :as fcm] ;; ⚡ 引入缓存管理器
+   ["dart:core" :as dc]
+   [cljd.flutter :as f]
+   [clojure.string :as str]
+   
+   ;; System Theme
+   [mongol-zangila.ui.theme :as theme]))
+
+;; =============================================================================
+;; 1. Singleton Cache Manager (The LRU Disk Sandbox)
+;; =============================================================================
+
+;; ⚡ 物理级别的缓存隔离池：最高 1000 张图，最长存活 7 天
+;; 超过阈值会自动清理最旧图片，防止 App 长期使用后占用几十GB存储
+(defonce global-media-cache
+  (fcm/CacheManager.
+   (fcm/Config. "zangila_media_cache"
+                .stalePeriod (dc/Duration. .days 7)
+                .maxNrOfCacheObjects 1000)))
+
+;; =============================================================================
+;; 2. Standardized Fallback States
+;; =============================================================================
+
+(defn- default-placeholder 
+  "A smooth, solid-color skeleton loader.
+   ⚡ FIXED: Removed CircularProgressIndicator to eliminate frame drops during rapid scrolling."
+  []
+  (m/Container .color theme/border-color))
+
+(defn- default-error-widget 
+  "A graceful degradation state when the URL is invalid or the image fails to load."
+  []
+  (m/Container
+   .color m/Colors.grey.shade50
+   .child (m/Center
+           .child (m/Icon m/Icons.broken_image_rounded 
+                          .color m/Colors.grey.shade300 
+                          .size 32.0))))
+
+;; =============================================================================
+;; 3. The Core High-Performance Component
+;; =============================================================================
+
+(defn cached-img 
+  "A drop-in replacement for m/Image.network with built-in SQLite/Disk caching.
+   ⚡ Dynamically intercepts dimensions to force hardware-level downsampling."
+  [url & {:keys [width height fit border-radius placeholder-widget error-widget]
+          :or {fit m/BoxFit.cover
+               border-radius 0.0}}]
+  
+  (let [valid-url? (and url (not (str/blank? url)))]
+    
+    (m/ClipRRect
+     .borderRadius (m/BorderRadius.circular border-radius)
+     .child
+     (if-not valid-url?
+       
+       ;; Immediate Fallback: Avoids spinning up the caching engine for bad data
+       (m/Container 
+        .width width 
+        .height height 
+        .child (or error-widget (default-error-widget)))
+       
+       ;; ⚡ 拦截 Context 以进行屏幕像素密度的计算
+       (f/widget
+        :context ctx
+        (let [mq (m/MediaQuery.of ctx)
+              dpr (.-devicePixelRatio mq)
+              screen-w (.-width (.-size mq))
+              
+              ;; ⚡ 防御 infinity: 如果外部传入无限大 (如瀑布流撑满父级)，使用屏幕宽度作为硬性压制边界
+              safe-w (if (or (nil? width) (= width double/infinity)) screen-w width)
+              safe-h (if (or (nil? height) (= height double/infinity)) screen-w height)
+              
+              ;; 换算成 Skia/Impeller 引擎底层解码所需的精确物理像素 (整数)
+              mem-w (int (* safe-w dpr))
+              mem-h (int (* safe-h dpr))]
+          
+          (cni/CachedNetworkImage.
+           .imageUrl url
+           .cacheManager global-media-cache  ;; ⚡ 挂载全局沙箱
+           .width width
+           .height height
+           .fit fit
+           
+           ;; ⚡ THE MAGIC: 强行命令 C++ 解码器在此分辨率截断！节省海量 RAM
+           .memCacheWidth mem-w
+           .memCacheHeight mem-h
+           
+           ;; Progressive loading shimmer/spinner
+           .placeholder (fn [_ctx _url] 
+                          (or placeholder-widget (default-placeholder)))
+           
+           ;; HTTP 404, corrupted file, or offline without cache
+           .errorWidget (fn [_ctx _url _error] 
+                          (or error-widget (default-error-widget))))))))))

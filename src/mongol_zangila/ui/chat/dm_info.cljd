@@ -1,0 +1,320 @@
+(ns mongol-zangila.ui.chat.dm-info
+  "Direct message thread information and settings viewport.
+   Displays partner profile summary, shared media access, and privacy controls.
+   Architected as a horizontal gallery of vertical pillars for LTR Mongolian typography."
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
+   ["dart:core" :as dc]
+   
+   ;; Centralized Dart Interop Interceptor
+   ["package:mongol_zangila/post_frame_trigger.dart" :as pft]
+   
+   [cljd.flutter :as f]
+   
+   ;; System Infrastructure
+   [mongol-zangila.infrastructure.api :as api]
+   [mongol-zangila.controllers.profile-ctrl :as profile-ctrl] ;; ⚡ 引入统一的拉黑控制器
+   
+   ;; UI & Shared Components
+   [mongol-zangila.ui.theme :as theme]
+   [mongol-zangila.utils.nav :as nav]
+   [mongol-zangila.ui.widgets.avatar :as smart-avatar]
+   [components.toast :as toast]))
+
+;; =============================================================================
+;; 1. Core Data Fetching Engine
+;; =============================================================================
+
+(defn- load-partner-profile! 
+  "Fetches the extended profile data and thread settings for the chat partner."
+  [ctx partner-id !profile-data !loading?]
+  
+  (reset! !loading? true)
+  (-> (api/get-req (str "/users/" partner-id "/profile"))
+      (.then (fn [res]
+               (let [fetched-data (get res "data" {})]
+                 (reset! !profile-data fetched-data)
+                 (reset! !loading? false))))
+      
+      (.catchError (fn [err]
+                     (reset! !loading? false)
+                     (toast/error ctx (str "Мэдээлэл татахад алдаа гарлаа: " err)))))) ;; "Failed to fetch data"
+
+;; =============================================================================
+;; 2. Mutation Handlers (Privacy Controls)
+;; =============================================================================
+
+(defn- toggle-mute! 
+  "Optimistically toggles the notification mute state for this specific thread."
+  [ctx thread-id !muted?]
+  (let [currently-muted? @!muted?]
+    ;; Optimistic UI update
+    (swap! !muted? not)
+    
+    (-> (api/post-req (str "/chat/threads/" thread-id "/mute") {"mute" (not currently-muted?)})
+        (.catchError (fn [_err]
+                       ;; Rollback on failure
+                       (swap! !muted? not)
+                       (toast/error ctx "Сүлжээний алдаа гарлаа." :fade)))))) ;; "Network error."
+
+;; ⚡ FIXED: Redirected to the centralized profile controller for resilient outbox syncing
+(defn- block-user! 
+  "Initiates the blocking sequence for the partner and retreats to the inbox."
+  [ctx partner-id partner-name]
+  (profile-ctrl/block-user! ctx partner-id partner-name 
+                            (fn []
+                              ;; 连续弹出两次路由，退出 dm-info 和底下的 dm-screen，直接回到 inbox
+                              (nav/pop! ctx) 
+                              (nav/pop! ctx))))
+
+;; =============================================================================
+;; 3. Sub-components (Vertical Pillars)
+;; =============================================================================
+
+(defn- section-header 
+  "Vertical text header for grouping settings pillars."
+  [title]
+  (m/Container
+   .width 56.0
+   .padding (m/EdgeInsets.only .top 24.0)
+   .alignment m/Alignment.topCenter
+   .child (mgl/MongolText title
+                          .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                              .fontSize 14.0
+                                              .fontWeight m/FontWeight.bold
+                                              .color theme/text-secondary))))
+
+(defn- action-icon-button 
+  "A circular action button with MongolText underneath. Forms a compact vertical group."
+  [icon-data label on-tap & {:keys [color] :or {color theme/brand-blue}}]
+  (m/InkWell
+   .onTap on-tap
+   .borderRadius (m/BorderRadius.circular 12.0)
+   .child
+   (m/Padding
+    .padding (m/EdgeInsets.symmetric .horizontal 8.0 .vertical 12.0)
+    .child
+    (m/Column
+     .mainAxisSize m/MainAxisSize.min
+     .children
+     [(m/Container
+       .padding (m/EdgeInsets.all 12.0)
+       .decoration (m/BoxDecoration 
+                    .color (.withOpacity color 0.1)
+                    .shape m/BoxShape.circle)
+       .child (m/Icon icon-data .color color .size 24.0))
+      (m/SizedBox .height 12.0)
+      (mgl/MongolText label
+                      .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                          .fontSize 14.0
+                                          .fontWeight m/FontWeight.w600
+                                          .color theme/text-primary))]))))
+
+(defn- vertical-list-tile 
+  "Transforms the standard horizontal ListTile into a vertical settings pillar.
+   Top: Icon, Middle: Text Content, Bottom: Action/Chevron."
+  [icon-data title subtitle on-tap & {:keys [trailing color] :or {color theme/text-primary}}]
+  (m/InkWell
+   .onTap on-tap
+   .child
+   (m/Container
+    .width 88.0
+    .padding (m/EdgeInsets.symmetric .vertical 24.0 .horizontal 8.0)
+    .decoration (m/BoxDecoration 
+                 .color m/Colors.white
+                 .border (m/Border .right (m/BorderSide .color theme/border-color .width 0.5)))
+    .child
+    (m/Column
+     .children
+     [;; 1. Icon (Top)
+      (m/Container
+       .padding (m/EdgeInsets.all 12.0)
+       .decoration (m/BoxDecoration .color (.withOpacity color 0.05) .shape m/BoxShape.circle)
+       .child (m/Icon icon-data .color color .size 24.0))
+      
+      (m/SizedBox .height 24.0)
+      
+      ;; 2. Content (Middle) - Uses Expanded to push trailing to the bottom
+      (m/Expanded
+       .child
+       (m/Row
+        .mainAxisAlignment m/MainAxisAlignment.center
+        .crossAxisAlignment m/CrossAxisAlignment.start
+        .children
+        (filterv some?
+                 [(mgl/MongolText title 
+                                  .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                                      .fontSize 15.0 
+                                                      .color color 
+                                                      .fontWeight m/FontWeight.w500))
+                  (when subtitle
+                    (m/Padding
+                     .padding (m/EdgeInsets.only .left 12.0)
+                     .child (mgl/MongolText subtitle 
+                                            .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                                                .fontSize 13.0 
+                                                                .color theme/text-secondary))))])))
+      
+      (m/SizedBox .height 16.0)
+      
+      ;; 3. Trailing Action (Bottom)
+      (or trailing (m/Icon m/Icons.keyboard_arrow_down_rounded .color theme/text-secondary .size 24.0))]))))
+
+;; =============================================================================
+;; 4. The Main Info Screen Widget
+;; =============================================================================
+
+(defn dm-info-screen 
+  "The primary viewport for inspecting thread settings and partner identity."
+  [thread-id partner-id initial-name]
+  
+  (let [!profile-data (atom nil)
+        !loading? (atom true)
+        !muted? (atom false)]
+    
+    (f/widget
+     :context ctx
+     :watch [profile-data !profile-data
+             loading? !loading?
+             muted? !muted?]
+     
+     (pft/PostFrameTrigger
+      .onLayout #(load-partner-profile! ctx partner-id !profile-data !loading?)
+      .child
+      (m/Scaffold
+       .backgroundColor theme/bg-color
+       
+       ;; --- Top App Bar ---
+       .appBar
+       (m/AppBar
+        .backgroundColor theme/bg-color
+        .elevation 0.0
+        .leading (m/IconButton 
+                  .icon (m/Icon m/Icons.arrow_back_rounded .color theme/text-primary)
+                  .onPressed #(nav/pop! ctx)))
+       
+       ;; --- Main Body: Horizontal Settings Gallery ---
+       .body
+       (if loading?
+         (m/Center .child (m/CircularProgressIndicator .color theme/brand-blue))
+         
+         (let [display-name (get profile-data "name" initial-name)
+               handle (get profile-data "handle" "user")
+               avatar-url (get profile-data "avatar_url" "")
+               bio (get profile-data "bio" "")]
+           
+           (m/ListView
+            ;; ⚡ 从左至右横向滑动
+            .scrollDirection m/Axis.horizontal
+            .physics (m/BouncingScrollPhysics.)
+            .children
+            [
+             ;; 1. Hero Identity Pillar
+             (m/Container
+              .width 180.0
+              .padding (m/EdgeInsets.only .top 32.0 .bottom 32.0 .left 16.0 .right 16.0)
+              .child
+              (m/Column
+               .crossAxisAlignment m/CrossAxisAlignment.center
+               .children
+               [(smart-avatar/smart-avatar ctx partner-id avatar-url :size 100.0)
+                (m/SizedBox .height 32.0)
+                
+                (m/Expanded
+                 .child
+                 (m/Row
+                  .mainAxisAlignment m/MainAxisAlignment.center
+                  .crossAxisAlignment m/CrossAxisAlignment.start
+                  .children
+                  [(mgl/MongolText display-name
+                                   .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                                       .fontSize 22.0 
+                                                       .fontWeight m/FontWeight.bold 
+                                                       .color theme/text-primary))
+                   (m/SizedBox .width 8.0)
+                   (mgl/MongolText (str "@" handle)
+                                   .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                                       .fontSize 15.0 
+                                                       .color theme/text-secondary))
+                   (when-not (empty? bio)
+                     (m/Padding
+                      .padding (m/EdgeInsets.only .left 16.0)
+                      .child (mgl/MongolText bio
+                                             .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                                                 .fontSize 14.0 
+                                                                 .color theme/text-primary))))]))]))
+             
+             (m/VerticalDivider .width 1.0 .thickness 1.0 .color theme/border-color)
+             
+             ;; 2. Quick Action Pillar
+             (m/Container
+              .width 100.0
+              .padding (m/EdgeInsets.symmetric .vertical 32.0)
+              .child
+              (m/Column
+               .mainAxisAlignment m/MainAxisAlignment.spaceEvenly
+               .children
+               [(action-icon-button m/Icons.person_outline_rounded 
+                                    "Профайл" ;; "Profile"
+                                    #(nav/push! ctx "/profile/view" {:user-id partner-id}))
+                
+                ;; ⚡ Toast 占位：搜索消息
+                (action-icon-button m/Icons.search_rounded 
+                                    "Хайх" ;; "Search"
+                                    #(toast/info ctx "Зурвасаас хайх"))
+                
+                (action-icon-button (if muted? m/Icons.notifications_off_outlined m/Icons.notifications_none_rounded)
+                                    "Мэдэгдэл" ;; "Notifications"
+                                    #(toggle-mute! ctx thread-id !muted?)
+                                    :color (if muted? theme/text-secondary theme/brand-blue))]))
+             
+             (m/VerticalDivider .width 1.0 .thickness 1.0 .color theme/border-color)
+             
+             ;; 3. Shared Resources Section
+             (section-header "Мэдээлэл") ;; "Information"
+             
+             ;; ⚡ Toast 占位：图片、视频
+             (vertical-list-tile m/Icons.photo_library_outlined 
+                                 "Зураг, бичлэг" ;; "Photos, videos"
+                                 "24 файл"
+                                 #(toast/info ctx "Медиа үзэх"))
+                                 
+             ;; ⚡ Toast 占位：文件、链接
+             (vertical-list-tile m/Icons.insert_drive_file_outlined 
+                                 "Файл, линк" ;; "Files, links"
+                                 nil
+                                 #(toast/info ctx "Файл үзэх"))
+             
+             (m/VerticalDivider .width 1.0 .thickness 1.0 .color theme/border-color)
+             
+             ;; 4. Privacy & Moderation Section
+             (section-header "Тохиргоо") ;; "Settings"
+             
+             ;; Mute Toggle Switch
+             (vertical-list-tile m/Icons.notifications_off_outlined 
+                                 "Мэдэгдэл хаах" ;; "Mute notifications"
+                                 nil
+                                 nil
+                                 ;; 使用 RotatedBox 将 Switch 旋转 90 度以贴合竖向流动
+                                 :trailing (m/RotatedBox
+                                            .quarterTurns 1
+                                            .child (m/Switch 
+                                                    .value muted? 
+                                                    .onChanged (fn [_] (toggle-mute! ctx thread-id !muted?))
+                                                    .activeColor theme/brand-blue)))
+             
+             (vertical-list-tile m/Icons.block_rounded 
+                                 "Блоклох" ;; "Block"
+                                 nil
+                                 #(block-user! ctx partner-id display-name) 
+                                 :color theme/error-red)
+             
+             ;; ⚡ Toast 占位：举报功能
+             (vertical-list-tile m/Icons.flag_outlined 
+                                 "Репорт хийх" ;; "Report"
+                                 nil
+                                 #(toast/info ctx "Репорт хийх цонх")
+                                 :color theme/error-red)
+             
+             (m/SizedBox .width 48.0)]))))))))
