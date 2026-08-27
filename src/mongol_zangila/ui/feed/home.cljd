@@ -4,6 +4,7 @@
    Adapted for LTR vertical Mongolian typography with horizontal pull-to-refresh."
   (:require
    ["package:flutter/material.dart" :as m]
+   ["package:custom_refresh_indicator/custom_refresh_indicator.dart" :as cri]
    ["dart:core" :as dc]
    
    ;; Centralized Dart Interop Interceptor
@@ -169,9 +170,11 @@
                 
                 :not-armed-text "Татаж шинэчлэх"
                 :armed-text "Суллаж шинэчлэх"
+                :loading-text "Суллаж шинэчлэх"
                 :not-armed-color theme/border-color
                 :armed-color theme/brand-blue
                 :text-style (m/TextStyle .fontFamily "OyunQaganTig" .color m/Colors.white .fontSize 14.0 .fontWeight m/FontWeight.bold)
+                :trigger-mode cri/IndicatorTriggerMode.anywhere
                 
                 ;; ⚡ 替换为计算过滤后的 visible-posts 数量
                 :item-count (if (and @!has-more? page-loading?) (inc (count visible-posts)) (count visible-posts))

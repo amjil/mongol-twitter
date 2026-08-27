@@ -4,6 +4,7 @@
    (LTR vertical typography), embedding a hero profile pillar and paginated posts."
   (:require
    ["package:flutter/material.dart" :as m]
+   ["package:custom_refresh_indicator/custom_refresh_indicator.dart" :as cri]
    ["package:mongol/mongol.dart" :as mgl]
    ["dart:core" :as dc]
 
@@ -295,9 +296,11 @@
                :background-color theme/bg-color
                :not-armed-text "Татаж шинэчлэх"
                :armed-text "Суллаж шинэчлэх"
+               :loading-text "Суллаж шинэчлэх"
                :not-armed-color theme/border-color
                :armed-color theme/brand-blue
                :text-style (m/TextStyle .fontFamily "OyunQaganTig" .color m/Colors.white .fontSize 14.0 .fontWeight m/FontWeight.bold)
+               :trigger-mode cri/IndicatorTriggerMode.anywhere
                
                :item-count (if is-blocked?
                              1

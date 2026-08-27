@@ -4,6 +4,7 @@
    real-time unread badges and localized timestamp formatting."
   (:require
    ["package:flutter/material.dart" :as m]
+   ["package:custom_refresh_indicator/custom_refresh_indicator.dart" :as cri]
    ["package:mongol/mongol.dart" :as mgl]
    ["dart:async" :as async]
    ["dart:core" :as dc]
@@ -154,9 +155,11 @@
 
                 :not-armed-text "Татаж шинэчлэх"
                 :armed-text "Суллаж шинэчлэх"
+                :loading-text "Суллаж шинэчлэх"
                 :not-armed-color theme/border-color
                 :armed-color theme/brand-blue
                 :text-style (m/TextStyle .fontFamily "OyunQaganTig" .color m/Colors.white .fontSize 14.0 .fontWeight m/FontWeight.bold)
+                :trigger-mode cri/IndicatorTriggerMode.anywhere
 
                 :item-count (count visible-chats)
                 :separator-builder (fn [_ _] (m/SizedBox .width 8.0))
