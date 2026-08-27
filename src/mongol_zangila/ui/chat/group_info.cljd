@@ -49,7 +49,7 @@
    .builder
    (fn [d-ctx]
      (f/widget
-      ;; ⚡ 修正：放入 :managed 托管，彻底解决内存泄漏与宏编译陷阱
+      ;; ⚡ Fix: put it under :managed to avoid leaks and macro-compile traps
       :managed [!name-ctrl (m/TextEditingController. .text current-name)
                 :dispose .dispose]
       (m/AlertDialog.

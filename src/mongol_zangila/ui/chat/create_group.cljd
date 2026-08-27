@@ -11,7 +11,7 @@
    [clojure.string :as str]
 
    [mongol-zangila.infrastructure.api :as api]
-   [mongol-zangila.state :as state] ;; ⚡ 引入全局状态以获取当前登录用户 ID
+   [mongol-zangila.state :as state] ;; ⚡ Import global state to get the current user id
    [mongol-zangila.ui.theme :as theme]
    [mongol-zangila.utils.nav :as nav]
    [components.toast :as toast]
@@ -142,7 +142,7 @@
     (f/widget
      :context ctx
      
-     ;; ⚡ 利用 :managed 完美托管 TextEditingController 的生命周期
+     ;; ⚡ Let :managed own the TextEditingController lifecycle
      :managed [group-name-ctrl (m/TextEditingController. .text "")
                :dispose .dispose]
                
@@ -224,11 +224,11 @@
          (m/Expanded
           .child
           (cond
-            ;; 状态1：正在加载网络请求
+            ;; State 1: loading
             loading?
             (m/Center .child (m/CircularProgressIndicator .color theme/brand-blue))
             
-            ;; ⚡ 状态2：关注列表为空（展现友好的引导 UI）
+            ;; ⚡ State 2: following list is empty (friendly empty-state UI)
             (empty? friends)
             (m/Center
              .child
@@ -248,7 +248,7 @@
                
                (m/SizedBox .height 32.0)
                
-               ;; 引导去探索界面的按钮
+               ;; Button that sends the user to Explore
                (m/ElevatedButton
                 .style (m/ElevatedButton.styleFrom
                         .backgroundColor m/Colors.white
@@ -259,12 +259,12 @@
                                 .side (m/BorderSide .color theme/brand-blue .width 1.5))
                         .padding (m/EdgeInsets.symmetric .horizontal 32.0 .vertical 12.0))
                 .onPressed (fn []
-                             (nav/pop! ctx) ;; 退出当前的建群页面
-                             (nav/push! ctx "/search")) ;; 跳转到全局搜索/探索页面
+                             (nav/pop! ctx) ;; Leave the create-group page
+                             (nav/push! ctx "/search")) ;; Go to global search / explore
                 .child (m/Text "Хэрэглэгч хайх" ;; "Search users"
                                .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold .fontSize 14.0)))]))
 
-            ;; 状态3：正常渲染成员画廊
+            ;; State 3: render the member gallery
             :else
             (m/Column
              .crossAxisAlignment m/CrossAxisAlignment.start

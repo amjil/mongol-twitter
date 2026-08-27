@@ -50,13 +50,13 @@
   (reset! !loading? false)
   
   (cond
-    ;; 1. 业务错误 (422/400/403)：数据不合法
-    ;; 绝对不放入离线队列！只弹窗提示，留在编辑页让用户修改。
+    ;; 1. Business error (422/400/403): invalid data
+    ;; Never enqueue offline. Show a dialog and stay on the compose page so the user can fix it.
     (client-error? err)
     (post-submit-error-toast! ctx err)
 
-    ;; 2. 网络错误/服务端错误 (5xx/Timeouts)：数据合法，网络不通
-    ;; 接管当前发帖任务，放入离线队列后台重试，清除草稿并关闭页面。
+    ;; 2. Network / server error (5xx/timeouts): data is valid, transport failed
+    ;; Take over the post, enqueue for background retry, clear the draft, and close the page.
     outbox-fallback
     (do
       (write-buffer/enqueue! "create-post" payload idempotency-key)
@@ -65,7 +65,7 @@
       (toast/warn ctx "Сүлжээний алдаа, хүлээгдэж буй жагсаалтад хадгаллаа.")
       (nav/pop! ctx))
 
-    ;; 3. 其他未知错误
+    ;; 3. Other unknown errors
     :else
     (post-submit-error-toast! ctx err)))
 

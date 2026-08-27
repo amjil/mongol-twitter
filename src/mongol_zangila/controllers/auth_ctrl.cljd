@@ -9,7 +9,7 @@
    
    [mongol-zangila.state :as state]
    [mongol-zangila.infrastructure.api :as api]
-   [mongol-zangila.infrastructure.db :as db] ;; ⚡ 引入底层离线数据库
+   [mongol-zangila.infrastructure.db :as db] ;; ⚡ Import the local offline database
    [mongol-zangila.infrastructure.storage :as storage]
    [mongol-zangila.infrastructure.session :as session]
    [mongol-zangila.infrastructure.socket :as socket]
@@ -21,14 +21,14 @@
 (defn- start-background-services!
   "Boots realtime socket, offline outbox daemons, and hydrates global state after authentication."
   []
-  ;; 1. 启动 Outbox 离线队列同步
+  ;; 1. Start outbox offline-queue sync
   (chat-ctrl/register-outbox-handlers!)
   (write-buffer/start-daemon!)
   
-  ;; 2. 建立 WebSocket 长连接
+  ;; 2. Open the WebSocket connection
   (socket/connect!)
   
-  ;; 3. ⚡ Blocklist Hydration (静默同步全量黑名单，彻底解耦 profile-ctrl)
+  ;; 3. ⚡ Blocklist hydration (silently sync the full blocklist; decouple from profile-ctrl)
   (-> (api/get-req "/users/blocks")
       (.then (fn [res]
                (let [users (get res "data" [])

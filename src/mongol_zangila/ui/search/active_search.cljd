@@ -83,7 +83,7 @@
         .onPressed #(nav/push! ctx "/profile/view" {:user-id user-id})
         .child (mgl/MongolText "Үзэх" .style (m/TextStyle .fontFamily "OyunQaganTig" .color theme/brand-blue)))
        
-       ;; ⚡ 核心修复：用 if 配合 SizedBox.shrink 彻底杜绝 nil 混入渲染树！
+       ;; ⚡ Core fix: use if + SizedBox.shrink so nil never enters the widget tree
        (if is-self?
          (m/SizedBox.shrink)
          (m/Column
@@ -168,7 +168,7 @@
                        (fn [val]
                          (reset! !query val)
                          (when-not (str/blank? val)
-                           ;; 仅实时搜索用户，减轻后端和 UI 负担
+                           ;; Live-search users only, to lighten backend and UI load
                            (search-ctrl/search-users! ctx val !user-results !loading-users?)))
                        :on-clear #(reset! !query "")))
 

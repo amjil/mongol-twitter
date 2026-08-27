@@ -56,15 +56,15 @@
 
     "like-tweet"
     (api/post-req (str "/tweets/" (get payload "post_id") "/like") 
-                  (dissoc payload "post_id")) ;; ⚡ 透传包含 idempotency_key 在内的所有参数
+                  (dissoc payload "post_id")) ;; ⚡ Pass through all params including idempotency_key
 
     "repost-tweet"
     (api/post-req (str "/tweets/" (get payload "post_id") "/repost") 
-                  (dissoc payload "post_id")) ;; ⚡ 透传包含 idempotency_key 在内的所有参数
+                  (dissoc payload "post_id")) ;; ⚡ Pass through all params including idempotency_key
 
     "bookmark-tweet"
     (api/post-req (str "/tweets/" (get payload "post_id") "/bookmark")
-                  (dissoc payload "post_id")) ;; ⚡ 透传包含 idempotency_key 在内的所有参数
+                  (dissoc payload "post_id")) ;; ⚡ Pass through all params including idempotency_key
 
     "block-user"
     (api/post-req (str "/users/" (get payload "user_id") "/block") {})

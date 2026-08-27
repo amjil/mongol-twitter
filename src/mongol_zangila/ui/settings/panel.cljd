@@ -70,7 +70,7 @@
                                              .fontWeight m/FontWeight.w500
                                              .color color))
          
-         ;; ⚡ 核心修复：使用 if 和 SizedBox.shrink 彻底阻绝 nil 混入 Widget 数组
+         ;; ⚡ Core fix: use if + SizedBox.shrink so nil never enters the widget list
          (if subtitle
            (m/Padding
             .padding (m/EdgeInsets.only .left 12.0)

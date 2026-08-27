@@ -185,7 +185,7 @@
           .child (mgl/MongolText (str "@" (get author "handle" "user") " хэрэглэгчийг блоклосон байна.")
                                  .style (m/TextStyle .fontFamily "OyunQaganTig" .color theme/text-secondary .fontWeight m/FontWeight.bold)))]))
       
-      ;; --- 正常帖子 UI: 三柱式横向流架构 (Three-Pillar Horizontal Flow) ---
+      ;; --- Normal post UI: three-pillar horizontal flow ---
       (let [content (get post-data "content" "")
             entities (get post-data "entities" [])
             media-urls (mapv media/absolute-media-url (get post-data "media" []))
@@ -257,7 +257,7 @@
              .crossAxisAlignment m/CrossAxisAlignment.stretch
              .mainAxisSize m/MainAxisSize.min
              .children
-             [;; A. 垂直富文本
+             [;; A. Vertical rich text
               (m/GestureDetector
                .onTap (when-not is-detail-view #(open-post-detail! ctx post-id))
                .behavior m/HitTestBehavior.opaque
@@ -271,7 +271,7 @@
                  :max-lines (if is-detail-view nil 3)
                  :overflow (if is-detail-view nil m/TextOverflow.ellipsis))))
 
-              ;; B. 引用卡片
+              ;; B. Quote card
               (if quoted-post
                 (m/Padding
                  .padding (m/EdgeInsets.only .left 16.0)
@@ -282,7 +282,7 @@
                   (quoted-post-widget/quoted-post-card ctx quoted-post)))
                 (m/SizedBox.shrink))
 
-              ;; C. 高级多图矩阵
+              ;; C. Multi-image matrix
               (if (not-empty media-urls)
                 (m/Padding
                  .padding (m/EdgeInsets.only .left 16.0)

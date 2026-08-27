@@ -41,7 +41,7 @@
     (f/widget
      :context ctx
      
-     ;; ⚡ 核心升级 1：挂载横向滚动监听器以触发分页
+     ;; ⚡ Upgrade 1: attach a horizontal scroll listener to trigger pagination
      :managed [scroll-ctrl (let [ctrl (m/ScrollController.)]
                              (.addListener ctrl
                                            (fn []
@@ -61,7 +61,7 @@
              page-loading? !pagination-loading?]
      
      (pft/PostFrameTrigger
-      ;; ⚡ 核心升级 2：复用 feed-ctrl 中健壮的加载引擎
+      ;; ⚡ Upgrade 2: reuse the robust loader in feed-ctrl
       .onLayout (fn []
                   (reset! !initial-loading? false)
                   (feed-ctrl/load-page! ctx endpoint !posts !page !has-more? !initial-loading? true))
@@ -102,7 +102,7 @@
             .scrollDirection m/Axis.horizontal
             .physics (m/BouncingScrollPhysics.)
             .padding (m/EdgeInsets.only .left 16.0 .right 32.0)
-            ;; ⚡ 核心升级 3：如果有更多数据且正在分页加载，多渲染一个加载指示器占位
+            ;; ⚡ Upgrade 3: if more pages exist and a page is loading, render an extra spinner slot
             .itemCount (if (and @!has-more? page-loading?) (inc (count posts)) (count posts))
             .itemBuilder
             (fn [_ i]

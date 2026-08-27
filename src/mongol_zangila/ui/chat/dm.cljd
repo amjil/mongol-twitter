@@ -104,7 +104,7 @@
              
              .itemBuilder 
              (fn [_ i] 
-               ;; ⚡ 终极防弹衣：加入 try-catch 与强制判空，彻底隔绝脏数据导致的崩溃
+               ;; ⚡ Hardening: try-catch plus nil checks so dirty data cannot crash the list
                (try
                  (let [rendered-widget
                        (if (>= i (count messages))
@@ -120,12 +120,12 @@
                                                                             :on-retry! #(chat-ctrl/retry-message! ctx thread-id % !messages))
                              :else               (msg-bubble/chat-bubble ctx msg current-user-id 
                                                                          :on-retry! #(chat-ctrl/retry-message! ctx thread-id % !messages)))))]
-                   ;; 无论发生什么，绝不交出 nil
+                   ;; Never return nil, no matter what
                    (if (nil? rendered-widget) 
                      (m/SizedBox.shrink) 
                      rendered-widget))
                  (catch dc/dynamic _ 
-                   ;; 如果遇到严重脏数据报错，静默降级为隐形占位符
+                   ;; On severe dirty data, silently fall back to an invisible placeholder
                    (m/SizedBox.shrink)))))))
          
          ;; --- B. Bottom Area ---

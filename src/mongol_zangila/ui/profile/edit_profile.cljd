@@ -19,7 +19,7 @@
    
    ;; ⚡ Custom Keyboard Components
    [virtual-keyboard.keyboard :as keyboard]
-   [virtual-keyboard.options :as options])) ;; ⚡ 核心修复 1：引入键盘配置项
+   [virtual-keyboard.options :as options])) ;; ⚡ Core fix 1: import keyboard options
 
 ;; =============================================================================
 ;; 1. Sub-component: Form Inputs
@@ -82,7 +82,7 @@
      :watch [avatar-url !avatar-url
              loading? !loading?]
      
-     ;; ⚡ 核心修复 2：为键盘注入配置，防止抛出 "Null is not a subtype of num"
+     ;; ⚡ Core fix 2: inject keyboard options to avoid "Null is not a subtype of num"
      :let [info (merge options/keyboard-option {:keyboard/mongol-font-family "OyunQaganTig"
                                                 :keyboard/key-container-color m/Colors.grey.shade500
                                                 :keyboard/font-size 16})]
@@ -185,7 +185,7 @@
                (profile-input bio-ctrl "Био" "Өөрийнхөө тухай товчхон..." 4)]))
             
             ;; B. Overlay Layer: The Candidates Predictor Bar
-            ;; ⚡ 核心修复 3：移除了外层多余的 m/Positioned，防止 Competing ParentDataWidgets 崩溃
+            ;; ⚡ Core fix 3: drop the extra outer m/Positioned to avoid Competing ParentDataWidgets crash
             (keyboard/candidates nil)]))
          
          ;; 2. Lower Viewport: The Custom FST Keyboard

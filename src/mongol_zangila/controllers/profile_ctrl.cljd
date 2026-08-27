@@ -160,15 +160,15 @@
       (write-buffer/enqueue! "block-user" outbox-payload idk)
       (-> (api/post-req endpoint {})
           (.catchError (fn [err]
-                         ;; ⚡ FIXED: 识别业务错误（如400/403等有Response的具体错误）与网络丢包的区别
+                         ;; ⚡ FIXED: distinguish business errors (400/403 etc. with a Response) from packet loss
                          (if (and (.-response err) (not= (.-statusCode (.-response err)) 503))
                            (do 
-                             ;; 确定性业务失败：清空本地拦截缓存，执行回滚回调
+                             ;; Deterministic business failure: clear local intercept cache and run the rollback callback
                              (db/remove-blocked-user! target-user-id)
                              (when on-rollback (on-rollback))
                              (toast/error ctx "Хүсэлт амжилтгүй. Таны үйлдлийг цуцаллаа."))
                            
-                           ;; 纯网络崩溃或超时：降级移交离线队列，不回滚 UI，等待后台重试机制自动闭环
+                           ;; Pure network crash or timeout: hand off to the offline queue, do not roll back UI, wait for background retry
                            (write-buffer/enqueue! "block-user" outbox-payload idk))))))))
 
 (defn unblock-user!
@@ -193,7 +193,7 @@
           (.catchError (fn [err]
                          (if (and (.-response err) (not= (.-statusCode (.-response err)) 503))
                            (do 
-                             ;; 确定性业务失败：重新把黑名单加回来并通知 UI 回滚
+                             ;; Deterministic business failure: put the blocklist entry back and notify UI to roll back
                              (db/add-blocked-user! target-user-id)
                              (when on-rollback (on-rollback))
                              (toast/error ctx "Үйлдэл амжилтгүй боллоо."))

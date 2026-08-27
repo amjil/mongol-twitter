@@ -19,7 +19,7 @@
   [res]
   (try
     (let [d (get res "data")]
-      ;; 暴力尝试获取 "data" 字段，拿到就用，拿不到说明本身就是个数组
+      ;; Try the "data" field; if missing, the payload is already an array
       (vec (if (some? d) d res)))
     (catch dc/dynamic _ [])))
 

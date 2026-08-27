@@ -78,7 +78,7 @@
     (f/widget
      :context ctx
      
-     ;; ⚡ 极简生命周期：只负责创建和销毁控制器，不搞延迟挂载
+     ;; ⚡ Minimal lifecycle: only create/dispose the controller; no delayed mount
      :managed [scanner-ctrl (ms/MobileScannerController. 
                              .facing ms/CameraFacing.back
                              .detectionSpeed ms/DetectionSpeed.noDuplicates)
@@ -98,7 +98,7 @@
          .controller scanner-ctrl
          .onDetect #(handle-scan-capture! ctx % !scanned? scanner-ctrl)
          
-         ;; ⚡ 安全网：如果权限被拒绝或发生硬件级错误，在这里接管，防止闪退
+         ;; ⚡ Safety net: take over if permission is denied or a hardware error occurs, to prevent a crash
          .errorBuilder (fn [c error _]
                          (m/Center 
                           .child (m/Column

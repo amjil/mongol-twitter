@@ -23,10 +23,10 @@
    Implements horizontal infinite scrolling."
   [topic-name]
   
-  (let [;; 1. 防空指针保护
+  (let [;; 1. Nil-safety
         safe-topic-name (or topic-name "")
         
-        ;; ⚡ 2. 核心修复：剔除开头的 # 号！防止后端收到 %23 导致 404
+        ;; ⚡ 2. Core fix: strip a leading # so the backend does not get %23 and 404
         clean-topic-name (str/replace-first safe-topic-name #"^#" "")
         
         !posts (atom [])
@@ -36,10 +36,10 @@
         !refresh-loading? (atom false)
         !pagination-loading? (atom false)
         
-        ;; 使用纯净的 name 拼接 API 请求
+        ;; Build the API request with the stripped name
         topic-endpoint (str "/topics/" (dc/Uri.encodeComponent clean-topic-name))
         
-        ;; UI 显示上依然保留 # 号
+        ;; Keep the # in the UI
         display-title (if (str/starts-with? safe-topic-name "#") safe-topic-name (str "#" safe-topic-name))]
     
     (f/widget

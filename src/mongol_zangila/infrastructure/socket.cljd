@@ -14,10 +14,10 @@
 
 (defonce ^:private !socket (atom nil))
 
-;; 活跃的物理频道连接 (网络断开时清空)
+;; Active physical channel connections (cleared on disconnect)
 (defonce ^:private !active-channels (atom {}))
 
-;; ⚡ 订阅意图注册表 (必须由 UI 管理，网络断开时不许清空，用于重连恢复)
+;; ⚡ Subscription-intent registry (owned by UI; must survive disconnect for reconnect restore)
 (defonce ^:private !channel-subscriptions (atom {}))
 (defonce ^:private !on-connect-callbacks (atom []))
 (defonce ^:private !inbox-event-callbacks (atom []))
@@ -56,10 +56,10 @@
     (.disconnect socket)
     (reset! !socket nil)
     (reset! !active-channels {})
-    ;; 绝不能在这里清空 !channel-subscriptions 和 !inbox-event-callbacks
+    ;; Never clear !channel-subscriptions or !inbox-event-callbacks here
     (dc/print "🔌 [Socket] Physical connection severed, registries preserved.")))
 
-;; ⚡ 核心修复：补齐缺失的 full-teardown! 函数
+;; ⚡ Core fix: add the missing full-teardown!
 (defn full-teardown!
   "Completely dismantles the socket and ALL memory registries. Used strictly on Logout."
   []
@@ -86,7 +86,7 @@
         (.onOpen socket (fn [] 
                           (dc/print "🟢 [Socket] Connected to Phoenix Cluster.")
                           (doseq [cb @!on-connect-callbacks] (cb))
-                          ;; 连接成功后，根据内存里的订阅意图自动恢复所有房间
+                          ;; After connect, restore every room from in-memory subscription intents
                           (rejoin-all-channels!)))
         
         (.onClose socket (fn [_] 

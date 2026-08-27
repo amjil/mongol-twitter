@@ -18,7 +18,7 @@
    [mongol-zangila.controllers.notification-ctrl :as note-ctrl]
    [mongol-zangila.ui.theme :as theme]
    [mongol-zangila.utils.nav :as nav]
-   [mongol-zangila.ui.layout.scaffold :as scaffold] ;; ⚡ 引入全新的全局布局
+   [mongol-zangila.ui.layout.scaffold :as scaffold] ;; ⚡ Import the new global layout
    [mongol-zangila.ui.widgets.avatar :as smart-avatar]))
 
 ;; =============================================================================
@@ -64,9 +64,9 @@
   (let [actor (get note-data "actor" {})
         actor-name (get actor "name" "Хэрэглэгч")
         note-type (get note-data "type" "system")
-        timestamp (get note-data "created_at" "") ;; ⚡ 提取创建时间
+        timestamp (get note-data "created_at" "") ;; ⚡ Extract created_at
         
-        ;; ⚡ 核心补全：提取后端返回的评论、提及正文或被操作的原帖内容摘要
+        ;; ⚡ Extract comment, mention body, or original-post snippet from the backend
         preview-text (get note-data "content" "")
         has-preview? (and (#{"mention" "quote" "repost" "like"} note-type) 
                           (not (str/blank? preview-text)))
@@ -99,7 +99,7 @@
         [(smart-avatar/smart-avatar ctx (get actor "id") (get actor "avatar_url") :size 40.0)
          (m/SizedBox .height 16.0)
          
-         ;; 1. 通知动作行为描述
+         ;; 1. Notification action description
          (mgl/MongolText (str actor-name " " message)
                          .maxLines 2
                          .overflow m/TextOverflow.ellipsis
@@ -108,7 +108,7 @@
                                              .fontWeight m/FontWeight.bold
                                              .color theme/text-primary))
          
-         ;; 2. 若存在转发正文、引用评论或提及内容，渲染轻量预览气泡
+         ;; 2. If there is a repost body, quoted comment, or mention, render a light preview bubble
          (if has-preview?
            (m/Padding
             .padding (m/EdgeInsets.only .top 12.0)
@@ -131,7 +131,7 @@
          
          (m/SizedBox .height 12.0)
          
-         ;; 3. 时间戳
+         ;; 3. Timestamp
          (mgl/MongolText (format-note-time timestamp)
                          .style (m/TextStyle .fontFamily "OyunQaganTig" 
                                              .fontSize 12.0 
@@ -147,7 +147,7 @@
   (let [!notifications (atom [])
         !loading? (atom true)
         
-        ;; ⚡ 分页核心状态
+        ;; ⚡ Pagination state
         !page (atom 1)
         !has-more? (atom true)
         !loading-more? (atom false)]
@@ -155,12 +155,12 @@
     (f/widget
      :context ctx
      
-     ;; ⚡ 初始化 ScrollController 并绑定滚动触顶监听
+     ;; ⚡ Init ScrollController and listen for near-end scroll
      :managed [scroll-ctrl (let [sc (m/ScrollController.)]
                              (.addListener sc 
                                            (fn []
                                              (let [pos (.-position sc)]
-                                               ;; 当滑动到距离末尾仅剩 200 像素时，触发下一页预加载
+                                               ;; Prefetch the next page when within 200 px of the end
                                                (when (and (>= (.-pixels pos) (- (.-maxScrollExtent pos) 200.0))
                                                           (not @!loading-more?)
                                                           @!has-more?)
@@ -174,14 +174,14 @@
      
      (pft/PostFrameTrigger
       .onLayout (fn []
-                  ;; 1. 发起 HTTP 异步请求获取通知 (⚠️ 注意：控制层需更新入参支持分页)
+                  ;; 1. Fetch notifications over HTTP (controller must accept pagination args)
                   (-> (note-ctrl/load-notifications! ctx !notifications !page !has-more? !loading? true)
                       (.then (fn [_]
-                               ;; 2. 成功拿到列表数据后，瞬间执行全部已读（归零全局Atom并异步同步后端）
+                               ;; 2. On success, mark all as read (zero the global atom and sync the backend)
                                (note-ctrl/mark-all-read!)))))
       .child
       
-      ;; 核心替换：使用全新的 app-scaffold 彻底接管全局 Bottom Navigation Bar
+      ;; Core swap: app-scaffold fully owns the global Bottom Navigation Bar
       (scaffold/app-scaffold
        ctx "/notifications/view"
        (m/Scaffold
@@ -191,7 +191,7 @@
         (m/AppBar
          .backgroundColor m/Colors.white
          .elevation 0.5
-         ;; 作为底部导肮顶级 Tab，取消后退按钮
+         ;; Top-level bottom-nav tab: no back button
          .automaticallyImplyLeading false
          .title (m/Text "Мэдэгдэл" ;; "Notifications"
                         .style (m/TextStyle .fontFamily "OyunQaganTig" 
@@ -206,18 +206,18 @@
             (m/Center .child (mgl/MongolText "Мэдэгдэл хоосон байна." .style (m/TextStyle .fontFamily "OyunQaganTig" .color theme/text-secondary)))
             
             (m/ListView.builder
-             .controller scroll-ctrl ;; ⚡ 绑定滚动控制器
+             .controller scroll-ctrl ;; ⚡ Bind the scroll controller
              .scrollDirection m/Axis.horizontal
-             ;; 强制物理效果，即使数据很少也能滑动
+             ;; Force scroll physics even when there is little data
              .physics (m/AlwaysScrollableScrollPhysics. .parent (m/BouncingScrollPhysics.))
              .padding (m/EdgeInsets.symmetric .horizontal 16.0)
              
-             ;; ⚡ 预留一个位置给加载菊花图
+             ;; ⚡ Reserve a slot for the loading spinner
              .itemCount (if has-more? (inc (count notifications)) (count notifications))
              
              .itemBuilder 
              (fn [_ i] 
-               ;; ⚡ 当渲染到最后一个假索引时，显示加载圈
+               ;; ⚡ Show a spinner when rendering the extra sentinel index
                (if (= i (count notifications))
                  (m/Padding 
                   .padding (m/EdgeInsets.only .right 24.0 .left 24.0)

@@ -78,7 +78,7 @@
                       "")
         resolved-audio-url (media/absolute-media-url audio-url)
         
-        ;; ⚡ 安全提取初始秒数，用于静态高度计算
+        ;; ⚡ Safely extract initial seconds for static height
         raw-duration (get message-data "media_duration" (get-in message-data ["media" "duration"] 1.0))
         initial-duration (if (number? raw-duration) raw-duration 1.0)
         
@@ -145,7 +145,7 @@
                             (max 0.0 (min 1.0 (/ pos-ms dur-ms)))
                             0.0)
            
-           ;; ⚡ 动态高度算法：基础高度 130 + (最多 60 秒的比例 * 180) => 总高度在 130px ~ 310px 之间
+           ;; ⚡ Dynamic height: 130 + (up to 60s ratio * 180) => 130px–310px
            duration-ratio (max 0.0 (min 1.0 (/ initial-duration 60.0)))
            bubble-height (+ 130.0 (* duration-ratio 180.0))
            
@@ -252,7 +252,7 @@
                ;; Middle: ⚡ Vertical Progress Slider
                (m/Expanded
                 .child (m/RotatedBox
-                        ;; 顺时针旋转3个90度(270度)，使原始水平Slider的0点在底部，Max在顶部
+                        ;; Rotate 270° clockwise so the horizontal Slider's 0 is at the bottom and Max at the top
                         .quarterTurns 3 
                         .child (m/SliderTheme
                                 .data (m/SliderThemeData.

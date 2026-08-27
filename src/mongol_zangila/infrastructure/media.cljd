@@ -155,7 +155,7 @@
                                   (when-not (str/blank? url)
                                     (on-send-voice! url duration)))
                                 
-                                ;; ⚡ 核心修复 1：上传成功后，立刻物理清理本地临时文件
+                                ;; ⚡ Core fix 1: delete the local temp file immediately after a successful upload
                                 (try
                                   (let [temp-file (io/File. path)]
                                     (when (.existsSync temp-file)
@@ -168,7 +168,7 @@
                        (.catchError (fn [err]
                                       (toast/error ctx (str "Audio upload failed: " err))
                                       
-                                      ;; ⚡ 核心修复 2：即使上传彻底失败，本地文件也不需要了，顺手清理
+                                      ;; ⚡ Core fix 2: even on total upload failure, the local file is unused — delete it
                                       (try
                                         (let [temp-file (io/File. path)]
                                           (when (.existsSync temp-file)
@@ -177,7 +177,7 @@
                                         (catch dc/Exception e
                                           (dc/print (str "🔴 Failed to delete temp voice file: " e))))
                                       
-                                      ;; 重新抛出异常，让 Composer 捕获以关闭上传转圈动画
+                                      ;; Re-throw so Composer can catch it and stop the upload spinner
                                       (throw err)))))))
         (.catchError (fn [err]
                        (toast/error ctx (str "Failed to stop recording: " err))

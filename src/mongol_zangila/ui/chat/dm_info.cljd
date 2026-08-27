@@ -14,7 +14,7 @@
    
    ;; System Infrastructure
    [mongol-zangila.infrastructure.api :as api]
-   [mongol-zangila.controllers.profile-ctrl :as profile-ctrl] ;; ⚡ 引入统一的拉黑控制器
+   [mongol-zangila.controllers.profile-ctrl :as profile-ctrl] ;; ⚡ Import the shared block controller
    
    ;; UI & Shared Components
    [mongol-zangila.ui.theme :as theme]
@@ -64,7 +64,7 @@
   [ctx partner-id partner-name]
   (profile-ctrl/block-user! ctx partner-id partner-name 
                             (fn []
-                              ;; 连续弹出两次路由，退出 dm-info 和底下的 dm-screen，直接回到 inbox
+                              ;; Pop twice to leave dm-info and the dm screen underneath, back to inbox
                               (nav/pop! ctx) 
                               (nav/pop! ctx))))
 
@@ -205,7 +205,7 @@
                bio (get profile-data "bio" "")]
            
            (m/ListView
-            ;; ⚡ 从左至右横向滑动
+            ;; ⚡ Horizontal scroll left-to-right
             .scrollDirection m/Axis.horizontal
             .physics (m/BouncingScrollPhysics.)
             .children
@@ -259,7 +259,7 @@
                                     "Профайл" ;; "Profile"
                                     #(nav/push! ctx "/profile/view" {:user-id partner-id}))
                 
-                ;; ⚡ Toast 占位：搜索消息
+                ;; ⚡ Toast placeholder: search messages
                 (action-icon-button m/Icons.search_rounded 
                                     "Хайх" ;; "Search"
                                     #(toast/info ctx "Зурвасаас хайх"))
@@ -274,13 +274,13 @@
              ;; 3. Shared Resources Section
              (section-header "Мэдээлэл") ;; "Information"
              
-             ;; ⚡ Toast 占位：图片、视频
+             ;; ⚡ Toast placeholder: photos, videos
              (vertical-list-tile m/Icons.photo_library_outlined 
                                  "Зураг, бичлэг" ;; "Photos, videos"
                                  "24 файл"
                                  #(toast/info ctx "Медиа үзэх"))
                                  
-             ;; ⚡ Toast 占位：文件、链接
+             ;; ⚡ Toast placeholder: files, links
              (vertical-list-tile m/Icons.insert_drive_file_outlined 
                                  "Файл, линк" ;; "Files, links"
                                  nil
@@ -296,7 +296,7 @@
                                  "Мэдэгдэл хаах" ;; "Mute notifications"
                                  nil
                                  nil
-                                 ;; 使用 RotatedBox 将 Switch 旋转 90 度以贴合竖向流动
+                                 ;; Rotate the Switch 90° with RotatedBox to match vertical flow
                                  :trailing (m/RotatedBox
                                             .quarterTurns 1
                                             .child (m/Switch 
@@ -310,7 +310,7 @@
                                  #(block-user! ctx partner-id display-name) 
                                  :color theme/error-red)
              
-             ;; ⚡ Toast 占位：举报功能
+             ;; ⚡ Toast placeholder: report
              (vertical-list-tile m/Icons.flag_outlined 
                                  "Репорт хийх" ;; "Report"
                                  nil

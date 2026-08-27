@@ -30,7 +30,7 @@
    [mongol-zangila.ui.widgets.tag-search :as tag-search]))
 
 ;; =============================================================================
-;; 1. ⚡ 全局状态声明 (模仿 Sandbox 确保状态不被 Flutter 刷新机制重置)
+;; 1. ⚡ Global state (sandbox-style so Flutter rebuilds do not reset it)
 ;; =============================================================================
 
 (defonce !compose-editor-state (simple-editor/init-simple-state))
@@ -173,7 +173,7 @@
   (f/widget
    :context ctx
    
-   ;; ⚡ 生命周期托管
+   ;; ⚡ Lifecycle management
    :managed [lifecycle-init 
              (let [c-len (count (or initial-content ""))]
                (reset! !compose-saved? false)
@@ -265,7 +265,7 @@
       (simple-editor/simple-editor
        !compose-editor-state
 
-       ;; rich-editor 读取 :block-style（非 :block-styles），覆盖默认白色字体
+       ;; rich-editor reads :block-style (not :block-styles) to override the default white text
        :editor-config
        {:block-style
         {:paragraph (m/TextStyle .fontFamily "OyunQaganTig" .color theme/text-primary .fontSize 16.0)

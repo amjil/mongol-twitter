@@ -23,7 +23,7 @@
                    (reset! !notifications new-notes)
                    (swap! !notifications #(vec (concat % new-notes))))
                  
-                 ;; 假设后端默认每页返回 20 条，如果少于 20 条说明触底了
+                 ;; Assume the backend returns 20 per page; fewer than 20 means we hit the end
                  (if (< (count new-notes) 20) 
                    (reset! !has-more? false)
                    (swap! !page inc))
@@ -31,7 +31,7 @@
                  (reset! !loading-state? false))))
       (.catchError (fn [err]
                      (reset! !loading-state? false)
-                     ;; ⚡ 补回了原来的 Toast 错误提示
+                     ;; ⚡ Restore the original error Toast
                      (toast/error ctx (str "Мэдэгдэл татахад алдаа гарлаа: " err) :fade)))))
 
 (defn mark-all-read!

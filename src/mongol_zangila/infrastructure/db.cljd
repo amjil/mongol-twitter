@@ -164,8 +164,8 @@
                    (let [c (if content content "")
                          mj (convert/jsonEncode (or media-urls []))
                          ej (convert/jsonEncode (or entities []))
-                         ;; .content / .mediaJson 是必填项 -> 传原生 String
-                         ;; 其余 nullable 字段 -> 用 d/Value 包装
+                         ;; .content / .mediaJson are required -> pass a native String
+                         ;; Remaining nullable fields -> wrap with d/Value
                          companion (drift/DraftsCompanion.insert
                                     .content c
                                     .idempotencyKey (if (empty? idempotency-key) (d/Value nil) (d/Value. ^String idempotency-key))

@@ -107,7 +107,7 @@
     
     (when on-mutate
       (on-mutate (fn [p]
-                   ;; ⚡ 核心修复：(into {} p) 将 Dart Map 转换为 Clojure Map 以支持 assoc
+                   ;; ⚡ Core fix: (into {} p) converts a Dart Map to a Clojure map so assoc works
                    (-> (into {} p)
                        (assoc "is_liked_by_me" (not currently-liked?))
                        (assoc "like_count" (if currently-liked? (max 0 (dec original-count)) (inc original-count)))))))
@@ -135,7 +135,7 @@
     
     (when on-mutate
       (on-mutate (fn [p]
-                   ;; ⚡ 核心修复：(into {} p)
+                   ;; ⚡ Core fix: (into {} p)
                    (-> (into {} p)
                        (assoc "is_reposted_by_me" (not currently-reposted?))
                        (assoc "repost_count" (if currently-reposted? (max 0 (dec original-count)) (inc original-count)))))))
@@ -161,7 +161,7 @@
         payload {"action" action "idempotency_key" idk}]
 
     (when on-mutate
-      ;; ⚡ 核心修复：(into {} p)
+      ;; ⚡ Core fix: (into {} p)
       (on-mutate (fn [p] (assoc (into {} p) "is_bookmarked_by_me" (not currently-bookmarked?)))))
     (when on-change (on-change (not currently-bookmarked?)))
 

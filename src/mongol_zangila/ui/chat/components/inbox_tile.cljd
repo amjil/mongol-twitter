@@ -66,7 +66,7 @@
         has-unread? (> unread-count 0)]
     
     (m/Container
-     ;; ⚡ 核心适配 1：移除定宽，宽度由内容自然撑开 (Wrap Content)
+     ;; ⚡ Adapt 1: drop a fixed width; let content wrap
      .margin (m/EdgeInsets.only .top 16.0 .bottom 16.0)
      .decoration (m/BoxDecoration
                   .color (if has-unread? m/Colors.white theme/bg-color)
@@ -94,17 +94,17 @@
       (m/Padding
        .padding (m/EdgeInsets.all 16.0)
        .child
-       ;; ⚡ 核心适配 2：全局使用 Column 垂直排布，头像在顶，下面挂载横向流
+       ;; ⚡ Adapt 2: Column layout — avatar on top, LTR flow below
        (m/Column
         .crossAxisAlignment m/CrossAxisAlignment.start
         .children
         [
-         ;; --- 顶部：头像 (Avatar at the very top) ---
+         ;; --- Top: avatar ---
          (smart-avatar/smart-avatar ctx (get partner "id" thread-id) avatar-url :size 48.0)
          
          (m/SizedBox .height 16.0)
          
-         ;; --- 下方：动态横向信息流 (Dynamic LTR Flow) ---
+         ;; --- Below: dynamic LTR info flow ---
          (m/Expanded
           .child
           (m/Row
@@ -123,7 +123,7 @@
             (m/Container .width 0.5 .color theme/border-color)
             (m/SizedBox .width 12.0)
 
-            ;; 2. Last Message Pillar (⚡ 核心适配 3：去掉 Expanded，宽度随字数自然增长)
+            ;; 2. Last Message Pillar (⚡ Adapt 3: drop Expanded; width grows with text)
             (mgl/MongolText (if (str/blank? last-msg) "Зурвас илгээх..." last-msg)
                             .style (m/TextStyle .fontFamily "OyunQaganTig"
                                                 .fontSize 14.0
@@ -133,7 +133,7 @@
                                                          (str/blank? last-msg) theme/text-secondary
                                                          has-unread? theme/text-primary
                                                          :else theme/text-secondary))
-                            ;; 依然保留最大行数保护，防止几千字的小作文无限往右撑爆屏幕
+                            ;; Keep a max-line cap so a huge message cannot stretch the screen infinitely
                             .maxLines 3
                             .overflow m/TextOverflow.ellipsis)
 

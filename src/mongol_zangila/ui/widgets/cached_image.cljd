@@ -5,7 +5,7 @@
   (:require
    ["package:flutter/material.dart" :as m]
    ["package:cached_network_image/cached_network_image.dart" :as cni]
-   ["package:flutter_cache_manager/flutter_cache_manager.dart" :as fcm] ;; ⚡ 引入缓存管理器
+   ["package:flutter_cache_manager/flutter_cache_manager.dart" :as fcm] ;; ⚡ Import the cache manager
    ["dart:core" :as dc]
    [cljd.flutter :as f]
    [clojure.string :as str]
@@ -17,8 +17,8 @@
 ;; 1. Singleton Cache Manager (The LRU Disk Sandbox)
 ;; =============================================================================
 
-;; ⚡ 物理级别的缓存隔离池：最高 1000 张图，最长存活 7 天
-;; 超过阈值会自动清理最旧图片，防止 App 长期使用后占用几十GB存储
+;; ⚡ Isolated cache pool: up to 1000 images, 7-day max age
+;; Oldest images are evicted past the cap so the app cannot grow to tens of GB
 (defonce global-media-cache
   (fcm/CacheManager.
    (fcm/Config. "zangila_media_cache"
@@ -69,29 +69,29 @@
         .height height 
         .child (or error-widget (default-error-widget)))
        
-       ;; ⚡ 拦截 Context 以进行屏幕像素密度的计算
+       ;; ⚡ Capture Context to compute screen pixel density
        (f/widget
         :context ctx
         (let [mq (m/MediaQuery.of ctx)
               dpr (.-devicePixelRatio mq)
               screen-w (.-width (.-size mq))
               
-              ;; ⚡ 防御 infinity: 如果外部传入无限大 (如瀑布流撑满父级)，使用屏幕宽度作为硬性压制边界
+              ;; ⚡ Guard infinity: if the parent is unbounded (e.g. a full-bleed waterfall), cap at screen width
               safe-w (if (or (nil? width) (= width double/infinity)) screen-w width)
               safe-h (if (or (nil? height) (= height double/infinity)) screen-w height)
               
-              ;; 换算成 Skia/Impeller 引擎底层解码所需的精确物理像素 (整数)
+              ;; Convert to the exact physical pixels (int) Skia/Impeller needs for decode
               mem-w (int (* safe-w dpr))
               mem-h (int (* safe-h dpr))]
           
           (cni/CachedNetworkImage.
            .imageUrl url
-           .cacheManager global-media-cache  ;; ⚡ 挂载全局沙箱
+           .cacheManager global-media-cache  ;; ⚡ Attach the global cache sandbox
            .width width
            .height height
            .fit fit
            
-           ;; ⚡ THE MAGIC: 强行命令 C++ 解码器在此分辨率截断！节省海量 RAM
+           ;; ⚡ THE MAGIC: force the C++ decoder to stop at this resolution and save RAM
            .memCacheWidth mem-w
            .memCacheHeight mem-h
            

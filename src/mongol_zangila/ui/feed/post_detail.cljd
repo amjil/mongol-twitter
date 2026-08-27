@@ -160,7 +160,7 @@
                     .child (post-card/post-card 
                             ctx reply-data 
                             :is-reply true
-                            ;; ⚡ 核心改动：把主帖的 ID 传给所有的评论卡片
+                            ;; ⚡ Core change: pass the parent post id to every comment card
                             :root-post-id post-id
                             :on-mutate (fn [mutator]
                                          (swap! !replies (fn [rs]

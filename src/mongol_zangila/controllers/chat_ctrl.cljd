@@ -237,18 +237,18 @@
 
 (defn dispatch-message!
   "Sends a DM thread message with rich entities support. Caches to DB immediately upon server confirmation."
-  [ctx thread-id content entities !messages] ;; ⚡ 增加了 entities 入参
+  [ctx thread-id content entities !messages] ;; ⚡ Added entities parameter
   (let [temp-id (str "temp-" (.-millisecondsSinceEpoch (dc/DateTime.now)))
         idk (str temp-id "-" (.nextInt (math/Random.) 1000000))
-        ;; 乐观 UI 气泡：直接注入 entities，这样自己发出去的瞬间 @ 和 # 就能高亮可点
+        ;; Optimistic UI bubble: inject entities immediately so @ and # are highlighted and tappable on send
         temp-msg {"id" temp-id "thread_id" thread-id "sender_id" "self"
-                  "type" "text" "content" content "entities" entities ;; ⚡ 注入本地乐观锁
+                  "type" "text" "content" content "entities" entities ;; ⚡ Inject local optimistic entities
                   "created_at" (.toIso8601String (dc/DateTime.now))
                   "status" "sending"}
         api-path (str "/chat/threads/" thread-id "/messages")
         topic (thread-topic thread-id)
         is-offline? (= @state/network-status :offline)
-        ;; 传输 Payload：将实体数组上报给 Elixir / Phoenix 后端
+        ;; Transport payload: send the entity array to the Elixir / Phoenix backend
         api-payload {"content" content "type" "text" "entities" entities "idempotency_key" idk}]
     
     (swap! !messages #(into [(assoc temp-msg "status" (if is-offline? "queued" "sending"))] %))
@@ -271,11 +271,11 @@
 
 (defn dispatch-group-message!
   "Sends a Group message with rich entities support. Caches to DB immediately upon server confirmation."
-  [ctx group-id content entities !messages current-user] ;; ⚡ 增加了 entities 入参
+  [ctx group-id content entities !messages current-user] ;; ⚡ Added entities parameter
   (let [temp-id (str "temp-" (.-millisecondsSinceEpoch (dc/DateTime.now)))
         idk (str temp-id "-" (.nextInt (math/Random.) 1000000))
         temp-msg {"id" temp-id "group_id" group-id "sender_id" (get current-user "id")
-                  "sender" current-user "type" "text" "content" content "entities" entities ;; ⚡ 注入本地乐观锁
+                  "sender" current-user "type" "text" "content" content "entities" entities ;; ⚡ Inject local optimistic entities
                   "created_at" (.toIso8601String (dc/DateTime.now))
                   "status" "sending"}
         api-path (str "/chat/groups/" group-id "/messages")
@@ -441,19 +441,54 @@
 ;; 7. Pagination
 ;; =============================================================================
 
+(defn- topic->messages-path [topic]
+  (cond
+    (str/starts-with? topic "thread:") (str "/chat/threads/" (subs topic 7) "/messages")
+    (str/starts-with? topic "group:") (str "/chat/groups/" (subs topic 6) "/messages")
+    :else nil))
+
+(defn- oldest-server-message-id [messages]
+  (->> messages
+       reverse
+       (map #(get % "id"))
+       (remove #(or (nil? %) (str/starts-with? (str %) "temp-")))
+       first))
+
 (defn load-older-messages!
-  "Fetches the next page of historical messages from local Drift DB."
-  [ctx thread-id current-offset !messages !has-more?]
-  (let [limit 50]
-    (-> (db/fetch-thread-messages thread-id limit current-offset)
-        (.then (fn [older-msgs]
-                 (if (empty? older-msgs)
-                   (reset! !has-more? false)
-                   (do
-                     ;; Append older messages to the end of the list (top of UI due to reverse=true)
-                     (swap! !messages #(vec (concat % older-msgs)))
-                     ;; If the DB returned fewer rows than requested, we've hit the end of history
-                     (when (< (count older-msgs) limit)
-                       (reset! !has-more? false))))))
-        (.catchError (fn [err]
-                       (dc/print (str "Failed to load older messages: " err)))))))
+  "Fetches the next page of historical messages from the server, falling back to local Drift."
+  [ctx topic current-offset !messages !has-more?]
+  (let [limit 50
+        api-path (topic->messages-path topic)
+        before-id (oldest-server-message-id @!messages)
+        apply-page! (fn [older-msgs]
+                      (if (empty? older-msgs)
+                        (reset! !has-more? false)
+                        (do
+                          (db/save-messages! topic older-msgs)
+                          (swap! !messages
+                                 (fn [msgs]
+                                   (let [existing (set (map #(get % "id") msgs))
+                                         fresh (->> older-msgs
+                                                    (remove #(contains? existing (get % "id")))
+                                                    (map clj-map))]
+                                     (vec (concat msgs fresh)))))
+                          (when (< (count older-msgs) limit)
+                            (reset! !has-more? false)))))]
+    (cond
+      (nil? before-id)
+      (do (reset! !has-more? false)
+          (dc/Future.value nil))
+
+      (and api-path (not= @state/network-status :offline))
+      (-> (api/get-req (str api-path "?before=" before-id "&limit=" limit))
+          (.then (fn [res] (apply-page! (get res "data" []))))
+          (.catchError (fn [err]
+                         (dc/print (str "Failed to load older messages: " err))
+                         (-> (db/fetch-thread-messages topic limit current-offset)
+                             (.then apply-page!)))))
+
+      :else
+      (-> (db/fetch-thread-messages topic limit current-offset)
+          (.then apply-page!)
+          (.catchError (fn [err]
+                         (dc/print (str "Failed to load older messages: " err))))))))

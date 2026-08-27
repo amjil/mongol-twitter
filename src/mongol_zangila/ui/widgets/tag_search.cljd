@@ -53,7 +53,7 @@
   (let [!raw-results (atom [])
         !loading? (atom false)
         !search-type (atom :user)
-        ;; 移动端虚拟键盘只更新 TextEditingController，不同步 rich-editor block content
+        ;; The mobile virtual keyboard only updates TextEditingController; it does not sync rich-editor block content
         !query (atom "")
         
         do-search! 

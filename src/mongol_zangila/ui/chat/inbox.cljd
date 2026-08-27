@@ -16,14 +16,14 @@
    
    ;; System Controllers & State
    [mongol-zangila.state :as state] 
-   [mongol-zangila.infrastructure.db :as db] ;; ⚡ 引入本地离线过滤库
+   [mongol-zangila.infrastructure.db :as db] ;; ⚡ Import local offline filter store
    [mongol-zangila.controllers.chat-ctrl :as chat-ctrl]
 
    ;; Shared UI Components
    [mongol-zangila.ui.theme :as theme]
    [mongol-zangila.utils.nav :as nav]
    [mongol-zangila.ui.widgets.empty-state :as empty-state]
-   [mongol-zangila.ui.layout.scaffold :as scaffold] ;; ⚡ 全局布局
+   [mongol-zangila.ui.layout.scaffold :as scaffold] ;; ⚡ Global layout
    
    ;; Unified tile component that handles DM/Group routing
    [mongol-zangila.ui.chat.components.inbox-tile :as inbox-tile]
@@ -73,7 +73,7 @@
   "The primary viewport for direct messaging conversations."
   []
   (let [!chats (atom [])
-        !blocked-ids (atom #{}) ;; ⚡ 核心屏蔽集合
+        !blocked-ids (atom #{}) ;; ⚡ Core blocklist set
         !initial-loading? (atom true)
         !refresh-loading? (atom false)
         
@@ -104,7 +104,7 @@
                   (chat-ctrl/load-inbox! ctx !chats !initial-loading? true)
                   (chat-ctrl/bind-inbox-realtime! !chats current-user-id !realtime-cb)
                   
-                  ;; ⚡ 异步加载本地 SQLite 黑名单
+                  ;; ⚡ Load local SQLite blocklist asynchronously
                   (-> (db/get-blocked-user-ids)
                       (.then (fn [ids] (reset! !blocked-ids ids)))))
       .child
@@ -127,26 +127,26 @@
                                             .color theme/text-primary))
          .actions [(m/IconButton
                     .icon (m/Icon m/Icons.add_comment_rounded .color theme/brand-blue)
-                    .onPressed #(show-new-chat-options! ctx))]) ;; ⚡ 唤起 Action Sheet
+                    .onPressed #(show-new-chat-options! ctx))]) ;; ⚡ Show Action Sheet
 
         ;; --- Main Body: Horizontal Pull-to-Refresh Chat List ---
         .body
         (if init-loading?
           (m/Center .child (m/CircularProgressIndicator .color theme/brand-blue))
 
-          ;; ⚡ 实时清洗：剥离所有与黑名单用户产生交集的会话
+          ;; ⚡ Live filter: drop threads that intersect the blocklist
           (let [visible-chats (vec (remove (fn [chat]
                                              (let [p-id (or (get chat "partner_id") (get-in chat ["partner" "id"]))]
                                                (and p-id (contains? blocked-ids p-id))))
                                            chats))]
             
             (if (empty? visible-chats)
-              ;; ⚡ 空视图的按钮也同步绑定到 Action Sheet
+              ;; ⚡ Empty-state button also opens the Action Sheet
               (empty-state/empty-chat-view ctx #(show-new-chat-options! ctx))
 
               (ptr/horizontal-refresh
                {:on-refresh (fn []
-                              ;; ⚡ 下拉刷新时也同步刷新一下黑名单以防变动
+                              ;; ⚡ Refresh the blocklist on pull-to-refresh in case it changed
                               (-> (db/get-blocked-user-ids) (.then #(reset! !blocked-ids %)))
                               (chat-ctrl/load-inbox! ctx !chats !refresh-loading? true))
 

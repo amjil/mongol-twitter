@@ -25,7 +25,7 @@
    ;; UI & Shared Components
    [mongol-zangila.ui.theme :as theme]
    [mongol-zangila.utils.nav :as nav]
-   [mongol-zangila.ui.layout.scaffold :as scaffold] ;; ⚡ 引入全新的全局布局
+   [mongol-zangila.ui.layout.scaffold :as scaffold] ;; ⚡ Import the new global layout
 
    ;; Domain Sub-components
    [mongol-zangila.ui.widgets.avatar :as smart-avatar]

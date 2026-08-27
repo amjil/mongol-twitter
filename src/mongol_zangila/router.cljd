@@ -30,7 +30,7 @@
    [mongol-zangila.ui.chat.dm-info :as dm-info]
    [mongol-zangila.ui.chat.group-info :as group-info]
    [mongol-zangila.ui.chat.admin :as chat-admin]
-   [mongol-zangila.ui.chat.create-group :as create-group] ;; ⚡ 引入建群视图
+   [mongol-zangila.ui.chat.create-group :as create-group] ;; ⚡ Import create-group view
    
    ;; 🖼 Media
    [mongol-zangila.ui.media.viewer :as media-viewer]
@@ -115,12 +115,12 @@
          (= route-name "/feed/compose")
          (compose/compose-screen args)
          
-         ;; ⚡ 动态深链匹配 (Dynamic Deep Link for Post Detail)
-         ;; 匹配类似 "/post/12345-uuid" 的路径，截取 ID 并传递
+         ;; ⚡ Dynamic deep-link match (post detail)
+         ;; Match paths like "/post/12345-uuid", extract the ID, and pass it on
          (and route-name (clojure.string/starts-with? route-name "/post/"))
          (post-detail/post-detail-screen (subs route-name 6))
          
-         ;; 内部标准跳转，Expects {:post-id "123"}
+         ;; Internal standard navigation; expects {:post-id "123"}
          (= route-name "/feed/post-detail") 
          (post-detail/post-detail-screen (get args :post-id))
          
@@ -141,7 +141,7 @@
          (= route-name "/chat/inbox") (inbox/inbox-screen)
          (= route-name "/chat/admin") (chat-admin/group-admin-screen (get args :group-id))
          
-         ;; ⚡ 新增建群路由
+         ;; ⚡ Create-group route
          (= route-name "/chat/create-group") (create-group/create-group-screen)
          
          ;; Expects {:thread-id "t1" :partner-name "Bat"}

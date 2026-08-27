@@ -34,10 +34,10 @@
    .onTap #(nav/push! ctx "/search/active")
    .child
    (m/Container
-    .width 64.0 ;; 与 active-search 的侧边栏宽度保持一致
+    .width 64.0 ;; Match the active-search sidebar width
     .padding (m/EdgeInsets.symmetric .vertical 16.0 .horizontal 12.0)
     .decoration (m/BoxDecoration 
-                 .color m/Colors.white ;; 放在偏灰的背景上使用纯白可以凸显输入框
+                 .color m/Colors.white ;; Pure white on a grayish background makes the input stand out
                  .borderRadius (m/BorderRadius.circular 24.0)
                  .border (m/Border.all .color (.withOpacity theme/border-color 0.5) .width 1.0)
                  .boxShadow [(m/BoxShadow .color (m/Color 0x0A000000) .blurRadius 8.0 .offset (m/Offset 0.0 2.0))])
@@ -135,7 +135,7 @@
             (m/Padding
              .padding (m/EdgeInsets.only .left 16.0 .right 8.0 .top 16.0 .bottom 16.0)
              .child
-             ;; ⚡ 直接使用我们刚刚手写的垂直 LTR 风格假搜索框
+             ;; ⚡ Use the hand-rolled vertical LTR fake search box
              (dummy-search-bar ctx)))
 
            (if loading?

@@ -26,15 +26,15 @@
 ;; 2. Logic: Deterministic Character Scanner (No RegExp)
 ;; =============================================================================
 
-;; ⚡ 明确的“截断符号黑名单”
-;; 注意：这里完全排除了 \u202F(NNBS) 和 \u180E(MVS)，确保蒙古文后缀绝对不断开！
+;; ⚡ Explicit delimiter blacklist
+;; Note: \u202F (NNBS) and \u180E (MVS) are excluded so Mongolian suffixes never split
 (defn- stop-char? [s]
   (contains? #{" " "\n" "\t" "\r" "\u3000" "\u00A0"
                "." "," "!" "?" ";" ":" "(" ")" "[" "]" "{" "}" "<" ">" "\"" "'" "-"
                "。" "，" "！" "？" "、" "：" "；" "（" "）" "【" "】" "《" "》" "‘" "’" "“" "”"}
              s))
 
-;; ⚡ 物理级向后扫描算法：100% 免疫正则转义缺陷
+;; ⚡ Character-level forward scan: immune to regex-escape bugs
 (defn- find-word-end [content start-idx]
   (let [c-len (count content)]
     (loop [i start-idx]
@@ -42,7 +42,7 @@
         i
         (recur (inc i))))))
 
-;; ⚡ 动态话题提取器：纯字符扫描
+;; ⚡ Hashtag extractor: pure character scan
 (defn- extract-dynamic-topics [text]
   (let [c-len (count text)]
     (loop [i 0
@@ -53,9 +53,9 @@
           (conj acc {"type" "text" "text" (subs text last-idx c-len)})
           acc)
         (if (= (subs text i (inc i)) "#")
-          ;; 发现 # 号，启动向后扫描探测
+          ;; Found #; start a forward scan
           (let [end (find-word-end text i)]
-            (if (> end (inc i)) ;; 确保不是一个孤立的 # 号
+            (if (> end (inc i)) ;; Skip a lone #
               (let [topic-text (subs text i end)
                     new-acc (if (> i last-idx)
                               (conj acc {"type" "text" "text" (subs text last-idx i)})
@@ -67,7 +67,7 @@
               (recur (inc i) acc last-idx)))
           (recur (inc i) acc last-idx))))))
 
-;; 主解析引擎
+;; Main parse engine
 (defn- parse-to-tokens [content entities]
   (let [c-len (count content)
         valid-entities (->> entities
@@ -80,7 +80,7 @@
            current-idx 0
            acc []]
       (if (empty? ents)
-        ;; 没有后端实体了，交给纯物理扫描器去抓取所有的 #话题
+        ;; No more backend entities; let the scanner pick up remaining #hashtags
         (if (< current-idx c-len)
           (into acc (extract-dynamic-topics (subs content current-idx c-len)))
           acc)
@@ -88,17 +88,17 @@
               start (max current-idx (get ent "start"))
               t-type (get ent "type")
               
-              ;; ⚡ 如果后端实体是 @提及 或 #话题，强制启动自愈扫描补全残缺的后缀
+              ;; ⚡ If the backend entity is an @mention or #hashtag, run a heal-scan to complete truncated suffixes
               safe-end (if (or (= t-type "mention") (= t-type "topic"))
                          (find-word-end content start)
                          (min c-len (max start (get ent "end"))))]
           
           (if (> start current-idx)
-            ;; 处理实体前方的纯文本空白区
+            ;; Emit the plain-text gap before the entity
             (let [plain-text (subs content current-idx start)]
               (recur ents start (into acc (extract-dynamic-topics plain-text))))
             
-            ;; 处理吸附自愈后的实体
+            ;; Emit the healed entity
             (let [raw-text (subs content start safe-end)
                   clean-name (cond 
                                (= t-type "mention") (str/replace-first raw-text #"^@" "")
