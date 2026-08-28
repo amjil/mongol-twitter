@@ -33,28 +33,34 @@
     .onLayout #(auth-ctrl/boot-application! ctx)
     .child
     (m/Scaffold
-     .backgroundColor theme/brand-blue
      .body
-     (m/Center
+     (m/Container
+      .decoration (m/BoxDecoration
+                   .gradient (m/LinearGradient
+                              .begin m/Alignment.topLeft
+                              .end m/Alignment.bottomRight
+                              .colors [theme/brand-blue theme/brand-blue-deep]))
       .child
-      ;; ⚡ Replaced Column with Row to adhere to the LTR Mongolian reading direction.
-      ;; The loading spinner now appears to the right of the vertical text.
-      (m/Row
-       .mainAxisAlignment m/MainAxisAlignment.center
-       .crossAxisAlignment m/CrossAxisAlignment.center
-       .children
-       [;; 1. Brand Logo / Typography (Vertical Mongol Text)
-        (mgl/MongolText "Монгол Зангилаа" ;; "Mongol Zangila"
-                        .style (m/TextStyle .fontFamily "OyunQaganTig"
-                                            .fontSize 36.0
-                                            .fontWeight m/FontWeight.bold
-                                            .color m/Colors.white
-                                            .letterSpacing 2.0))
-
-        ;; ⚡ Spacing adjusted for horizontal layout
-        (m/SizedBox .width 48.0)
-
-        ;; 2. Elegant Loading Indicator
-        (m/CircularProgressIndicator
-         .valueColor (m/AlwaysStoppedAnimation. m/Colors.white)
-         .strokeWidth 3.0)]))))))
+      (m/Center
+       .child
+       (m/Row
+        .mainAxisAlignment m/MainAxisAlignment.center
+        .crossAxisAlignment m/CrossAxisAlignment.center
+        .children
+        [(m/Container
+          .padding (m/EdgeInsets.all 20.0)
+          .decoration (m/BoxDecoration
+                       .color (.withOpacity m/Colors.white 0.15)
+                       .shape m/BoxShape.circle)
+          .child (m/Icon m/Icons.water_drop_rounded .color m/Colors.white .size 36.0))
+         (m/SizedBox .width 28.0)
+         (mgl/MongolText "Монгол Зангилаа"
+                         .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                             .fontSize 36.0
+                                             .fontWeight m/FontWeight.bold
+                                             .color m/Colors.white
+                                             .letterSpacing 2.0))
+         (m/SizedBox .width 48.0)
+         (m/CircularProgressIndicator
+          .valueColor (m/AlwaysStoppedAnimation. m/Colors.white)
+          .strokeWidth 3.0)])))))))

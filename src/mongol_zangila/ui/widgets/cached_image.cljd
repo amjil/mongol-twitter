@@ -33,17 +33,21 @@
   "A smooth, solid-color skeleton loader.
    ⚡ FIXED: Removed CircularProgressIndicator to eliminate frame drops during rapid scrolling."
   []
-  (m/Container .color theme/border-color))
+  (theme/themed
+   (fn [ctx]
+     (m/Container .color (theme/border ctx)))))
 
 (defn- default-error-widget 
   "A graceful degradation state when the URL is invalid or the image fails to load."
   []
-  (m/Container
-   .color m/Colors.grey.shade50
-   .child (m/Center
-           .child (m/Icon m/Icons.broken_image_rounded 
-                          .color m/Colors.grey.shade300 
-                          .size 32.0))))
+  (theme/themed
+   (fn [ctx]
+     (m/Container
+      .color (theme/surface-2 ctx)
+      .child (m/Center
+              .child (m/Icon m/Icons.broken_image_rounded
+                             .color (theme/text-2 ctx)
+                             .size 32.0))))))
 
 ;; =============================================================================
 ;; 3. The Core High-Performance Component

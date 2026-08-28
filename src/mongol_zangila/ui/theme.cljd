@@ -1,126 +1,298 @@
 (ns mongol-zangila.ui.theme
-  "Centralized design system and theme configuration.
-   Defines the visual identity, typography (OyunQaganTig), and color palette,
-   optimized for native LTR vertical Mongolian script."
+  "Tenger design system: light + dark ThemeData, semantic colors, and persistence.
+   Brand blue is the eternal sky; dark surfaces are the night sky under it."
   (:require
-   ["package:flutter/material.dart" :as m]))
+   ["package:flutter/material.dart" :as m]
+   ["package:flutter/services.dart" :as services]
+   [mongol-zangila.infrastructure.storage :as storage]))
 
 ;; =============================================================================
-;; 1. Core Color Palette (The Tenger Design System)
+;; 1. Brand & semantic constants (shared across both themes)
 ;; =============================================================================
 
-(def ^:const brand-blue 
+(def ^:const brand-blue
   "Primary brand color. Represents the eternal blue sky (Tenger)."
   (m/Color 0xFF1D9BF0))
 
-(def ^:const bg-color 
-  "Default background color for scaffolds and major viewports."
-  (m/Color 0xFFF7F9FA))
+(def ^:const brand-blue-deep
+  "Deeper sky blue for gradients and pressed states."
+  (m/Color 0xFF0C7BC7))
 
-(def ^:const text-primary 
-  "High-contrast text color for primary headings and body copy."
-  (m/Color 0xFF0F1419))
-
-(def ^:const text-secondary 
-  "Low-contrast text color for metadata, timestamps, and subtitles."
-  (m/Color 0xFF536471))
-
-(def ^:const border-color 
-  "Subtle gray used for dividers, card borders, and input outlines."
-  (m/Color 0xFFEFF3F4))
-
-(def ^:const error-red 
-  "Semantic color for destructive actions, errors, and validation warnings."
+(def ^:const error-red
   (m/Color 0xFFF4212E))
 
-(def ^:const success-green 
-  "Semantic color for confirmations, active states, and success toasts."
+(def ^:const success-green
   (m/Color 0xFF00BA7C))
 
 (def ^:const warning-yellow
-  "Semantic color for warnings, pending states, and non-critical alerts."
   (m/Color 0xFFFFAD1F))
 
+(def ^:const on-brand
+  "Text/icons sitting on brand-blue surfaces."
+  m/Colors.white)
+
+(def ^:const font-family "OyunQaganTig")
+
+(def ^:const radius-sm 12.0)
+(def ^:const radius-md 16.0)
+(def ^:const radius-lg 20.0)
+(def ^:const radius-pill 24.0)
+
 ;; =============================================================================
-;; 2. Global ThemeData Configuration
+;; 2. Light & dark palettes
 ;; =============================================================================
 
-(def app-theme
-  "The global ThemeData object injected into the root MaterialApp."
-  (m/ThemeData
+(def light-palette
+  {:bg          (m/Color 0xFFF3F6F9)
+   :surface     (m/Color 0xFFFFFFFF)
+   :surface-2   (m/Color 0xFFEEF2F6)
+   :text        (m/Color 0xFF0F1419)
+   :text-2      (m/Color 0xFF5B6B7A)
+   :border      (m/Color 0xFFE3E9EF)
+   :input-fill  (m/Color 0xFFF3F6F9)
+   :bubble-them (m/Color 0xFFFFFFFF)
+   :nav         (m/Color 0xFFFBFCFD)
+   :shadow      (m/Color 0x140F1419)
+   :overlay     (m/Color 0x59000000)
+   :brand       brand-blue
+   :brand-soft  (m/Color 0x1F1D9BF0)
+   :error       error-red
+   :success     success-green
+   :warning     warning-yellow
+   :on-brand    on-brand})
 
-   ;; All descendant Text widgets will default to this unless explicitly overridden.
-   .fontFamily "OyunQaganTig"
+(def dark-palette
+  {:bg          (m/Color 0xFF0B1219)
+   :surface     (m/Color 0xFF151C24)
+   :surface-2   (m/Color 0xFF1C2530)
+   :text        (m/Color 0xFFE8EEF4)
+   :text-2      (m/Color 0xFF8B9AAB)
+   :border      (m/Color 0xFF2A3542)
+   :input-fill  (m/Color 0xFF1C2530)
+   :bubble-them (m/Color 0xFF1C2530)
+   :nav         (m/Color 0xFF101820)
+   :shadow      (m/Color 0x66000000)
+   :overlay     (m/Color 0x99000000)
+   :brand       brand-blue
+   :brand-soft  (m/Color 0x331D9BF0)
+   :error       (m/Color 0xFFFF4D56)
+   :success     (m/Color 0xFF1AD68A)
+   :warning     warning-yellow
+   :on-brand    on-brand})
 
-   .primaryColor brand-blue
+;; =============================================================================
+;; 3. Theme mode (system / light / dark) — persisted
+;; =============================================================================
 
+(defonce !mode
+  ^{:doc "User preference. Values: :system, :light, :dark."}
+  (atom :system))
 
-   .scaffoldBackgroundColor bg-color
+(defn- mode-keyword [v]
+  (let [k (cond
+            (keyword? v) v
+            (string? v) (keyword v)
+            :else :system)]
+    (if (contains? #{:system :light :dark} k) k :system)))
 
-   ;; Maps the custom palette to Material 3 semantics
-   .colorScheme (m/ColorScheme.light
-                 .primary brand-blue
-                 .secondary brand-blue
-                 .surface m/Colors.white
-                 .error error-red
-                 .onPrimary m/Colors.white
-                 .onSurface text-primary)
+(defn load-mode!
+  "Hydrates !mode from SharedPreferences. Safe to call during app init."
+  []
+  (-> (storage/get-setting "theme_mode" "system")
+      (.then (fn [v] (reset! !mode (mode-keyword v))))))
 
-   ;; --- Global Component Overrides ---
+(defn set-mode!
+  "Updates the in-memory mode and persists it."
+  [mode]
+  (let [k (mode-keyword mode)]
+    (reset! !mode k)
+    (storage/save-setting! "theme_mode" (name k))))
 
-   .appBarTheme (m/AppBarTheme
-                 .backgroundColor m/Colors.white
-                 .foregroundColor text-primary
-                 .elevation 0.0
-                 .centerTitle true
-                 .iconTheme (m/IconThemeData .color text-primary)
-                 .titleTextStyle (m/TextStyle
-                                  .fontFamily "OyunQaganTig"
-                                  .fontSize 18.0
-                                  .fontWeight m/FontWeight.bold ;; ⚡ Standardized enum syntax
-                                  .color text-primary))
+(defn theme-mode-enum
+  [mode]
+  (case (mode-keyword mode)
+    :light m/ThemeMode.light
+    :dark  m/ThemeMode.dark
+    m/ThemeMode.system))
 
-   .elevatedButtonTheme (m/ElevatedButtonThemeData
-                         .style (m/ElevatedButton.styleFrom
+;; =============================================================================
+;; 4. Context-aware palette (Theme.of registers a rebuild dependency)
+;; =============================================================================
+
+(defn dark?
+  [ctx]
+  (= (.-brightness (m/Theme.of ctx)) m/Brightness.dark))
+
+(defn of
+  "Semantic colors for the active Material brightness.
+   Call during build so the widget rebuilds on theme changes."
+  [ctx]
+  (if (dark? ctx) dark-palette light-palette))
+
+(defn bg [ctx] (:bg (of ctx)))
+(defn surface [ctx] (:surface (of ctx)))
+(defn surface-2 [ctx] (:surface-2 (of ctx)))
+(defn text [ctx] (:text (of ctx)))
+(defn text-2 [ctx] (:text-2 (of ctx)))
+(defn border [ctx] (:border (of ctx)))
+(defn input-fill [ctx] (:input-fill (of ctx)))
+(defn bubble-them [ctx] (:bubble-them (of ctx)))
+(defn nav-bar [ctx] (:nav (of ctx)))
+(defn brand-soft [ctx] (:brand-soft (of ctx)))
+(defn overlay [ctx] (:overlay (of ctx)))
+
+(defn card-shadow
+  [ctx]
+  (if (dark? ctx)
+    [(m/BoxShadow .color (:shadow dark-palette) .blurRadius 12.0 .offset (m/Offset 0.0 2.0))]
+    [(m/BoxShadow .color (:shadow light-palette) .blurRadius 18.0 .offset (m/Offset 0.0 6.0) .spreadRadius -4.0)]))
+
+(defn hairline
+  [ctx]
+  (m/BorderSide .color (border ctx) .width 1.0))
+
+(defn sheet-shape []
+  (m/RoundedRectangleBorder
+   .borderRadius (m/BorderRadius.vertical .top (m/Radius.circular radius-lg))))
+
+(defn type-style
+  "OyunQaganTig text style with optional weight and color."
+  [size color & {:keys [weight]}]
+  (m/TextStyle
+   .fontFamily font-family
+   .fontSize size
+   .fontWeight (or weight m/FontWeight.normal)
+   .color color))
+
+(defn themed
+  "Gives helpers a Theme-bound BuildContext without threading ctx through every call site."
+  [builder]
+  (m/Builder .builder builder))
+
+;; =============================================================================
+;; 5. ThemeData builders
+;; =============================================================================
+
+(defn- build-theme
+  [brightness palette]
+  (let [is-dark? (= brightness m/Brightness.dark)
+        bg (:bg palette)
+        surface (:surface palette)
+        text (:text palette)
+        text-2 (:text-2 palette)
+        border (:border palette)
+        fill (:input-fill palette)
+        overlay-style (if is-dark?
+                        services/SystemUiOverlayStyle.light
+                        services/SystemUiOverlayStyle.dark)]
+    (m/ThemeData
+     .useMaterial3 true
+     .brightness brightness
+     .fontFamily font-family
+     .primaryColor brand-blue
+     .scaffoldBackgroundColor bg
+     .canvasColor surface
+     .dividerColor border
+     .splashColor (:brand-soft palette)
+     .highlightColor (:brand-soft palette)
+
+     .colorScheme (if is-dark?
+                    (m/ColorScheme.dark
+                     .primary brand-blue
+                     .secondary brand-blue
+                     .surface surface
+                     .error (:error palette)
+                     .onPrimary on-brand
+                     .onSurface text
+                     .onError on-brand
+                     .outline border)
+                    (m/ColorScheme.light
+                     .primary brand-blue
+                     .secondary brand-blue
+                     .surface surface
+                     .error (:error palette)
+                     .onPrimary on-brand
+                     .onSurface text
+                     .onError on-brand
+                     .outline border))
+
+     .appBarTheme (m/AppBarTheme
+                   .backgroundColor surface
+                   .foregroundColor text
+                   .elevation 0.0
+                   .scrolledUnderElevation 0.0
+                   .centerTitle true
+                   .systemOverlayStyle overlay-style
+                   .iconTheme (m/IconThemeData .color text)
+                   .titleTextStyle (m/TextStyle
+                                    .fontFamily font-family
+                                    .fontSize 18.0
+                                    .fontWeight m/FontWeight.bold
+                                    .color text))
+
+     .elevatedButtonTheme (m/ElevatedButtonThemeData
+                           .style (m/ElevatedButton.styleFrom
+                                   .backgroundColor brand-blue
+                                   .foregroundColor on-brand
+                                   .elevation 0.0
+                                   .padding (m/EdgeInsets.symmetric .vertical 24.0 .horizontal 12.0)
+                                   .shape (m/RoundedRectangleBorder
+                                           .borderRadius (m/BorderRadius.circular radius-pill))))
+
+     .outlinedButtonTheme (m/OutlinedButtonThemeData
+                           .style (m/OutlinedButton.styleFrom
+                                   .foregroundColor brand-blue
+                                   .side (m/BorderSide .color brand-blue .width 1.5)
+                                   .padding (m/EdgeInsets.symmetric .vertical 24.0 .horizontal 12.0)
+                                   .shape (m/RoundedRectangleBorder
+                                           .borderRadius (m/BorderRadius.circular radius-pill))))
+
+     .textButtonTheme (m/TextButtonThemeData
+                       .style (m/TextButton.styleFrom
+                               .foregroundColor brand-blue
+                               .textStyle (m/TextStyle .fontFamily font-family .fontWeight m/FontWeight.bold)))
+
+     .floatingActionButtonTheme (m/FloatingActionButtonThemeData
                                  .backgroundColor brand-blue
-                                 .foregroundColor m/Colors.white
-                                 .elevation 0.0
-                                 ;; ⚡ Flipped padding (Vertical > Horizontal) to accommodate LTR vertical typography constraints
-                                 .padding (m/EdgeInsets.symmetric .vertical 24.0 .horizontal 12.0)
+                                 .foregroundColor on-brand
+                                 .elevation 4.0
                                  .shape (m/RoundedRectangleBorder
-                                         .borderRadius (m/BorderRadius.circular 24.0))))
+                                         .borderRadius (m/BorderRadius.circular radius-lg)))
 
-   .outlinedButtonTheme (m/OutlinedButtonThemeData
-                         .style (m/OutlinedButton.styleFrom
-                                 .foregroundColor brand-blue
-                                 .side (m/BorderSide .color brand-blue .width 1.5)
-                                 ;; ⚡ Flipped padding (Vertical > Horizontal) to accommodate LTR vertical typography constraints
-                                 .padding (m/EdgeInsets.symmetric .vertical 24.0 .horizontal 12.0)
-                                 .shape (m/RoundedRectangleBorder
-                                         .borderRadius (m/BorderRadius.circular 24.0))))
+     .dividerTheme (m/DividerThemeData
+                    .color border
+                    .space 1.0
+                    .thickness 1.0)
 
-   .textButtonTheme (m/TextButtonThemeData
-                     .style (m/TextButton.styleFrom
-                             .foregroundColor brand-blue
-                             .textStyle (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold))) ;; ⚡ Standardized enum syntax
+     .bottomSheetTheme (m/BottomSheetThemeData
+                        .backgroundColor surface
+                        .modalBackgroundColor surface
+                        .elevation 8.0
+                        .shape (sheet-shape))
 
-   .dividerTheme (m/DividerThemeData
-                  .color border-color
-                  .space 1.0
-                  .thickness 1.0)
+     .inputDecorationTheme (m/InputDecorationTheme
+                            .filled true
+                            .fillColor fill
+                            .hintStyle (m/TextStyle .color text-2)
+                            .contentPadding (m/EdgeInsets.all 16.0)
+                            .enabledBorder (m/OutlineInputBorder
+                                            .borderRadius (m/BorderRadius.circular radius-sm)
+                                            .borderSide (m/BorderSide .color border))
+                            .focusedBorder (m/OutlineInputBorder
+                                            .borderRadius (m/BorderRadius.circular radius-sm)
+                                            .borderSide (m/BorderSide .color brand-blue .width 2.0))
+                            .errorBorder (m/OutlineInputBorder
+                                          .borderRadius (m/BorderRadius.circular radius-sm)
+                                          .borderSide (m/BorderSide .color error-red .width 1.0))))))
 
-   ;; Input fields (e.g., Auth screens, Settings)
-   .inputDecorationTheme (m/InputDecorationTheme
-                          .filled true
-                          .fillColor m/Colors.white
-                          .hintStyle (m/TextStyle .color text-secondary)
-                          .contentPadding (m/EdgeInsets.all 16.0)
-                          .enabledBorder (m/OutlineInputBorder
-                                          .borderRadius (m/BorderRadius.circular 12.0)
-                                          .borderSide (m/BorderSide .color border-color))
-                          .focusedBorder (m/OutlineInputBorder
-                                          .borderRadius (m/BorderRadius.circular 12.0)
-                                          .borderSide (m/BorderSide .color brand-blue .width 2.0))
-                          .errorBorder (m/OutlineInputBorder
-                                        .borderRadius (m/BorderRadius.circular 12.0)
-                                        .borderSide (m/BorderSide .color error-red .width 1.0)))))
+(def light-theme (build-theme m/Brightness.light light-palette))
+(def dark-theme (build-theme m/Brightness.dark dark-palette))
+
+;; Legacy aliases used by older call sites that have not been migrated yet.
+;; These stay on the light palette; prefer `of` / `bg` / `surface` in new code.
+(def bg-color (:bg light-palette))
+(def text-primary (:text light-palette))
+(def text-secondary (:text-2 light-palette))
+(def border-color (:border light-palette))
+(def app-theme light-theme)
+

@@ -80,20 +80,20 @@
       .onLayout #(fetch-thread! ctx post-id !post-data !replies !loading? false)
       .child
       (m/Scaffold
-       .backgroundColor theme/bg-color
+       .backgroundColor (theme/bg ctx)
        
        .appBar
        (m/AppBar
-        .backgroundColor m/Colors.white
+        .backgroundColor (theme/surface ctx)
         .elevation 0.5
         .leading (m/IconButton 
-                  .icon (m/Icon m/Icons.arrow_back_rounded .color theme/text-primary)
+                  .icon (m/Icon m/Icons.arrow_back_rounded .color (theme/text ctx))
                   .onPressed #(nav/pop! ctx))
         .title (m/Text "Нийтлэл"
                        .style (m/TextStyle .fontFamily "OyunQaganTig" 
                                            .fontSize 18.0 
                                            .fontWeight m/FontWeight.bold 
-                                           .color theme/text-primary)))
+                                           .color (theme/text ctx))))
        
        .floatingActionButton
        (when post-data
@@ -142,12 +142,12 @@
              ;; 2. Visual Separator
              (= i 1)
              (m/Container
-              .color theme/bg-color
+              .color (theme/bg ctx)
               .padding (m/EdgeInsets.symmetric .horizontal 16.0 .vertical 16.0)
               .alignment m/Alignment.topCenter
               .child (mgl/MongolText (str (count replies) " сэтгэгдэл")
                                      .style (m/TextStyle .fontFamily "OyunQaganTig" 
-                                                         .color theme/text-secondary 
+                                                         .color (theme/text-2 ctx) 
                                                          .fontWeight m/FontWeight.bold)))
              
              ;; 3. The Conversation Thread (Comments)

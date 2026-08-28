@@ -37,9 +37,9 @@
     .width 64.0 ;; Match the active-search sidebar width
     .padding (m/EdgeInsets.symmetric .vertical 16.0 .horizontal 12.0)
     .decoration (m/BoxDecoration 
-                 .color m/Colors.white ;; Pure white on a grayish background makes the input stand out
+                 .color (theme/surface ctx) ;; Pure white on a grayish background makes the input stand out
                  .borderRadius (m/BorderRadius.circular 24.0)
-                 .border (m/Border.all .color (.withOpacity theme/border-color 0.5) .width 1.0)
+                 .border (m/Border.all .color (.withOpacity (theme/border ctx) 0.5) .width 1.0)
                  .boxShadow [(m/BoxShadow .color (m/Color 0x0A000000) .blurRadius 8.0 .offset (m/Offset 0.0 2.0))])
     .child
     (m/Column
@@ -47,14 +47,14 @@
      .children
      [(m/Padding 
        .padding (m/EdgeInsets.only .top 12.0)
-       .child (m/Icon m/Icons.search_rounded .color theme/text-secondary .size 20.0))
+       .child (m/Icon m/Icons.search_rounded .color (theme/text-2 ctx) .size 20.0))
       
       (m/SizedBox .height 12.0)
       
       (mgl/MongolText "Хайх..."
                       .style (m/TextStyle .fontFamily "OyunQaganTig" 
                                           .fontSize 15.0 
-                                          .color theme/text-secondary))]))))
+                                          .color (theme/text-2 ctx)))]))))
 
 (defn- trending-tile 
   "Transforms trending topics into modular vertical pillars for the discovery gallery."
@@ -69,15 +69,15 @@
       .width 110.0
       .padding (m/EdgeInsets.symmetric .vertical 24.0 .horizontal 8.0)
       .decoration (m/BoxDecoration 
-                   .color m/Colors.white
-                   .border (m/Border .right (m/BorderSide .color theme/border-color .width 0.5)))
+                   .color (theme/surface ctx)
+                   .border (m/Border .right (m/BorderSide .color (theme/border ctx) .width 0.5)))
       .child
       (m/Column
        .children
        [;; Semantic Icon Anchor (Top)
         (m/Container
          .padding (m/EdgeInsets.all 12.0)
-         .decoration (m/BoxDecoration .color theme/bg-color .shape m/BoxShape.circle)
+         .decoration (m/BoxDecoration .color (theme/bg ctx) .shape m/BoxShape.circle)
          .child (m/Icon m/Icons.tag_rounded .color theme/brand-blue .size 20.0))
         
         (m/SizedBox .height 24.0)
@@ -93,12 +93,12 @@
                            .style (m/TextStyle .fontFamily "OyunQaganTig" 
                                                .fontSize 16.0 
                                                .fontWeight m/FontWeight.bold 
-                                               .color theme/text-primary))
+                                               .color (theme/text ctx)))
            (m/SizedBox .width 8.0)
            (mgl/MongolText (str post-count " нийтлэл") ;; "X posts"
                            .style (m/TextStyle .fontFamily "OyunQaganTig" 
                                                .fontSize 13.0
-                                               .color theme/text-secondary))]))])))))
+                                               .color (theme/text-2 ctx)))]))])))))
 
 ;; =============================================================================
 ;; 2. Main Explore Screen Widget
@@ -121,8 +121,8 @@
       (scaffold/app-scaffold
        ctx "/search"
        (m/Scaffold
-        .backgroundColor theme/bg-color
-        .appBar (m/AppBar .title (m/Text " ") .backgroundColor theme/bg-color .elevation 0.0)
+        .backgroundColor (theme/bg ctx)
+        .appBar (m/AppBar .title (m/Text " ") .backgroundColor (theme/bg ctx) .elevation 0.0)
         .body
         (m/SafeArea
          .child
@@ -157,7 +157,7 @@
                                       .style (m/TextStyle .fontFamily "OyunQaganTig"
                                                           .fontSize 14.0
                                                           .fontWeight m/FontWeight.bold
-                                                          .color theme/text-secondary))))
+                                                          .color (theme/text-2 ctx)))))
              (m/SliverToBoxAdapter .child (m/SizedBox.shrink)))
 
            (if (and (not loading?) (seq trends))

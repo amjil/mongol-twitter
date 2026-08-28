@@ -36,7 +36,7 @@
                             .style (m/TextStyle .fontFamily "OyunQaganTig"
                                                 .fontWeight m/FontWeight.bold
                                                 .fontSize author-font-size
-                                                .color theme/text-primary)
+                                                .color (theme/text ctx))
                             .maxLines 1
                             .overflow m/TextOverflow.ellipsis)
             (if show-handle?
@@ -46,11 +46,11 @@
                (mgl/MongolText (str "@" (get author "handle" "user"))
                                .style (m/TextStyle .fontFamily "OyunQaganTig"
                                                    .fontSize handle-font-size
-                                                   .color theme/text-secondary)))
+                                                   .color (theme/text-2 ctx))))
               (m/SizedBox.shrink))])
           (m/SizedBox .width 12.0)
           (if show-divider?
-            (m/Container .width 0.5 .color theme/border-color)
+            (m/Container .width 0.5 .color (theme/border ctx))
             (m/SizedBox.shrink))
           (if show-divider?
             (m/SizedBox .width 12.0)
@@ -62,13 +62,13 @@
                            .overflow m/TextOverflow.ellipsis
                            .style (m/TextStyle .fontFamily "OyunQaganTig"
                                                .fontSize content-font-size
-                                               .color theme/text-primary)))])]
+                                               .color (theme/text ctx))))])]
     (m/Container
      .margin margin
      .padding padding
      .decoration
      (m/BoxDecoration
       .color bg-color
-      .border (m/Border.all .color theme/border-color .width 1.0)
+      .border (m/Border.all .color (theme/border ctx) .width 1.0)
       .borderRadius (m/BorderRadius.circular 12.0))
      .child quoted-body)))

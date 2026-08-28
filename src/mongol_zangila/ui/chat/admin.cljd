@@ -99,7 +99,9 @@
 (defn- section-header 
   "Vertical text header for grouping configuration pillars."
   [title]
-  (m/Container
+  (theme/themed
+   (fn [ctx]
+     (m/Container
    .width 56.0
    .padding (m/EdgeInsets.only .top 24.0)
    .alignment m/Alignment.topCenter
@@ -107,7 +109,7 @@
                           .style (m/TextStyle .fontFamily "OyunQaganTig"
                                               .fontSize 14.0
                                               .fontWeight m/FontWeight.bold
-                                              .color theme/text-secondary))))
+                                              .color (theme/text-2 ctx)))))))
 
 (defn- admin-member-tile 
   "Transforms the standard horizontal ListTile into a vertical member administration pillar."
@@ -122,8 +124,8 @@
      .width 100.0
      .padding (m/EdgeInsets.symmetric .vertical 24.0 .horizontal 8.0)
      .decoration (m/BoxDecoration 
-                  .color m/Colors.white
-                  .border (m/Border .right (m/BorderSide .color theme/border-color .width 0.5)))
+                  .color (theme/surface ctx)
+                  .border (m/Border .right (m/BorderSide .color (theme/border ctx) .width 0.5)))
      .child
      (m/Column
       .crossAxisAlignment m/CrossAxisAlignment.center
@@ -138,7 +140,7 @@
         .child (mgl/MongolText (if is-self? (str member-name " (Та)") member-name)
                                .style (m/TextStyle .fontFamily "OyunQaganTig" 
                                                    .fontSize 15.0 
-                                                   .color theme/text-primary 
+                                                   .color (theme/text ctx) 
                                                    .fontWeight m/FontWeight.w600)))
        
        (m/SizedBox .height 8.0)
@@ -147,12 +149,12 @@
        (m/Container
         .padding (m/EdgeInsets.symmetric .vertical 12.0 .horizontal 4.0)
         .decoration (m/BoxDecoration 
-                     .color (if (= role "admin") (.withOpacity theme/brand-blue 0.1) theme/bg-color)
+                     .color (if (= role "admin") (.withOpacity theme/brand-blue 0.1) (theme/bg ctx))
                      .borderRadius (m/BorderRadius.circular 8.0))
         .child (mgl/MongolText (if (= role "admin") "Админ" "Гишүүн") ;; "Admin" / "Member"
                                .style (m/TextStyle .fontFamily "OyunQaganTig" 
                                                    .fontSize 13.0 
-                                                   .color (if (= role "admin") theme/brand-blue theme/text-secondary))))
+                                                   .color (if (= role "admin") theme/brand-blue (theme/text-2 ctx)))))
        
        (m/SizedBox .height 16.0)
        
@@ -160,7 +162,7 @@
        (if is-self?
          (m/SizedBox .height 48.0) ;; Spacer to maintain alignment if no actions
          (m/PopupMenuButton
-          .icon (m/Icon m/Icons.more_vert_rounded .color theme/text-secondary)
+          .icon (m/Icon m/Icons.more_vert_rounded .color (theme/text-2 ctx))
           .onSelected (fn [action]
                         (cond
                           (= action "kick") (kick-member! ctx group-id member-id !members)
@@ -200,21 +202,21 @@
       .onLayout #(load-admin-context! ctx group-id name-ctrl !members !loading?)
       .child
       (m/Scaffold
-       .backgroundColor theme/bg-color
+       .backgroundColor (theme/bg ctx)
        
        ;; --- Top App Bar ---
        .appBar
        (m/AppBar
-        .backgroundColor m/Colors.white
+        .backgroundColor (theme/surface ctx)
         .elevation 0.5
         .leading (m/IconButton 
-                  .icon (m/Icon m/Icons.close_rounded .color theme/text-primary)
+                  .icon (m/Icon m/Icons.close_rounded .color (theme/text ctx))
                   .onPressed #(nav/pop! ctx))
         .title (m/Text "Групп тохиргоо" ;; "Group Settings"
                        .style (m/TextStyle .fontFamily "OyunQaganTig" 
                                            .fontSize 18.0 
                                            .fontWeight m/FontWeight.bold 
-                                           .color theme/text-primary))
+                                           .color (theme/text ctx)))
         .actions [(if saving?
                     (m/Padding
                      .padding (m/EdgeInsets.only .right 16.0 .top 16.0 .bottom 16.0)
@@ -257,7 +259,7 @@
                 (mgl/MongolText "Группийн нэр" ;; "Group Name"
                                 .style (m/TextStyle .fontFamily "OyunQaganTig" 
                                                     .fontSize 15.0 
-                                                    .color theme/text-secondary))
+                                                    .color (theme/text-2 ctx)))
                 (m/SizedBox .width 16.0)
                 
                 ;; Horizontal Input Field embedded in the vertical flow
@@ -274,7 +276,7 @@
                                         .borderSide m/BorderSide.none)
                                .contentPadding (m/EdgeInsets.symmetric .horizontal 16.0 .vertical 12.0))))]))
              
-             (m/VerticalDivider .width 1.0 .thickness 1.0 .color theme/border-color)
+             (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
              
              ;; 3. Member Management Section Header
              (section-header "Гишүүд")] ;; "Members"

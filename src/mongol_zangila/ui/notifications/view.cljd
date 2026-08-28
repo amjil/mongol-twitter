@@ -81,9 +81,9 @@
     (m/Container
      .margin (m/EdgeInsets.only .right 16.0 .top 16.0 .bottom 16.0)
      .decoration (m/BoxDecoration 
-                  .color m/Colors.white
+                  .color (theme/surface ctx)
                   .borderRadius (m/BorderRadius.circular 16.0)
-                  .border (m/Border.all .color theme/border-color .width 0.5))
+                  .border (m/Border.all .color (theme/border ctx) .width 0.5))
      .child
      (m/InkWell
       .onTap #(on-notification-tap ctx note-data)
@@ -106,7 +106,7 @@
                          .style (m/TextStyle .fontFamily "OyunQaganTig" 
                                              .fontSize 15.0 
                                              .fontWeight m/FontWeight.bold
-                                             .color theme/text-primary))
+                                             .color (theme/text ctx)))
          
          ;; 2. If there is a repost body, quoted comment, or mention, render a light preview bubble
          (if has-preview?
@@ -118,7 +118,7 @@
              .decoration (m/BoxDecoration
                           .color (.withOpacity theme/brand-blue 0.04)
                           .borderRadius (m/BorderRadius.circular 10.0)
-                          .border (m/Border.all .color theme/border-color .width 0.5))
+                          .border (m/Border.all .color (theme/border ctx) .width 0.5))
              .child
              (mgl/MongolText preview-text
                              .maxLines 3
@@ -126,7 +126,7 @@
                              .style (m/TextStyle .fontFamily "OyunQaganTig"
                                                  .fontSize 13.0
                                                  .height 1.3
-                                                 .color theme/text-secondary))))
+                                                 .color (theme/text-2 ctx)))))
            (m/SizedBox.shrink))
          
          (m/SizedBox .height 12.0)
@@ -135,7 +135,7 @@
          (mgl/MongolText (format-note-time timestamp)
                          .style (m/TextStyle .fontFamily "OyunQaganTig" 
                                              .fontSize 12.0 
-                                             .color theme/text-secondary))]))))))
+                                             .color (theme/text-2 ctx)))]))))))
 
 ;; =============================================================================
 ;; 3. The Main Screen Widget
@@ -185,11 +185,11 @@
       (scaffold/app-scaffold
        ctx "/notifications/view"
        (m/Scaffold
-        .backgroundColor theme/bg-color
+        .backgroundColor (theme/bg ctx)
         
         .appBar
         (m/AppBar
-         .backgroundColor m/Colors.white
+         .backgroundColor (theme/surface ctx)
          .elevation 0.5
          ;; Top-level bottom-nav tab: no back button
          .automaticallyImplyLeading false
@@ -197,13 +197,13 @@
                         .style (m/TextStyle .fontFamily "OyunQaganTig" 
                                             .fontSize 18.0 
                                             .fontWeight m/FontWeight.bold 
-                                            .color theme/text-primary)))
+                                            .color (theme/text ctx))))
         
         .body
         (if loading?
           (m/Center .child (m/CircularProgressIndicator .color theme/brand-blue))
           (if (empty? notifications)
-            (m/Center .child (mgl/MongolText "Мэдэгдэл хоосон байна." .style (m/TextStyle .fontFamily "OyunQaganTig" .color theme/text-secondary)))
+            (m/Center .child (mgl/MongolText "Мэдэгдэл хоосон байна." .style (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text-2 ctx))))
             
             (m/ListView.builder
              .controller scroll-ctrl ;; ⚡ Bind the scroll controller

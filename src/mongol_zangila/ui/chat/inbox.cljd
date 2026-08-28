@@ -40,7 +40,7 @@
   [ctx]
   (m/showModalBottomSheet
    .context ctx
-   .backgroundColor m/Colors.white
+   .backgroundColor (theme/surface ctx)
    .shape (m/RoundedRectangleBorder .borderRadius (m/BorderRadius.vertical .top (m/Radius.circular 16.0)))
    .builder
    (fn [b-ctx]
@@ -52,7 +52,7 @@
        [(m/ListTile
          .leading (m/Icon m/Icons.person_search_rounded .color theme/brand-blue)
          .title (mgl/MongolText "Хэрэглэгч хайх" ;; "Search user"
-                                .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold .fontSize 16.0 .color theme/text-primary))
+                                .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold .fontSize 16.0 .color (theme/text ctx)))
          .onTap (fn []
                   (nav/pop! b-ctx)
                   (nav/push! ctx "/search")))
@@ -60,7 +60,7 @@
         (m/ListTile
          .leading (m/Icon m/Icons.group_add_rounded .color theme/brand-blue)
          .title (mgl/MongolText "Шинэ групп үүсгэх" ;; "Create new group"
-                                .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold .fontSize 16.0 .color theme/text-primary))
+                                .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold .fontSize 16.0 .color (theme/text ctx)))
          .onTap (fn []
                   (nav/pop! b-ctx)
                   (nav/push! ctx "/chat/create-group")))])))))
@@ -112,19 +112,19 @@
       (scaffold/app-scaffold
        ctx "/chat/inbox"
        (m/Scaffold
-        .backgroundColor theme/bg-color
+        .backgroundColor (theme/bg ctx)
 
         ;; --- Top App Bar ---
         .appBar
         (m/AppBar
-         .backgroundColor m/Colors.white
+         .backgroundColor (theme/surface ctx)
          .elevation 0.5
          .automaticallyImplyLeading false
          .title (m/Text "Зурвас"
                         .style (m/TextStyle .fontFamily "OyunQaganTig"
                                             .fontSize 18.0
                                             .fontWeight m/FontWeight.bold
-                                            .color theme/text-primary))
+                                            .color (theme/text ctx)))
          .actions [(m/IconButton
                     .icon (m/Icon m/Icons.add_comment_rounded .color theme/brand-blue)
                     .onPressed #(show-new-chat-options! ctx))]) ;; ⚡ Show Action Sheet
@@ -151,12 +151,12 @@
                               (chat-ctrl/load-inbox! ctx !chats !refresh-loading? true))
 
                 :scroll-controller scroll-ctrl
-                :background-color theme/bg-color
+                :background-color (theme/bg ctx)
 
                 :not-armed-text "Татаж шинэчлэх"
                 :armed-text "Суллаж шинэчлэх"
                 :loading-text "Суллаж шинэчлэх"
-                :not-armed-color theme/border-color
+                :not-armed-color (theme/border ctx)
                 :armed-color theme/brand-blue
                 :text-style (m/TextStyle .fontFamily "OyunQaganTig" .color m/Colors.white .fontSize 14.0 .fontWeight m/FontWeight.bold)
                 :trigger-mode cri/IndicatorTriggerMode.anywhere

@@ -109,9 +109,9 @@
                                           .child
                                           (m/Container
                                            .decoration (m/BoxDecoration 
-                                                        .color m/Colors.white
-                                                        .border (m/Border .right (m/BorderSide .color theme/border-color .width 1.0)
-                                                                          .top (m/BorderSide .color theme/border-color .width 1.0)) ;; Add a top border for a bit more depth
+                                                        .color (theme/surface ctx)
+                                                        .border (m/Border .right (m/BorderSide .color (theme/border ctx) .width 1.0)
+                                                                          .top (m/BorderSide .color (theme/border ctx) .width 1.0)) ;; Add a top border for a bit more depth
                                                         .boxShadow [(m/BoxShadow .color m/Colors.black12 .blurRadius 16.0 .offset (m/Offset 4.0 0.0))])))
                                          
                                          ;; B. Editor mount area (also starts 56.0 from the top)
@@ -121,11 +121,11 @@
                                           ;; rich-editor defaults to white text; override it on the white panel
                                           :editor-config
                                           {:block-style
-                                           {:paragraph (m/TextStyle .fontFamily "OyunQaganTig" .color theme/text-primary .fontSize 16.0)
-                                            :heading-1 (m/TextStyle .fontFamily "OyunQaganTig" .color theme/text-primary .fontSize 20.0 .fontWeight m/FontWeight.bold)
-                                            :heading-2 (m/TextStyle .fontFamily "OyunQaganTig" .color theme/text-primary .fontSize 18.0 .fontWeight m/FontWeight.bold)
-                                            :list-item (m/TextStyle .fontFamily "OyunQaganTig" .color theme/text-primary .fontSize 16.0)
-                                            :blockquote (m/TextStyle .fontFamily "OyunQaganTig" .color theme/text-secondary .fontSize 15.0)}}
+                                           {:paragraph (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text ctx) .fontSize 16.0)
+                                            :heading-1 (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text ctx) .fontSize 20.0 .fontWeight m/FontWeight.bold)
+                                            :heading-2 (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text ctx) .fontSize 18.0 .fontWeight m/FontWeight.bold)
+                                            :list-item (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text ctx) .fontSize 16.0)
+                                            :blockquote (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text-2 ctx) .fontSize 15.0)}}
                                           
                                           :leading (m/SizedBox.shrink)
                                           
@@ -133,8 +133,8 @@
                                           :toolbar (m/Container
                                                     .width (.-infinity dc/double)
                                                     .decoration (m/BoxDecoration 
-                                                                 .color m/Colors.white
-                                                                 .border (m/Border .top (m/BorderSide .color theme/border-color .width 0.5))
+                                                                 .color (theme/surface ctx)
+                                                                 .border (m/Border .top (m/BorderSide .color (theme/border ctx) .width 0.5))
                                                                  .boxShadow [(m/BoxShadow .color (m/Color 0x08000000) .blurRadius 4.0 .offset (m/Offset 0.0 -2.0))])
                                                     .padding (m/EdgeInsets.symmetric .horizontal 16.0 .vertical 6.0)
                                                     .child
@@ -143,19 +143,19 @@
                                                      .children
                                                      [
                                                       (m/IconButton 
-                                                       .icon (m/Icon m/Icons.close_rounded .color theme/text-secondary .size 24.0) 
+                                                       .icon (m/Icon m/Icons.close_rounded .color (theme/text-2 ctx) .size 24.0) 
                                                        .onPressed #(nav/pop! d-ctx))
                                                       
                                                       (m/Spacer)
                                                       
                                                       (m/IconButton 
-                                                       .icon (m/Icon m/Icons.alternate_email_rounded .color theme/text-secondary .size 22.0) 
+                                                       .icon (m/Icon m/Icons.alternate_email_rounded .color (theme/text-2 ctx) .size 22.0) 
                                                        .onPressed #(tag-search/show-tag-modal! d-ctx !editor-state simple-editor/insert-entity-at-cursor!))
                                                       
                                                       (m/SizedBox .width 12.0)
                                                       
                                                       (m/IconButton 
-                                                       .icon (m/Icon m/Icons.tag_rounded .color theme/text-secondary .size 22.0) 
+                                                       .icon (m/Icon m/Icons.tag_rounded .color (theme/text-2 ctx) .size 22.0) 
                                                        .onPressed #(tag-search/show-tag-modal! d-ctx !editor-state simple-editor/insert-entity-at-cursor!))
                                                       
                                                       (m/SizedBox .width 16.0)
@@ -192,7 +192,7 @@
      :managed [_dummy-anchor (atom nil) :dispose cancel-voice-record!]
 
      (m/Container
-      .decoration (m/BoxDecoration .color m/Colors.white .border (m/Border .top (m/BorderSide .color theme/border-color .width 0.5)))
+      .decoration (m/BoxDecoration .color (theme/surface ctx) .border (m/Border .top (m/BorderSide .color (theme/border ctx) .width 0.5)))
       .padding (m/EdgeInsets.only .bottom 32.0 .top 12.0 .left 16.0 .right 16.0)
       .child
       (if (or is-recording? cancel-intent? (= uploading-type :voice))
@@ -209,7 +209,7 @@
                             (= uploading-type :voice) "Илгээж байна..."
                             cancel-intent? "Суллаж цуцлах"
                             :else (format-duration duration))
-                          .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold .fontSize 16.0 .color theme/text-primary))
+                          .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold .fontSize 16.0 .color (theme/text ctx)))
           (m/Spacer)])
         
         ;; --- State B: default minimal horizontal control bar ---
@@ -218,7 +218,7 @@
          [
           ;; 1. Virtual keyboard activator
           (m/IconButton
-           .icon (m/Icon m/Icons.keyboard_alt_outlined .color theme/text-secondary .size 28.0)
+           .icon (m/Icon m/Icons.keyboard_alt_outlined .color (theme/text-2 ctx) .size 28.0)
            .onPressed show-input-overlay!)
           
           (m/SizedBox .width 8.0)
@@ -228,7 +228,7 @@
             (m/Padding .padding (m/EdgeInsets.all 12.0)
                        .child (m/SizedBox .width 20.0 .height 20.0 .child (m/CircularProgressIndicator .strokeWidth 2.0 .color theme/brand-blue)))
             (m/IconButton
-             .icon (m/Icon m/Icons.image_outlined .color theme/text-secondary .size 28.0)
+             .icon (m/Icon m/Icons.image_outlined .color (theme/text-2 ctx) .size 28.0)
              .onPressed #(when-not uploading-type
                            (reset! !uploading-type :image)
                            (-> (media-attach/pick-and-upload! ctx on-send-image!)
@@ -272,4 +272,4 @@
            (m/Container
             .padding (m/EdgeInsets.all 12.0)
             .decoration (m/BoxDecoration .color theme/brand-blue .shape m/BoxShape.circle)
-            .child (m/Icon m/Icons.mic_rounded .color m/Colors.white)))]))))))
+            .child (m/Icon m/Icons.mic_rounded .color (theme/surface ctx))))]))))))

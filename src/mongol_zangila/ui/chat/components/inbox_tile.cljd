@@ -69,14 +69,14 @@
      ;; ⚡ Adapt 1: drop a fixed width; let content wrap
      .margin (m/EdgeInsets.only .top 16.0 .bottom 16.0)
      .decoration (m/BoxDecoration
-                  .color (if has-unread? m/Colors.white theme/bg-color)
+                  .color (if has-unread? (theme/surface ctx) (theme/bg ctx))
                   .borderRadius (m/BorderRadius.circular 20.0)
                   .boxShadow (if has-unread? 
                                [(m/BoxShadow .color (-> m/Colors.black (.withOpacity 0.04))
                                              .blurRadius 12.0
                                              .offset (m/Offset 0.0 4.0))]
                                [])
-                  .border (m/Border.all .color (.withOpacity theme/border-color 0.8) .width 1.0))
+                  .border (m/Border.all .color (.withOpacity (theme/border ctx) 0.8) .width 1.0))
      .child
      (m/InkWell
       .onTap (fn []
@@ -115,12 +115,12 @@
                             .style (m/TextStyle .fontFamily "OyunQaganTig"
                                                 .fontSize 16.0
                                                 .fontWeight (if has-unread? m/FontWeight.bold m/FontWeight.w500)
-                                                .color theme/text-primary)
+                                                .color (theme/text ctx))
                             .maxLines 1
                             .overflow m/TextOverflow.ellipsis)
 
             (m/SizedBox .width 12.0)
-            (m/Container .width 0.5 .color theme/border-color)
+            (m/Container .width 0.5 .color (theme/border ctx))
             (m/SizedBox .width 12.0)
 
             ;; 2. Last Message Pillar (⚡ Adapt 3: drop Expanded; width grows with text)
@@ -130,9 +130,9 @@
                                                 .height 1.4
                                                 .fontStyle (if (str/blank? last-msg) m/FontStyle.italic m/FontStyle.normal)
                                                 .color (cond
-                                                         (str/blank? last-msg) theme/text-secondary
-                                                         has-unread? theme/text-primary
-                                                         :else theme/text-secondary))
+                                                         (str/blank? last-msg) (theme/text-2 ctx)
+                                                         has-unread? (theme/text ctx)
+                                                         :else (theme/text-2 ctx)))
                             ;; Keep a max-line cap so a huge message cannot stretch the screen infinitely
                             .maxLines 3
                             .overflow m/TextOverflow.ellipsis)
@@ -150,4 +150,4 @@
                                 .style (m/TextStyle .fontFamily "OyunQaganTig"
                                                     .fontSize 12.0
                                                     .fontWeight (if has-unread? m/FontWeight.bold m/FontWeight.normal)
-                                                    .color (if has-unread? theme/brand-blue theme/text-secondary))))])]))]))))))
+                                                    .color (if has-unread? theme/brand-blue (theme/text-2 ctx)))))])]))]))))))

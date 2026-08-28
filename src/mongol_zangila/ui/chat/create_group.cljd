@@ -91,7 +91,7 @@
                    .color (if is-selected? (.withOpacity theme/brand-blue 0.05) m/Colors.white)
                    .borderRadius (m/BorderRadius.circular 16.0)
                    .border (m/Border.all 
-                            .color (if is-selected? theme/brand-blue theme/border-color) 
+                            .color (if is-selected? theme/brand-blue (theme/border ctx)) 
                             .width (if is-selected? 2.0 1.0)))
       .padding (m/EdgeInsets.symmetric .vertical 24.0 .horizontal 8.0)
       .child
@@ -106,7 +106,7 @@
          .decoration (m/BoxDecoration 
                       .shape m/BoxShape.circle
                       .color (if is-selected? theme/brand-blue m/Colors.transparent)
-                      .border (m/Border.all .color (if is-selected? theme/brand-blue theme/border-color) .width 2.0))
+                      .border (m/Border.all .color (if is-selected? theme/brand-blue (theme/border ctx)) .width 2.0))
          .child (if is-selected? (m/Icon m/Icons.check_rounded .color m/Colors.white .size 18.0) (m/SizedBox.shrink)))
         
         (m/SizedBox .height 24.0)
@@ -120,12 +120,12 @@
           .crossAxisAlignment m/CrossAxisAlignment.start
           .children
           [(mgl/MongolText name 
-                           .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold .fontSize 16.0 .color theme/text-primary)
+                           .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold .fontSize 16.0 .color (theme/text ctx))
                            .maxLines 1
                            .overflow m/TextOverflow.ellipsis)
            (m/SizedBox .width 6.0)
            (mgl/MongolText (str "@" handle)
-                           .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 14.0 .color theme/text-secondary)
+                           .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 14.0 .color (theme/text-2 ctx))
                            .maxLines 1
                            .overflow m/TextOverflow.ellipsis)]))])))))
 
@@ -155,18 +155,18 @@
       .onLayout #(load-friends-for-selection! ctx !friends !loading?)
       .child
       (m/Scaffold
-       .backgroundColor theme/bg-color
+       .backgroundColor (theme/bg ctx)
        
        ;; --- Top App Bar ---
        .appBar
        (m/AppBar
-        .backgroundColor m/Colors.white
+        .backgroundColor (theme/surface ctx)
         .elevation 0.5
         .leading (m/IconButton 
-                  .icon (m/Icon m/Icons.arrow_back_rounded .color theme/text-primary)
+                  .icon (m/Icon m/Icons.arrow_back_rounded .color (theme/text ctx))
                   .onPressed #(nav/pop! ctx))
         .title (m/Text "Шинэ групп" ;; "New Group"
-                       .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 18.0 .fontWeight m/FontWeight.bold .color theme/text-primary))
+                       .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 18.0 .fontWeight m/FontWeight.bold .color (theme/text ctx)))
         .actions [(m/Padding
                    .padding (m/EdgeInsets.only .right 16.0 .top 8.0 .bottom 8.0)
                    .child
@@ -192,8 +192,8 @@
          (m/Container
           .padding (m/EdgeInsets.all 24.0)
           .decoration (m/BoxDecoration 
-                       .color m/Colors.white
-                       .border (m/Border .right (m/BorderSide .color theme/border-color .width 1.0)))
+                       .color (theme/surface ctx)
+                       .border (m/Border .right (m/BorderSide .color (theme/border ctx) .width 1.0)))
           .child
           (m/Column
            .crossAxisAlignment m/CrossAxisAlignment.center
@@ -212,10 +212,10 @@
              .child
              (mgl/MongolTextField
               .controller group-name-ctrl
-              .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 18.0 .fontWeight m/FontWeight.bold .color theme/text-primary)
+              .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 18.0 .fontWeight m/FontWeight.bold .color (theme/text ctx))
               .decoration (m/InputDecoration
                            .hintText "Группийн нэр..." ;; "Group Name..."
-                           .hintStyle (m/TextStyle .color theme/text-secondary .fontWeight m/FontWeight.normal)
+                           .hintStyle (m/TextStyle .color (theme/text-2 ctx) .fontWeight m/FontWeight.normal)
                            .border m/InputBorder.none
                            .focusedBorder m/InputBorder.none
                            .enabledBorder m/InputBorder.none)))]))
@@ -244,14 +244,14 @@
                (m/SizedBox .height 24.0)
                
                (mgl/MongolText "Дагасан хэрэглэгч байхгүй байна." ;; "There are no followed users."
-                               .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 16.0 .color theme/text-secondary))
+                               .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 16.0 .color (theme/text-2 ctx)))
                
                (m/SizedBox .height 32.0)
                
                ;; Button that sends the user to Explore
                (m/ElevatedButton
                 .style (m/ElevatedButton.styleFrom
-                        .backgroundColor m/Colors.white
+                        .backgroundColor (theme/surface ctx)
                         .foregroundColor theme/brand-blue
                         .elevation 0.0
                         .shape (m/RoundedRectangleBorder 
@@ -275,7 +275,7 @@
                .padding (m/EdgeInsets.only .left 16.0 .top 16.0)
                .child
                (m/Text (str "Гишүүн сонгох (" (count selected-ids) ")") ;; "Select Members (X)"
-                       .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 14.0 .color theme/text-secondary .fontWeight m/FontWeight.bold)))
+                       .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 14.0 .color (theme/text-2 ctx) .fontWeight m/FontWeight.bold)))
               
               ;; Horizontal User List
               (m/Expanded

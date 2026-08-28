@@ -29,7 +29,9 @@
   "A styled text field optimized for native vertical Mongolian input.
    Utilizes MongolTextField for correct cursor movement and line wrapping."
   [^m/TextEditingController ctrl label hint max-lines]
-  (m/Container
+  (theme/themed
+   (fn [ctx]
+     (m/Container
    ;; Constrain width so it forms a neat vertical pillar section
    .padding (m/EdgeInsets.only .top 24.0 .bottom 24.0 .right 24.0)
    .child
@@ -41,7 +43,7 @@
                      .style (m/TextStyle .fontFamily "OyunQaganTig"
                                          .fontSize 15.0
                                          .fontWeight m/FontWeight.bold
-                                         .color theme/text-secondary))
+                                         .color (theme/text-2 ctx)))
      (m/SizedBox .width 16.0)
 
      ;; Native Vertical Input Field
@@ -49,15 +51,15 @@
       .controller ctrl
       .maxLines max-lines
       .minLines (if (> max-lines 1) 3 1)
-      .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 16.0 .color theme/text-primary)
+      .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 16.0 .color (theme/text ctx))
       .decoration (m/InputDecoration
                    .hintText hint
-                   .hintStyle (m/TextStyle .color theme/border-color)
+                   .hintStyle (m/TextStyle .color (theme/border ctx))
                    .filled true
-                   .fillColor theme/bg-color
+                   .fillColor (theme/bg ctx)
                    .border (m/OutlineInputBorder
                             .borderRadius (m/BorderRadius.circular 12.0)
-                            .borderSide m/BorderSide.none)))])))
+                            .borderSide m/BorderSide.none)))])))))
 
 ;; =============================================================================
 ;; 2. The Main Edit Profile Screen Widget
@@ -89,21 +91,21 @@
      :bind {:info info}
 
      (m/Scaffold
-      .backgroundColor m/Colors.white
+      .backgroundColor (theme/surface ctx)
 
       ;; --- Top App Bar ---
       .appBar
       (m/AppBar
-       .backgroundColor m/Colors.white
+       .backgroundColor (theme/surface ctx)
        .elevation 0.5
        .leading (m/IconButton
-                 .icon (m/Icon m/Icons.close_rounded .color theme/text-primary)
+                 .icon (m/Icon m/Icons.close_rounded .color (theme/text ctx))
                  .onPressed #(nav/pop! ctx))
        .title (m/Text "Профайл засах" ;; "Edit Profile"
                       .style (m/TextStyle .fontFamily "OyunQaganTig"
                                           .fontSize 18.0
                                           .fontWeight m/FontWeight.bold
-                                          .color theme/text-primary))
+                                          .color (theme/text ctx)))
        .actions
        [(m/Padding
          .padding (m/EdgeInsets.symmetric .horizontal 16.0 .vertical 8.0)
@@ -174,12 +176,12 @@
                                   .border (m/Border.all .color m/Colors.white .width 3.0))
                      .child (m/Icon m/Icons.camera_alt_rounded .color m/Colors.white .size 20.0))))]))
 
-               (m/VerticalDivider .width 1.0 .thickness 1.0 .color theme/border-color)
+               (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
 
                ;; Name Field Pillar
                (profile-input name-ctrl "Нэр" "Өөрийн нэрийг оруулна уу" 1)
 
-               (m/VerticalDivider .width 1.0 .thickness 1.0 .color theme/border-color)
+               (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
 
                ;; Bio Field Pillar
                (profile-input bio-ctrl "Био" "Өөрийнхөө тухай товчхон..." 4)]))

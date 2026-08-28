@@ -90,8 +90,8 @@
       .width 120.0
       .padding (m/EdgeInsets.symmetric .vertical 24.0 .horizontal 8.0)
       .decoration (m/BoxDecoration 
-                   .color m/Colors.white
-                   .border (m/Border .right (m/BorderSide .color theme/border-color .width 0.5)))
+                   .color (theme/surface ctx)
+                   .border (m/Border .right (m/BorderSide .color (theme/border ctx) .width 0.5)))
       .child
       (m/Column
        .crossAxisAlignment m/CrossAxisAlignment.center
@@ -110,12 +110,12 @@
                            .style (m/TextStyle .fontFamily "OyunQaganTig" 
                                                .fontSize 16.0 
                                                .fontWeight m/FontWeight.bold 
-                                               .color theme/text-primary))
+                                               .color (theme/text ctx)))
            (m/SizedBox .width 8.0)
            (mgl/MongolText (str "@" handle)
                            .style (m/TextStyle .fontFamily "OyunQaganTig" 
                                                .fontSize 14.0 
-                                               .color theme/text-secondary))]))
+                                               .color (theme/text-2 ctx)))]))
         
         (m/SizedBox .height 16.0)
         
@@ -124,12 +124,12 @@
           (m/ElevatedButton
            .onPressed #(toggle-connection-follow! ctx user-id !list-atom)
            .style (m/ElevatedButton.styleFrom
-                   .backgroundColor (if is-following? m/Colors.white theme/text-primary)
-                   .foregroundColor (if is-following? theme/text-primary m/Colors.white)
+                   .backgroundColor (if is-following? m/Colors.white (theme/text ctx))
+                   .foregroundColor (if is-following? (theme/text ctx) m/Colors.white)
                    .elevation 0.0
                    .minimumSize (m/Size 40.0 80.0)
                    .padding (m/EdgeInsets.symmetric .vertical 16.0 .horizontal 8.0)
-                   .side (when is-following? (m/BorderSide .color theme/border-color))
+                   .side (when is-following? (m/BorderSide .color (theme/border ctx)))
                    .shape (m/RoundedRectangleBorder .borderRadius (m/BorderRadius.circular 24.0)))
            .child (mgl/MongolText (if is-following? "Дагаж байна" "Дагах") ;; "Following" / "Follow"
                                   .style (m/TextStyle .fontFamily "OyunQaganTig" 
@@ -181,21 +181,21 @@
        .initialIndex initial-index
        .child
        (m/Scaffold
-        .backgroundColor theme/bg-color
+        .backgroundColor (theme/bg ctx)
         
         ;; --- Top App Bar ---
         .appBar
         (m/AppBar
-         .backgroundColor m/Colors.white
+         .backgroundColor (theme/surface ctx)
          .elevation 0.5
          .leading (m/IconButton 
-                   .icon (m/Icon m/Icons.arrow_back_rounded .color theme/text-primary)
+                   .icon (m/Icon m/Icons.arrow_back_rounded .color (theme/text ctx))
                    .onPressed #(nav/pop! ctx))
          .title (m/Text "Холболтууд" ;; "Connections"
                         .style (m/TextStyle .fontFamily "OyunQaganTig" 
                                             .fontSize 18.0 
                                             .fontWeight m/FontWeight.bold 
-                                            .color theme/text-primary)))
+                                            .color (theme/text ctx))))
         
         ;; --- Main Body: Left Rotated TabBar & Right Expanded TabBarView ---
         .body
@@ -209,8 +209,8 @@
             ;; Left Side: Rotated Tab Navigation
             (m/Container
              .decoration (m/BoxDecoration 
-                          .color m/Colors.white
-                          .border (m/Border .right (m/BorderSide .color theme/border-color .width 1.0)))
+                          .color (theme/surface ctx)
+                          .border (m/Border .right (m/BorderSide .color (theme/border ctx) .width 1.0)))
              .child
              ;; Quarter turns = 1 equates to a 90-degree clockwise rotation, perfect for LTR vertical reading
              (m/RotatedBox
@@ -218,7 +218,7 @@
               .child
               (m/TabBar
                .labelColor theme/brand-blue
-               .unselectedLabelColor theme/text-secondary
+               .unselectedLabelColor (theme/text-2 ctx)
                .indicatorColor theme/brand-blue
                .indicatorWeight 3.0
                .labelStyle (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold .fontSize 15.0)

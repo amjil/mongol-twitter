@@ -131,7 +131,7 @@
              :dispose dispose-registry
              
              spans (let [tokens (parse-to-tokens content entities)
-                         base-color (if is-me? m/Colors.white theme/text-primary)
+                         base-color (if is-me? m/Colors.white (theme/text ctx))
                          highlight-color (if is-me? m/Colors.white theme/brand-blue)
                          decoration (if is-me? m/TextDecoration.underline m/TextDecoration.none)]
                      (mapv (fn [tok]

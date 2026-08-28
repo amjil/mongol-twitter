@@ -42,8 +42,8 @@
      .width 120.0
      .padding (m/EdgeInsets.symmetric .vertical 24.0 .horizontal 8.0)
      .decoration (m/BoxDecoration 
-                  .color m/Colors.white
-                  .border (m/Border .right (m/BorderSide .color theme/border-color .width 0.5)))
+                  .color (theme/surface ctx)
+                  .border (m/Border .right (m/BorderSide .color (theme/border ctx) .width 0.5)))
      .child
      (m/Column
       .crossAxisAlignment m/CrossAxisAlignment.center
@@ -64,19 +64,19 @@
                           .style (m/TextStyle .fontFamily "OyunQaganTig" 
                                               .fontSize 15.0 
                                               .fontWeight m/FontWeight.bold 
-                                              .color theme/text-primary))
+                                              .color (theme/text ctx)))
           (m/SizedBox .width 6.0)
           (mgl/MongolText (str "@" handle)
                           .style (m/TextStyle .fontFamily "OyunQaganTig" 
                                               .fontSize 13.0
-                                              .color theme/text-secondary))]))
+                                              .color (theme/text-2 ctx)))]))
        
        (m/SizedBox .height 16.0)
        
        ;; Native Tactical Action Button (Bottom)
        (mgl/MongolElevatedButton
         .style (m/ElevatedButton.styleFrom 
-                .backgroundColor theme/bg-color
+                .backgroundColor (theme/bg ctx)
                 .elevation 0.0
                 .minimumSize (m/Size 40.0 64.0)
                 .shape (m/RoundedRectangleBorder .borderRadius (m/BorderRadius.circular 16.0)))
@@ -126,20 +126,20 @@
              current-user state/current-user]
      
      (m/Scaffold
-      .backgroundColor theme/bg-color
+      .backgroundColor (theme/bg ctx)
       
       .appBar
       (m/AppBar
-       .backgroundColor m/Colors.white
+       .backgroundColor (theme/surface ctx)
        .elevation 0.5
        .leading (m/IconButton 
-                 .icon (m/Icon m/Icons.arrow_back_rounded .color theme/text-primary)
+                 .icon (m/Icon m/Icons.arrow_back_rounded .color (theme/text ctx))
                  .onPressed #(nav/pop! ctx))
        .title (m/Text "Хайлт"
                       .style (m/TextStyle .fontFamily "OyunQaganTig" 
                                           .fontSize 18.0 
                                           .fontWeight m/FontWeight.bold 
-                                          .color theme/text-primary)))
+                                          .color (theme/text ctx))))
       
       .body
       (m/SafeArea
@@ -161,8 +161,8 @@
                .width 64.0
                .padding (m/EdgeInsets.only .top 8.0 .bottom 24.0 .left 8.0 .right 8.0)
                .decoration (m/BoxDecoration
-                            .color m/Colors.white
-                            .border (m/Border .right (m/BorderSide .color theme/border-color .width 1.0)))
+                            .color (theme/surface ctx)
+                            .border (m/Border .right (m/BorderSide .color (theme/border ctx) .width 1.0)))
                .child (search-input/search-field
                        search-ctrl
                        (fn [val]
@@ -177,7 +177,7 @@
                .child
                (cond
                  (str/blank? query)
-                 (m/Center .child (mgl/MongolText "Хайх үгээ оруулна уу..." .style (m/TextStyle .fontFamily "OyunQaganTig" .color theme/text-secondary)))
+                 (m/Center .child (mgl/MongolText "Хайх үгээ оруулна уу..." .style (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text-2 ctx))))
 
                  loading-users?
                  (m/Center .child (m/CircularProgressIndicator .color theme/brand-blue))

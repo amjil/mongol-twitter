@@ -75,8 +75,8 @@
      .margin (m/EdgeInsets.only .right 16.0)
      .padding (m/EdgeInsets.all 24.0)
      .decoration (m/BoxDecoration 
-                  .color m/Colors.white
-                  .border (m/Border.all .color (.withOpacity theme/border-color 0.5) .width 1.0)
+                  .color (theme/surface ctx)
+                  .border (m/Border.all .color (.withOpacity (theme/border ctx) 0.5) .width 1.0)
                   .borderRadius (m/BorderRadius.circular 16.0)
                   .boxShadow [(m/BoxShadow .color (m/Color 0x0A000000) .blurRadius 8.0 .offset (m/Offset 0.0 2.0))])
      .child
@@ -96,14 +96,14 @@
                           .style (m/TextStyle .fontFamily "OyunQaganTig" 
                                               .fontSize 16.0 
                                               .fontWeight m/FontWeight.bold 
-                                              .color theme/text-primary)
+                                              .color (theme/text ctx))
                           .maxLines 2
                           .overflow m/TextOverflow.ellipsis)
           (m/SizedBox .height 8.0)
           (mgl/MongolText (str "@" handle)
                           .style (m/TextStyle .fontFamily "OyunQaganTig" 
                                               .fontSize 13.0 
-                                              .color theme/text-secondary)
+                                              .color (theme/text-2 ctx))
                           .maxLines 1
                           .overflow m/TextOverflow.ellipsis)]))
        
@@ -112,16 +112,16 @@
        ;; Unblock Action Button
        (m/ElevatedButton
         .style (m/ElevatedButton.styleFrom
-                .backgroundColor theme/bg-color
+                .backgroundColor (theme/bg ctx)
                 .elevation 0.0
                 .padding (m/EdgeInsets.symmetric .horizontal 12.0 .vertical 24.0)
                 .shape (m/RoundedRectangleBorder 
                         .borderRadius (m/BorderRadius.circular 24.0)
-                        .side (m/BorderSide .color theme/border-color .width 1.0)))
+                        .side (m/BorderSide .color (theme/border ctx) .width 1.0)))
         .onPressed #(handle-unblock! ctx user !users)
         .child (mgl/MongolText "Блок гаргах" ;; "Unblock"
                                .style (m/TextStyle .fontFamily "OyunQaganTig" 
-                                                   .color theme/text-primary 
+                                                   .color (theme/text ctx) 
                                                    .fontWeight m/FontWeight.bold)))]))))
 
 ;; =============================================================================
@@ -144,15 +144,15 @@
                :dispose nil]
      
      (m/Scaffold
-      .backgroundColor theme/bg-color
+      .backgroundColor (theme/bg ctx)
       
       .appBar
       (m/AppBar
-       .backgroundColor m/Colors.white
+       .backgroundColor (theme/surface ctx)
        .elevation 0.5
        .centerTitle true
        .leading (m/IconButton 
-                 .icon (m/Icon m/Icons.arrow_back_ios_new_rounded .color theme/text-primary .size 20.0)
+                 .icon (m/Icon m/Icons.arrow_back_ios_new_rounded .color (theme/text ctx) .size 20.0)
                  .onPressed #(nav/pop! ctx)))
       
       .body
@@ -168,12 +168,12 @@
           (m/Column
            .mainAxisSize m/MainAxisSize.min
            .children
-           [(m/Icon m/Icons.shield_outlined .size 48.0 .color theme/text-secondary)
+           [(m/Icon m/Icons.shield_outlined .size 48.0 .color (theme/text-2 ctx))
             (m/SizedBox .height 16.0)
             (mgl/MongolText "Блоклосон хэрэглэгч байхгүй байна." ;; "No blocked users."
                             .style (m/TextStyle .fontFamily "OyunQaganTig" 
                                                 .fontSize 16.0 
-                                                .color theme/text-secondary))]))
+                                                .color (theme/text-2 ctx)))]))
          
          :else
          (m/ListView.builder

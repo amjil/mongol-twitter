@@ -70,16 +70,16 @@
       .onLayout #(chat-ctrl/initialize-group-thread! ctx group-id !messages !loading? current-user-id !chat-topic)
       .child
       (m/Scaffold
-       .backgroundColor theme/bg-color
+       .backgroundColor (theme/bg ctx)
 
        .appBar
        (m/AppBar
-        .backgroundColor m/Colors.white
+        .backgroundColor (theme/surface ctx)
         .elevation 0.5
-        .leading (m/IconButton .icon (m/Icon m/Icons.arrow_back_rounded .color theme/text-primary) .onPressed #(nav/pop! ctx))
+        .leading (m/IconButton .icon (m/Icon m/Icons.arrow_back_rounded .color (theme/text ctx)) .onPressed #(nav/pop! ctx))
         .title (m/Column .crossAxisAlignment m/CrossAxisAlignment.start
-                         .children [(m/Text group-name .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 18.0 .fontWeight m/FontWeight.bold .color theme/text-primary))
-                                    (m/Text (str member-count " гишүүнтэй") .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 12.0 .color theme/text-secondary))])
+                         .children [(m/Text group-name .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 18.0 .fontWeight m/FontWeight.bold .color (theme/text ctx)))
+                                    (m/Text (str member-count " гишүүнтэй") .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 12.0 .color (theme/text-2 ctx)))])
         .actions [(m/IconButton .icon (m/Icon m/Icons.info_outline_rounded .color theme/brand-blue) .onPressed #(nav/push! ctx "/chat/group-info" {:group-id group-id}))])
 
        .body

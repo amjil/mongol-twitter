@@ -4,86 +4,99 @@
    and reacts to global unread notification and message counts."
   (:require
    ["package:flutter/material.dart" :as m]
+   ["dart:core" :as dc]
    [cljd.flutter :as f]
    [mongol-zangila.state :as state]
    [mongol-zangila.ui.theme :as theme]
    [mongol-zangila.utils.nav :as nav]))
 
-(defn- nav-icon 
-  [icon-data label is-active? & {:keys [badge-count]}]
-  (let [color (if is-active? theme/brand-blue theme/text-secondary)]
-    (m/Column
-     .mainAxisSize m/MainAxisSize.min
-     .mainAxisAlignment m/MainAxisAlignment.center
-     .children
-     [(if (and badge-count (> badge-count 0))
-        (m/Badge
-         .label (m/Text (if (> badge-count 99) "99+" (str badge-count)) 
-                        .style (m/TextStyle .fontSize 10.0 .fontWeight m/FontWeight.bold))
-         .backgroundColor theme/error-red
-         .child (m/Icon icon-data .color color .size 28.0))
-        (m/Icon icon-data .color color .size 28.0))
-      ;; (m/SizedBox .height 4.0)
-      ;; (m/Text label 
-      ;;         .style (m/TextStyle .fontFamily "OyunQaganTig"
-      ;;                             .fontSize 12.0
-      ;;                             .fontWeight (if is-active? m/FontWeight.bold m/FontWeight.w500)
-      ;;                             .color color))
-      ])))
+(defn- nav-icon
+  [ctx icon-data is-active? & {:keys [badge-count]}]
+  (let [t (theme/of ctx)
+        color (if is-active? (:brand t) (:text-2 t))
+        icon (m/Icon icon-data .color color .size 26.0)]
+    (m/AnimatedContainer
+     .duration (dc/Duration. .milliseconds 200)
+     .curve m/Curves.easeOutCubic
+     .padding (m/EdgeInsets.symmetric .horizontal 14.0 .vertical 8.0)
+     .decoration (m/BoxDecoration
+                  .color (if is-active? (:brand-soft t) m/Colors.transparent)
+                  .borderRadius (m/BorderRadius.circular theme/radius-pill))
+     .child
+     (if (and badge-count (> badge-count 0))
+       (m/Badge
+        .label (m/Text (if (> badge-count 99) "99+" (str badge-count))
+                       .style (m/TextStyle .fontSize 10.0 .fontWeight m/FontWeight.bold))
+        .backgroundColor (:error t)
+        .child icon)
+       icon))))
 
-(defn app-scaffold 
+(defn app-scaffold
   "The root container for top-level navigation screens."
   [ctx current-route body-widget]
-  
+
   (f/widget
    :watch [unread-msgs state/unread-messages-count
            unread-notifs state/unread-notifications-count]
-   
+
    (m/Scaffold
-    .backgroundColor theme/bg-color
+    .backgroundColor (theme/bg ctx)
     .body body-widget
     .bottomNavigationBar
     (m/Container
-     .decoration (m/BoxDecoration 
-                  .color m/Colors.white
-                  .border (m/Border .top (m/BorderSide .color theme/border-color .width 1.0)))
+     .decoration (m/BoxDecoration
+                  .color (theme/nav-bar ctx)
+                  .border (m/Border .top (theme/hairline ctx))
+                  .boxShadow (if (theme/dark? ctx)
+                               []
+                               [(m/BoxShadow
+                                 .color (m/Color 0x0A0F1419)
+                                 .blurRadius 16.0
+                                 .offset (m/Offset 0.0 -4.0))]))
      .child
      (m/SafeArea
       .child
       (m/Padding
-       .padding (m/EdgeInsets.symmetric .vertical 8.0 .horizontal 16.0)
+       .padding (m/EdgeInsets.symmetric .vertical 6.0 .horizontal 12.0)
        .child
        (m/Row
         .mainAxisAlignment m/MainAxisAlignment.spaceBetween
         .children
-        [(m/GestureDetector 
+        [(m/GestureDetector
           .onTap #(when-not (= current-route "/feed/home") (nav/push-replacement! ctx "/feed/home"))
-          .child (m/Container .width 60.0 .color m/Colors.transparent 
-                              .child (nav-icon m/Icons.home_rounded "Нүүр" (= current-route "/feed/home"))))
-         
-         (m/GestureDetector 
+          .child (m/Container .color m/Colors.transparent
+                              .child (nav-icon ctx m/Icons.home_rounded (= current-route "/feed/home"))))
+
+         (m/GestureDetector
           .onTap #(when-not (= current-route "/search") (nav/push-replacement! ctx "/search"))
-          .child (m/Container .width 60.0 .color m/Colors.transparent 
-                              .child (nav-icon m/Icons.search_rounded "Хайх" (= current-route "/search"))))
-         
-         ;; ⚡ Chat Tab with dynamic message badge
-         (m/GestureDetector 
+          .child (m/Container .color m/Colors.transparent
+                              .child (nav-icon ctx m/Icons.search_rounded (= current-route "/search"))))
+
+         (m/GestureDetector
           .onTap #(when-not (= current-route "/chat/inbox") (nav/push-replacement! ctx "/chat/inbox"))
-          .child (m/Container .width 60.0 .color m/Colors.transparent 
-                              .child (nav-icon (if (= current-route "/chat/inbox") m/Icons.chat_bubble_rounded m/Icons.chat_bubble_outline_rounded) 
-                                               "Зурвас" (= current-route "/chat/inbox")
-                                               :badge-count unread-msgs)))
-         
-         ;; ⚡ Notifications Tab with dynamic notification badge
-         (m/GestureDetector 
+          .child (m/Container .color m/Colors.transparent
+                              .child (nav-icon ctx
+                                              (if (= current-route "/chat/inbox")
+                                                m/Icons.chat_bubble_rounded
+                                                m/Icons.chat_bubble_outline_rounded)
+                                              (= current-route "/chat/inbox")
+                                              :badge-count unread-msgs)))
+
+         (m/GestureDetector
           .onTap #(when-not (= current-route "/notifications/view") (nav/push-replacement! ctx "/notifications/view"))
-          .child (m/Container .width 60.0 .color m/Colors.transparent 
-                              .child (nav-icon (if (= current-route "/notifications/view") m/Icons.notifications_rounded m/Icons.notifications_none_rounded) 
-                                               "Мэдэгдэл" (= current-route "/notifications/view")
-                                               :badge-count unread-notifs)))
-         
-         (m/GestureDetector 
+          .child (m/Container .color m/Colors.transparent
+                              .child (nav-icon ctx
+                                              (if (= current-route "/notifications/view")
+                                                m/Icons.notifications_rounded
+                                                m/Icons.notifications_none_rounded)
+                                              (= current-route "/notifications/view")
+                                              :badge-count unread-notifs)))
+
+         (m/GestureDetector
           .onTap #(when-not (= current-route "/profile/view") (nav/push-replacement! ctx "/profile/view"))
-          .child (m/Container .width 60.0 .color m/Colors.transparent 
-                              .child (nav-icon (if (= current-route "/profile/view") m/Icons.person_rounded m/Icons.person_outline_rounded) 
-                                               "Профайл" (= current-route "/profile/view"))))])))))))
+          .child (m/Container .color m/Colors.transparent
+                              .child (nav-icon ctx
+                                              (if (= current-route "/profile/view")
+                                                m/Icons.person_rounded
+                                                m/Icons.person_outline_rounded)
+                                              (= current-route "/profile/view"))))])))))))

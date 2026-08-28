@@ -111,7 +111,7 @@
   (m/Container
    .width 170.0
    .padding (m/EdgeInsets.only .top 32.0 .bottom 32.0 .left 16.0 .right 16.0)
-   .decoration (m/BoxDecoration .color m/Colors.white .border (m/Border .right (m/BorderSide .color theme/border-color .width 1.0)))
+   .decoration (m/BoxDecoration .color (theme/surface ctx) .border (m/Border .right (m/BorderSide .color (theme/border ctx) .width 1.0)))
    .child
    (m/Column
     .crossAxisAlignment m/CrossAxisAlignment.center
@@ -130,10 +130,10 @@
        .crossAxisAlignment m/CrossAxisAlignment.start
        .children
        [(mgl/MongolText group-name 
-                        .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 20.0 .fontWeight m/FontWeight.bold .color theme/text-primary))
+                        .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 20.0 .fontWeight m/FontWeight.bold .color (theme/text ctx)))
         (m/SizedBox .width 6.0)
         (mgl/MongolText (str member-count " гишүүн") 
-                        .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 14.0 .color theme/text-secondary))]))
+                        .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 14.0 .color (theme/text-2 ctx)))]))
      
      ;; Contextual Control Buttons
      (m/Column
@@ -166,7 +166,7 @@
     (m/Container
      .width 120.0
      .margin (m/EdgeInsets.only .right 12.0 .top 16.0 .bottom 16.0)
-     .decoration (m/BoxDecoration .color m/Colors.white .borderRadius (m/BorderRadius.circular 16.0) .border (m/Border.all .color theme/border-color .width 1.0))
+     .decoration (m/BoxDecoration .color (theme/surface ctx) .borderRadius (m/BorderRadius.circular 16.0) .border (m/Border.all .color (theme/border ctx) .width 1.0))
      .padding (m/EdgeInsets.symmetric .vertical 20.0 .horizontal 8.0)
      .child
      (m/Column
@@ -192,13 +192,13 @@
          .mainAxisAlignment m/MainAxisAlignment.center
          .crossAxisAlignment m/CrossAxisAlignment.start
          .children
-         [(mgl/MongolText name .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold .fontSize 15.0 .color theme/text-primary) .maxLines 1 .overflow m/TextOverflow.ellipsis)
+         [(mgl/MongolText name .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold .fontSize 15.0 .color (theme/text ctx)) .maxLines 1 .overflow m/TextOverflow.ellipsis)
           (m/SizedBox .width 4.0)
-          (mgl/MongolText (str "@" handle) .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 13.0 .color theme/text-secondary) .maxLines 1 .overflow m/TextOverflow.ellipsis)]))
+          (mgl/MongolText (str "@" handle) .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 13.0 .color (theme/text-2 ctx)) .maxLines 1 .overflow m/TextOverflow.ellipsis)]))
        
        ;; Semantic Role Badges
        (cond
-         is-me?    (m/Container .padding (m/EdgeInsets.symmetric .horizontal 8.0 .vertical 4.0) .decoration (m/BoxDecoration .color theme/bg-color .borderRadius (m/BorderRadius.circular 8.0)) .child (m/Text "Би" .style (m/TextStyle .fontSize 10.0 .fontWeight m/FontWeight.bold .color theme/text-secondary)))
+         is-me?    (m/Container .padding (m/EdgeInsets.symmetric .horizontal 8.0 .vertical 4.0) .decoration (m/BoxDecoration .color (theme/bg ctx) .borderRadius (m/BorderRadius.circular 8.0)) .child (m/Text "Би" .style (m/TextStyle .fontSize 10.0 .fontWeight m/FontWeight.bold .color (theme/text-2 ctx))))
          is-owner? (m/Container .padding (m/EdgeInsets.symmetric .horizontal 8.0 .vertical 4.0) .decoration (m/BoxDecoration .color (.withOpacity theme/warning-yellow 0.1) .borderRadius (m/BorderRadius.circular 8.0)) .child (m/Text "Админ" .style (m/TextStyle .fontSize 10.0 .fontWeight m/FontWeight.bold .color theme/warning-yellow)))
          :else     (m/SizedBox.shrink))]))))
 
@@ -223,17 +223,17 @@
       .onLayout #(load-group-details! ctx group-id !group-data !members !loading?)
       .child
       (m/Scaffold
-       .backgroundColor theme/bg-color
+       .backgroundColor (theme/bg ctx)
        
        .appBar
        (m/AppBar
-        .backgroundColor theme/bg-color
+        .backgroundColor (theme/bg ctx)
         .elevation 0.0
         .leading (m/IconButton 
-                  .icon (m/Icon m/Icons.arrow_back_rounded .color theme/text-primary)
+                  .icon (m/Icon m/Icons.arrow_back_rounded .color (theme/text ctx))
                   .onPressed #(nav/pop! ctx))
         .title (m/Text "Группийн тохиргоо" ;; "Group Settings"
-                       .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 18.0 .fontWeight m/FontWeight.bold .color theme/text-primary)))
+                       .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 18.0 .fontWeight m/FontWeight.bold .color (theme/text ctx))))
        
        .body
        (if loading?

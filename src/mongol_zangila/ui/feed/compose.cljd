@@ -158,7 +158,7 @@
              .child (m/Container
                      .padding (m/EdgeInsets.all 2.0)
                      .decoration (m/BoxDecoration .color (m/Color 0xAA000000) .shape m/BoxShape.circle)
-                     .child (m/Icon m/Icons.close_rounded .color m/Colors.white .size 12.0))))])))))))
+                     .child (m/Icon m/Icons.close_rounded .color theme/on-brand .size 12.0))))])))))))
 
 ;; =============================================================================
 ;; 4. Main Composition Screen Widget
@@ -220,14 +220,14 @@
                      (.then (fn [_] (dc/Future.value true)))))
     .child
     (m/Scaffold
-     .backgroundColor m/Colors.white
+     .backgroundColor (theme/surface ctx)
      
      .appBar
      (m/AppBar
-      .backgroundColor m/Colors.white
+      .backgroundColor (theme/surface ctx)
       .elevation 0.5
       .leading (m/IconButton 
-                .icon (m/Icon m/Icons.close_rounded .color theme/text-primary)
+                .icon (m/Icon m/Icons.close_rounded .color (theme/text ctx))
                 .onPressed (fn [] 
                              (-> (save-draft-logic! ctx loading? !compose-saved? !compose-editor-state !compose-media-urls draft-id outbox-id 
                                                     reply-to-id reply-to-name reply-to-author-id quote-id quote-author-name quote-post @!compose-idk)
@@ -268,19 +268,19 @@
        ;; rich-editor reads :block-style (not :block-styles) to override the default white text
        :editor-config
        {:block-style
-        {:paragraph (m/TextStyle .fontFamily "OyunQaganTig" .color theme/text-primary .fontSize 16.0)
-         :heading-1 (m/TextStyle .fontFamily "OyunQaganTig" .color theme/text-primary .fontSize 20.0 .fontWeight m/FontWeight.bold)
-         :heading-2 (m/TextStyle .fontFamily "OyunQaganTig" .color theme/text-primary .fontSize 18.0 .fontWeight m/FontWeight.bold)
-         :list-item (m/TextStyle .fontFamily "OyunQaganTig" .color theme/text-primary .fontSize 16.0)
-         :blockquote (m/TextStyle .fontFamily "OyunQaganTig" .color theme/text-secondary .fontSize 15.0)}}
+        {:paragraph (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text ctx) .fontSize 16.0)
+         :heading-1 (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text ctx) .fontSize 20.0 .fontWeight m/FontWeight.bold)
+         :heading-2 (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text ctx) .fontSize 18.0 .fontWeight m/FontWeight.bold)
+         :list-item (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text ctx) .fontSize 16.0)
+         :blockquote (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text-2 ctx) .fontSize 15.0)}}
 
        :leading
        (m/Container
         .width 60.0
         .height (.-infinity dc/double)
         .decoration (m/BoxDecoration
-                     .color m/Colors.white
-                     .border (m/Border .right (m/BorderSide .color theme/border-color .width 0.5)))
+                     .color (theme/surface ctx)
+                     .border (m/Border .right (m/BorderSide .color (theme/border ctx) .width 0.5)))
         .padding (m/EdgeInsets.symmetric .vertical 16.0)
         .child
         (m/Column
@@ -294,7 +294,7 @@
           (m/SizedBox .height 16.0)
 
           (m/IconButton
-           .icon (m/Icon m/Icons.alternate_email_rounded .color theme/text-secondary)
+           .icon (m/Icon m/Icons.alternate_email_rounded .color (theme/text-2 ctx))
            .onPressed (fn []
                         (tag-search/show-tag-modal! ctx !compose-editor-state simple-editor/insert-entity-at-cursor!)
                         nil))
@@ -302,7 +302,7 @@
           (m/SizedBox .height 16.0)
 
           (m/IconButton
-           .icon (m/Icon m/Icons.tag_rounded .color theme/text-secondary)
+           .icon (m/Icon m/Icons.tag_rounded .color (theme/text-2 ctx))
            .onPressed (fn []
                         (tag-search/show-tag-modal! ctx !compose-editor-state simple-editor/insert-entity-at-cursor!)
                         nil))
@@ -320,13 +320,13 @@
         [(if (empty? quote-author-name)
            (m/SizedBox.shrink)
            (mgl/MongolText (str "Иш татах: @" (str/replace-first quote-author-name #"^@" ""))
-                           .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 16.0 .color theme/text-secondary)))
+                           .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 16.0 .color (theme/text-2 ctx))))
          (if quote-post
            (quoted-post-widget/quoted-post-card
             ctx quote-post
             :margin (m/EdgeInsets.only .right 16.0 .top 16.0 .bottom 16.0)
             :padding (m/EdgeInsets.all 16.0)
-            :bg-color theme/bg-color
+            :bg-color (theme/bg ctx)
             :show-handle? true
             :show-divider? false
             :author-font-size 14.0

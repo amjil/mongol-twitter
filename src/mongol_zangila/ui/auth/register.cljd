@@ -26,7 +26,9 @@
 (defn- auth-input-pillar 
   "A styled vertical text field optimized for authentication forms."
   [^m/TextEditingController ctrl label obscure?]
-  (m/Container
+  (theme/themed
+   (fn [ctx]
+     (m/Container
    .padding (m/EdgeInsets.only .top 24.0 .bottom 24.0 .right 24.0)
    .child
    (m/Row
@@ -37,7 +39,7 @@
                      .style (m/TextStyle .fontFamily "OyunQaganTig"
                                          .fontSize 15.0
                                          .fontWeight m/FontWeight.bold
-                                         .color theme/text-secondary))
+                                         .color (theme/text-2 ctx)))
      (m/SizedBox .width 16.0)
      
      ;; Native Vertical Input Field
@@ -45,14 +47,14 @@
       .controller ctrl
       .maxLines 1
       .obscureText obscure?
-      .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 16.0 .color theme/text-primary)
+      .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 16.0 .color (theme/text ctx))
       .decoration (m/InputDecoration
-                   .hintStyle (m/TextStyle .color theme/border-color)
+                   .hintStyle (m/TextStyle .color (theme/border ctx))
                    .filled true
-                   .fillColor theme/bg-color
+                   .fillColor (theme/bg ctx)
                    .border (m/OutlineInputBorder
                             .borderRadius (m/BorderRadius.circular 12.0)
-                            .borderSide m/BorderSide.none)))])))
+                            .borderSide m/BorderSide.none)))])))))
 
 ;; =============================================================================
 ;; 2. The Main Registration Screen Widget
@@ -79,21 +81,21 @@
      :bind {:info info}
      
      (m/Scaffold
-      .backgroundColor m/Colors.white
+      .backgroundColor (theme/surface ctx)
       
       ;; --- Top App Bar ---
       .appBar
       (m/AppBar
-       .backgroundColor m/Colors.white
+       .backgroundColor (theme/surface ctx)
        .elevation 0.5
        .leading (m/IconButton 
-                 .icon (m/Icon m/Icons.arrow_back_rounded .color theme/text-primary)
+                 .icon (m/Icon m/Icons.arrow_back_rounded .color (theme/text ctx))
                  .onPressed #(nav/pop! ctx))
        .title (mgl/MongolText "Бүртгүүлэх" ;; "Register"
                               .style (m/TextStyle .fontFamily "OyunQaganTig" 
                                                   .fontSize 18.0 
                                                   .fontWeight m/FontWeight.bold 
-                                                  .color theme/text-primary)))
+                                                  .color (theme/text ctx))))
       
       .body
       (m/SafeArea
@@ -126,31 +128,31 @@
                  .children
                  [(m/Container
                    .padding (m/EdgeInsets.all 16.0)
-                   .decoration (m/BoxDecoration .color theme/bg-color .shape m/BoxShape.circle)
+                   .decoration (m/BoxDecoration .color (theme/bg ctx) .shape m/BoxShape.circle)
                    .child (m/Icon m/Icons.person_add_alt_1_rounded .color theme/brand-blue .size 28.0))
                   (m/SizedBox .height 24.0)
                   (mgl/MongolText "Бүртгүүлэх" ;; Register
                                   .style (m/TextStyle .fontFamily "OyunQaganTig" 
                                                       .fontSize 16.0 
                                                       .fontWeight m/FontWeight.bold 
-                                                      .color theme/text-primary))]))
+                                                      .color (theme/text ctx)))]))
 
-               (m/VerticalDivider .width 1.0 .thickness 1.0 .color theme/border-color)
+               (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
 
                ;; Pillar 2: Name Input
                (auth-input-pillar name-ctrl "Нэр" false)
 
-               (m/VerticalDivider .width 1.0 .thickness 1.0 .color theme/border-color)
+               (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
 
                ;; Pillar 3: Phone Input
                (auth-input-pillar phone-ctrl "Утасны дугаар" false)
 
-               (m/VerticalDivider .width 1.0 .thickness 1.0 .color theme/border-color)
+               (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
 
                ;; Pillar 4: Password Input
                (auth-input-pillar pass-ctrl "Нууц үг" true)
 
-               (m/VerticalDivider .width 1.0 .thickness 1.0 .color theme/border-color)
+               (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
 
                ;; Pillar 5: Actions & Terms
                (m/Padding
@@ -184,7 +186,7 @@
                   (mgl/MongolText "Бүртгүүлснээр та манай Үйлчилгээний нөхцөлийг\nзөвшөөрсөнд тооцно." ;; Terms
                                   .style (m/TextStyle .fontFamily "OyunQaganTig" 
                                                       .fontSize 13.0 
-                                                      .color theme/text-secondary
+                                                      .color (theme/text-2 ctx)
                                                       .height 1.5))]))]))
             
             ;; Floating candidates view for custom IME

@@ -206,7 +206,7 @@
                               .style (m/TextStyle .fontFamily "OyunQaganTig" 
                                                   .fontSize 12.0 
                                                   .fontWeight m/FontWeight.bold 
-                                                  .color theme/text-secondary)))
+                                                  .color (theme/text-2 ctx))))
               (m/SizedBox.shrink))
             
             ;; 2. ⚡ The Vertical Bubble Geometry
@@ -214,13 +214,13 @@
              .width 56.0
              .height bubble-height
              .decoration (m/BoxDecoration 
-                          .color (if is-me? theme/brand-blue m/Colors.white)
+                          .color (if is-me? theme/brand-blue (theme/bubble-them ctx))
                           .borderRadius (m/BorderRadius.only
                                          .topLeft (m/Radius.circular 28.0)
                                          .topRight (m/Radius.circular 28.0)
                                          .bottomLeft (m/Radius.circular (if is-me? 28.0 4.0))
                                          .bottomRight (m/Radius.circular (if is-me? 4.0 28.0)))
-                          .border (when-not is-me? (m/Border.all .color theme/border-color .width 0.5))
+                          .border (when-not is-me? (m/Border.all .color (theme/border ctx) .width 0.5))
                           .boxShadow (when-not is-me? 
                                        [(m/BoxShadow .color (.withOpacity m/Colors.black 0.02) 
                                                      .blurRadius 4.0 
@@ -260,7 +260,7 @@
                                        .thumbShape (m/RoundSliderThumbShape. .enabledThumbRadius 6.0)
                                        .overlayShape (m/RoundSliderOverlayShape. .overlayRadius 14.0)
                                        .activeTrackColor (if is-me? m/Colors.white theme/brand-blue)
-                                       .inactiveTrackColor (if is-me? (.withOpacity m/Colors.white 0.3) theme/border-color)
+                                       .inactiveTrackColor (if is-me? (.withOpacity m/Colors.white 0.3) (theme/border ctx))
                                        .thumbColor (if is-me? m/Colors.white theme/brand-blue))
                                 .child (m/Slider
                                         .value progress-ratio
@@ -279,7 +279,7 @@
                                        .style (m/TextStyle .fontFamily "OyunQaganTig"
                                                            .fontSize 14.0 
                                                            .fontWeight m/FontWeight.w600
-                                                           .color (if is-me? m/Colors.white theme/text-primary))))]))
+                                                           .color (if is-me? m/Colors.white (theme/text ctx)))))]))
             
             (m/SizedBox .height 4.0)
             
@@ -289,7 +289,7 @@
              .children
              [(mgl/MongolText (format-message-time timestamp)
                               .style (m/TextStyle .fontSize 10.0
-                                                  .color (if is-me? (.withOpacity m/Colors.white 0.7) theme/text-secondary)))
+                                                  .color (if is-me? (.withOpacity m/Colors.white 0.7) (theme/text-2 ctx))))
 
               (if is-me?
                 (m/Padding

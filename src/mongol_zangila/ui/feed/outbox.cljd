@@ -146,9 +146,9 @@
       .margin (m/EdgeInsets.only .right 16.0 .top 16.0 .bottom 16.0)
       .padding (m/EdgeInsets.all 16.0)
       .decoration (m/BoxDecoration 
-                   .color m/Colors.white
+                   .color (theme/surface ctx)
                    .borderRadius (m/BorderRadius.circular 12.0)
-                   .border (m/Border.all .color (if has-errors? (.withOpacity theme/error-red 0.3) theme/border-color) .width 1.0)
+                   .border (m/Border.all .color (if has-errors? (.withOpacity theme/error-red 0.3) (theme/border ctx)) .width 1.0)
                    .boxShadow [(m/BoxShadow .color (.withOpacity m/Colors.black 0.02) .blurRadius 8.0)])
       .child
       (m/Column
@@ -161,7 +161,7 @@
                           is-draft? m/Icons.edit_note_rounded
                           has-errors? m/Icons.error_outline_rounded
                           :else m/Icons.cloud_upload_outlined)
-                        .color (if has-errors? theme/error-red theme/text-secondary)
+                        .color (if has-errors? theme/error-red (theme/text-2 ctx))
                         .size 32.0))
         
         ;; 2. Content Preview
@@ -178,12 +178,12 @@
                              (= m-type "repost-tweet") "Дахин нийтлэх"
                              (= m-type "bookmark-tweet") "Хадгалсан"
                              :else "Үйлдэл")
-                           .style (m/TextStyle .fontFamily "OyunQaganTig" .color theme/text-secondary .fontSize 14.0))
+                           .style (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text-2 ctx) .fontSize 14.0))
            (m/SizedBox .width 8.0)
            (mgl/MongolText preview-text
                            .maxLines 2
                            .overflow m/TextOverflow.ellipsis
-                           .style (m/TextStyle .fontFamily "OyunQaganTig" .color theme/text-primary .fontSize 16.0))
+                           .style (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text ctx) .fontSize 16.0))
            (if has-errors?
              (m/Padding
               .padding (m/EdgeInsets.only .left 12.0)
@@ -196,7 +196,7 @@
          .padding (m/EdgeInsets.only .top 16.0)
          .child
          (m/IconButton
-          .icon (m/Icon m/Icons.delete_outline_rounded .color theme/text-secondary)
+          .icon (m/Icon m/Icons.delete_outline_rounded .color (theme/text-2 ctx))
           .onPressed #(delete-pending-item! ctx item)))])))))
 
 ;; =============================================================================
@@ -230,20 +230,20 @@
          items (vec (sort-by #(get % "created_at") #(compare %2 %1) all-items))]
      
      (m/Scaffold
-      .backgroundColor theme/bg-color
+      .backgroundColor (theme/bg ctx)
       
       .appBar
       (m/AppBar
-       .backgroundColor m/Colors.white
+       .backgroundColor (theme/surface ctx)
        .elevation 0.5
        .leading (m/IconButton 
-                 .icon (m/Icon m/Icons.arrow_back_rounded .color theme/text-primary)
+                 .icon (m/Icon m/Icons.arrow_back_rounded .color (theme/text ctx))
                  .onPressed #(nav/pop! ctx))
        .title (m/Text "Хүлээгдэж буй"
                       .style (m/TextStyle .fontFamily "OyunQaganTig" 
                                           .fontSize 18.0 
                                           .fontWeight m/FontWeight.bold 
-                                          .color theme/text-primary))
+                                          .color (theme/text ctx)))
        .actions [(m/TextButton
                   .onPressed #(trigger-manual-sync! ctx)
                   .child (m/Text "Синхрончлох"

@@ -75,7 +75,9 @@
 (defn- section-header 
   "Vertical text header for grouping settings pillars."
   [title]
-  (m/Container
+  (theme/themed
+   (fn [ctx]
+     (m/Container
    .width 56.0
    .padding (m/EdgeInsets.only .top 24.0)
    .alignment m/Alignment.topCenter
@@ -83,12 +85,14 @@
                           .style (m/TextStyle .fontFamily "OyunQaganTig"
                                               .fontSize 14.0
                                               .fontWeight m/FontWeight.bold
-                                              .color theme/text-secondary))))
+                                              .color (theme/text-2 ctx)))))))
 
 (defn- action-icon-button 
   "A circular action button with MongolText underneath. Forms a compact vertical group."
   [icon-data label on-tap & {:keys [color] :or {color theme/brand-blue}}]
-  (m/InkWell
+  (theme/themed
+   (fn [ctx]
+     (m/InkWell
    .onTap on-tap
    .borderRadius (m/BorderRadius.circular 12.0)
    .child
@@ -109,21 +113,24 @@
                       .style (m/TextStyle .fontFamily "OyunQaganTig"
                                           .fontSize 14.0
                                           .fontWeight m/FontWeight.w600
-                                          .color theme/text-primary))]))))
+                                          .color (theme/text ctx)))]))))))
 
 (defn- vertical-list-tile 
   "Transforms the standard horizontal ListTile into a vertical settings pillar.
    Top: Icon, Middle: Text Content, Bottom: Action/Chevron."
-  [icon-data title subtitle on-tap & {:keys [trailing color] :or {color theme/text-primary}}]
-  (m/InkWell
+  [icon-data title subtitle on-tap & {:keys [trailing color]}]
+  (theme/themed
+   (fn [ctx]
+     (let [color (or color (theme/text ctx))]
+     (m/InkWell
    .onTap on-tap
    .child
    (m/Container
     .width 88.0
     .padding (m/EdgeInsets.symmetric .vertical 24.0 .horizontal 8.0)
     .decoration (m/BoxDecoration 
-                 .color m/Colors.white
-                 .border (m/Border .right (m/BorderSide .color theme/border-color .width 0.5)))
+                 .color (theme/surface ctx)
+                 .border (m/Border .right (m/BorderSide .color (theme/border ctx) .width 0.5)))
     .child
     (m/Column
      .children
@@ -154,12 +161,12 @@
                      .child (mgl/MongolText subtitle 
                                             .style (m/TextStyle .fontFamily "OyunQaganTig" 
                                                                 .fontSize 13.0 
-                                                                .color theme/text-secondary))))])))
+                                                                .color (theme/text-2 ctx)))))])))
       
       (m/SizedBox .height 16.0)
       
       ;; 3. Trailing Action (Bottom)
-      (or trailing (m/Icon m/Icons.keyboard_arrow_down_rounded .color theme/text-secondary .size 24.0))]))))
+      (or trailing (m/Icon m/Icons.keyboard_arrow_down_rounded .color (theme/text-2 ctx) .size 24.0))])))))))
 
 ;; =============================================================================
 ;; 4. The Main Info Screen Widget
@@ -183,15 +190,15 @@
       .onLayout #(load-partner-profile! ctx partner-id !profile-data !loading?)
       .child
       (m/Scaffold
-       .backgroundColor theme/bg-color
+       .backgroundColor (theme/bg ctx)
        
        ;; --- Top App Bar ---
        .appBar
        (m/AppBar
-        .backgroundColor theme/bg-color
+        .backgroundColor (theme/bg ctx)
         .elevation 0.0
         .leading (m/IconButton 
-                  .icon (m/Icon m/Icons.arrow_back_rounded .color theme/text-primary)
+                  .icon (m/Icon m/Icons.arrow_back_rounded .color (theme/text ctx))
                   .onPressed #(nav/pop! ctx)))
        
        ;; --- Main Body: Horizontal Settings Gallery ---
@@ -231,21 +238,21 @@
                                    .style (m/TextStyle .fontFamily "OyunQaganTig" 
                                                        .fontSize 22.0 
                                                        .fontWeight m/FontWeight.bold 
-                                                       .color theme/text-primary))
+                                                       .color (theme/text ctx)))
                    (m/SizedBox .width 8.0)
                    (mgl/MongolText (str "@" handle)
                                    .style (m/TextStyle .fontFamily "OyunQaganTig" 
                                                        .fontSize 15.0 
-                                                       .color theme/text-secondary))
+                                                       .color (theme/text-2 ctx)))
                    (when-not (empty? bio)
                      (m/Padding
                       .padding (m/EdgeInsets.only .left 16.0)
                       .child (mgl/MongolText bio
                                              .style (m/TextStyle .fontFamily "OyunQaganTig" 
                                                                  .fontSize 14.0 
-                                                                 .color theme/text-primary))))]))]))
+                                                                 .color (theme/text ctx)))))]))]))
              
-             (m/VerticalDivider .width 1.0 .thickness 1.0 .color theme/border-color)
+             (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
              
              ;; 2. Quick Action Pillar
              (m/Container
@@ -267,9 +274,9 @@
                 (action-icon-button (if muted? m/Icons.notifications_off_outlined m/Icons.notifications_none_rounded)
                                     "Мэдэгдэл" ;; "Notifications"
                                     #(toggle-mute! ctx thread-id !muted?)
-                                    :color (if muted? theme/text-secondary theme/brand-blue))]))
+                                    :color (if muted? (theme/text-2 ctx) theme/brand-blue))]))
              
-             (m/VerticalDivider .width 1.0 .thickness 1.0 .color theme/border-color)
+             (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
              
              ;; 3. Shared Resources Section
              (section-header "Мэдээлэл") ;; "Information"
@@ -286,7 +293,7 @@
                                  nil
                                  #(toast/info ctx "Файл үзэх"))
              
-             (m/VerticalDivider .width 1.0 .thickness 1.0 .color theme/border-color)
+             (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
              
              ;; 4. Privacy & Moderation Section
              (section-header "Тохиргоо") ;; "Settings"

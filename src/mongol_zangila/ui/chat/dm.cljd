@@ -74,14 +74,14 @@
                   nil)
       .child
       (m/Scaffold
-       .backgroundColor theme/bg-color
+       .backgroundColor (theme/bg ctx)
        
        .appBar
        (m/AppBar
-        .backgroundColor m/Colors.white
+        .backgroundColor (theme/surface ctx)
         .elevation 0.5
-        .leading (m/IconButton .icon (m/Icon m/Icons.arrow_back_rounded .color theme/text-primary) .onPressed #(nav/pop! ctx))
-        .title (m/Text partner-name .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 18.0 .fontWeight m/FontWeight.bold .color theme/text-primary))
+        .leading (m/IconButton .icon (m/Icon m/Icons.arrow_back_rounded .color (theme/text ctx)) .onPressed #(nav/pop! ctx))
+        .title (m/Text partner-name .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 18.0 .fontWeight m/FontWeight.bold .color (theme/text ctx)))
         .actions (vec (keep identity [(when partner-id (m/IconButton .icon (m/Icon m/Icons.info_outline_rounded .color theme/brand-blue) .onPressed #(nav/push! ctx "/chat/dm-info" {:thread-id thread-id :partner-id partner-id :initial-name partner-name})))])))
        
        .body
@@ -131,11 +131,11 @@
          ;; --- B. Bottom Area ---
          (if is-blocked?
            (m/Container
-            .height 100.0 .decoration (m/BoxDecoration .color m/Colors.white .border (m/Border .top (m/BorderSide .color theme/border-color .width 0.5))) .padding (m/EdgeInsets.all 16.0)
+            .height 100.0 .decoration (m/BoxDecoration .color (theme/surface ctx) .border (m/Border .top (m/BorderSide .color (theme/border ctx) .width 0.5))) .padding (m/EdgeInsets.all 16.0)
             .child (m/Row .mainAxisAlignment m/MainAxisAlignment.center .crossAxisAlignment m/CrossAxisAlignment.center
                           .children [(m/Icon m/Icons.block_rounded .color theme/error-red .size 24.0)
                                      (m/SizedBox .width 8.0)
-                                     (mgl/MongolText "Блоклосон хэрэглэгч" .style (m/TextStyle .fontFamily "OyunQaganTig" .color theme/text-secondary .fontWeight m/FontWeight.bold))
+                                     (mgl/MongolText "Блоклосон хэрэглэгч" .style (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text-2 ctx) .fontWeight m/FontWeight.bold))
                                      (m/SizedBox .width 16.0)
                                      (mgl/MongolElevatedButton .style (m/ElevatedButton.styleFrom .backgroundColor theme/brand-blue .elevation 0.0 .shape (m/RoundedRectangleBorder .borderRadius (m/BorderRadius.circular 16.0)))
                                                                .onPressed #(profile-ctrl/unblock-user! ctx partner-id partner-name (fn [] (reset! !is-blocked? false)))

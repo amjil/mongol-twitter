@@ -47,7 +47,9 @@
 
 (defn- action-button 
   [icon-data count-val is-active? active-color on-tap]
-  (m/InkWell
+  (theme/themed
+   (fn [ctx]
+     (m/InkWell
    .onTap on-tap
    .borderRadius (m/BorderRadius.circular 16.0)
    .child
@@ -59,16 +61,16 @@
      .children
      [(m/Icon icon-data 
               .size 20.0 
-              .color (if is-active? active-color theme/text-secondary))
+              .color (if is-active? active-color (theme/text-2 ctx)))
       (if (> count-val 0)
         (m/Padding
          .padding (m/EdgeInsets.only .top 6.0)
          .child (m/Text (str count-val)
                         .style (m/TextStyle .fontFamily "OyunQaganTig"
                                             .fontSize 13.0
-                                            .color (if is-active? active-color theme/text-secondary))))
+                                            .color (if is-active? active-color (theme/text-2 ctx)))))
         (m/SizedBox.shrink))
-      (m/SizedBox .height 12.0)]))))
+      (m/SizedBox .height 12.0)]))))))
 
 (defn- show-post-options! 
   [ctx post-data on-mutate on-delete]
@@ -78,7 +80,7 @@
         is-self? (= author-id (get @state/current-user "id"))]
     (m/showModalBottomSheet
      .context ctx
-     .backgroundColor m/Colors.white
+     .backgroundColor (theme/surface ctx)
      .shape (m/RoundedRectangleBorder .borderRadius (m/BorderRadius.vertical .top (m/Radius.circular 16.0)))
      .builder
      (fn [b-ctx]
@@ -102,7 +104,7 @@
             
             (when-not is-self?
               (mgl/MongolListTile
-               .leading (m/Icon m/Icons.report_problem_rounded .color theme/text-primary)
+               .leading (m/Icon m/Icons.report_problem_rounded .color (theme/text ctx))
                .title (mgl/MongolText "Мэдээлэх (Report)" 
                                       .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold .fontSize 16.0))
                .onTap (fn []
@@ -124,7 +126,7 @@
         post-id (get post-data "id")]
     (m/showModalBottomSheet
      .context ctx
-     .backgroundColor m/Colors.white
+     .backgroundColor (theme/surface ctx)
      .shape (m/RoundedRectangleBorder .borderRadius (m/BorderRadius.vertical .top (m/Radius.circular 16.0)))
      .builder
      (fn [b-ctx]
@@ -134,7 +136,7 @@
          .mainAxisSize m/MainAxisSize.min
          .children
          [(mgl/MongolListTile
-           .leading (m/Icon m/Icons.repeat_rounded .color (if reposted? theme/error-red theme/text-primary))
+           .leading (m/Icon m/Icons.repeat_rounded .color (if reposted? theme/error-red (theme/text ctx)))
            .title (mgl/MongolText (if reposted? "Дахин нийтлэхийг болих" "Дахин нийтлэх")
                                   .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold .fontSize 16.0))
            .onTap (fn []
@@ -142,7 +144,7 @@
                     (feed-ctrl/toggle-repost! ctx post-data on-mutate)))
           
           (mgl/MongolListTile
-           .leading (m/Icon m/Icons.format_quote_rounded .color theme/text-primary)
+           .leading (m/Icon m/Icons.format_quote_rounded .color (theme/text ctx))
            .title (mgl/MongolText "Иш татах" 
                                   .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold .fontSize 16.0))
            .onTap (fn []
@@ -173,17 +175,17 @@
     (if is-blocked?
       ;; --- The Blocked Stub ---
       (m/Container
-       .decoration (m/BoxDecoration .color m/Colors.white .border (m/Border .right (m/BorderSide .color theme/border-color .width 1.0)))
+       .decoration (m/BoxDecoration .color (theme/surface ctx) .border (m/Border .right (m/BorderSide .color (theme/border ctx) .width 1.0)))
        .padding (m/EdgeInsets.all 16.0)
        .child
        (m/Column
         .crossAxisAlignment m/CrossAxisAlignment.center
         .children
-        [(m/Icon m/Icons.block_rounded .color theme/text-secondary .size 20.0)
+        [(m/Icon m/Icons.block_rounded .color (theme/text-2 ctx) .size 20.0)
          (m/SizedBox .height 8.0)
          (m/Flexible
           .child (mgl/MongolText (str "@" (get author "handle" "user") " хэрэглэгчийг блоклосон байна.")
-                                 .style (m/TextStyle .fontFamily "OyunQaganTig" .color theme/text-secondary .fontWeight m/FontWeight.bold)))]))
+                                 .style (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text-2 ctx) .fontWeight m/FontWeight.bold)))]))
       
       ;; --- Normal post UI: three-pillar horizontal flow ---
       (let [content (get post-data "content" "")
@@ -201,8 +203,8 @@
         
         (m/Container
          .decoration (m/BoxDecoration 
-                      .color m/Colors.white
-                      .border (m/Border .right (m/BorderSide .color theme/border-color .width 1.0)))
+                      .color (theme/surface ctx)
+                      .border (m/Border .right (m/BorderSide .color (theme/border ctx) .width 1.0)))
          .padding (m/EdgeInsets.only .top 16.0 .bottom 16.0 .left 12.0 .right 8.0)
          .child
          (m/Row
@@ -225,7 +227,7 @@
                (smart-avatar/smart-avatar ctx author-id (get author "avatar_url") :size 40.0))
 
               (if is-reply
-                (m/Container .margin (m/EdgeInsets.only .top 6.0) .width 2.0 .height 16.0 .color theme/border-color)
+                (m/Container .margin (m/EdgeInsets.only .top 6.0) .width 2.0 .height 16.0 .color (theme/border ctx))
                 (m/SizedBox .height 12.0))
 
               (m/Expanded
@@ -237,15 +239,15 @@
                  .onTap #(nav/push! ctx "/profile/view" {:user-id author-id})
                  .child
                  (mgl/MongolText (get author "name" "Unknown")
-                                 .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 16.0 .fontWeight m/FontWeight.bold .color theme/text-primary)
+                                 .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 16.0 .fontWeight m/FontWeight.bold .color (theme/text ctx))
                                  .maxLines 1
                                  .overflow m/TextOverflow.ellipsis))))
 
               (mgl/MongolText (time-format/format-relative created-at)
-                              .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 12.0 .color theme/text-secondary))]))
+                              .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 12.0 .color (theme/text-2 ctx)))]))
 
            (m/SizedBox .width 12.0)
-           (m/Container .width 0.5 .color theme/border-color)
+           (m/Container .width 0.5 .color (theme/border ctx))
            (m/SizedBox .width 12.0)
 
            ;; ----------------------------------------------------
@@ -292,7 +294,7 @@
                 (m/SizedBox.shrink))]))
 
            (m/SizedBox .width 12.0)
-           (m/Container .width 0.5 .color theme/border-color)
+           (m/Container .width 0.5 .color (theme/border ctx))
            (m/SizedBox .width 4.0)
 
            ;; ----------------------------------------------------
@@ -308,7 +310,7 @@
              [(m/IconButton
                .padding m/EdgeInsets.zero
                .constraints (m/BoxConstraints)
-               .icon (m/Icon m/Icons.more_horiz_rounded .color theme/text-secondary .size 20.0)
+               .icon (m/Icon m/Icons.more_horiz_rounded .color (theme/text-2 ctx) .size 20.0)
                .onPressed #(show-post-options! ctx post-data on-mutate on-delete))
 
               (action-button m/Icons.chat_bubble_outline_rounded reply-count false theme/brand-blue

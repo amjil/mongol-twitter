@@ -69,15 +69,15 @@
                   (feed-ctrl/load-page! ctx topic-endpoint !posts !page !has-more? !initial-loading? true))
       .child
       (m/Scaffold
-       .backgroundColor theme/bg-color
+       .backgroundColor (theme/bg ctx)
        
        ;; --- Top App Bar ---
        .appBar
        (m/AppBar
-        .backgroundColor m/Colors.white
+        .backgroundColor (theme/surface ctx)
         .elevation 0.5
         .leading (m/IconButton 
-                  .icon (m/Icon m/Icons.arrow_back_rounded .color theme/text-primary)
+                  .icon (m/Icon m/Icons.arrow_back_rounded .color (theme/text ctx))
                   .onPressed #(nav/pop! ctx))
         .title (m/Text display-title
                        .style (m/TextStyle .fontFamily "OyunQaganTig" 

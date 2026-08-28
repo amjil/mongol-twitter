@@ -35,9 +35,9 @@
       (vec
        (keep identity
              [;; A. Hero Icon
-              (m/Icon icon-data 
-                      .size 80.0 
-                      .color (-> theme/text-secondary (.withOpacity 0.2)))
+              (m/Icon icon-data
+                      .size 80.0
+                      .color (.withOpacity (theme/text-2 ctx) 0.28))
               
               (m/SizedBox .height 24.0)
               
@@ -46,7 +46,7 @@
                               .style (m/TextStyle .fontFamily "OyunQaganTig" 
                                                   .fontSize 18.0 
                                                   .fontWeight m/FontWeight.bold
-                                                  .color theme/text-primary))
+                                                  .color (theme/text ctx)))
               
               ;; C. Optional Subtitle (Contextual Help)
               (when subtitle (m/SizedBox .height 12.0))
@@ -54,7 +54,7 @@
                 (mgl/MongolText subtitle 
                                 .style (m/TextStyle .fontFamily "OyunQaganTig" 
                                                     .fontSize 14.0 
-                                                    .color theme/text-secondary)))
+                                                    .color (theme/text-2 ctx))))
               
               ;; D. Optional Call-to-Action Button
               (when (and action-label on-action) (m/SizedBox .height 32.0))

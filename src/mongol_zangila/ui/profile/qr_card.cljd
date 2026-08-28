@@ -45,7 +45,7 @@
                       .style (m/TextStyle .fontFamily "OyunQaganTig"
                                           .fontSize 15.0
                                           .fontWeight m/FontWeight.bold
-                                          .color theme/text-secondary))
+                                          .color (theme/text-2 ctx)))
       (m/SizedBox .width 24.0)
 
       ;; The QR Code
@@ -54,7 +54,7 @@
        .decoration (m/BoxDecoration
                     .color m/Colors.white
                     .borderRadius (m/BorderRadius.circular 16.0)
-                    .border (m/Border.all .color theme/border-color .width 1.0))
+                    .border (m/Border.all .color (theme/border ctx) .width 1.0))
        .child (qr/QrImageView
                .data qr-payload
                .version qr/QrVersions.auto

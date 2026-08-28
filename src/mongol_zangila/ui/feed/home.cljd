@@ -122,11 +122,11 @@
         (scaffold/app-scaffold 
          ctx "/feed/home"
          (m/Scaffold
-          .backgroundColor theme/bg-color
+          .backgroundColor (theme/bg ctx)
 
           .appBar
           (m/AppBar
-           .backgroundColor m/Colors.white
+           .backgroundColor (theme/surface ctx)
            .elevation 0.5
            .automaticallyImplyLeading false
            .leading (m/Padding
@@ -148,7 +148,7 @@
                         .icon (m/Badge
                                .label (m/Text (str unread-notes))
                                .isLabelVisible (> unread-notes 0)
-                               .child (m/Icon m/Icons.notifications_none_rounded .color theme/text-primary))
+                               .child (m/Icon m/Icons.notifications_none_rounded .color (theme/text ctx)))
                         .onPressed #(nav/push! ctx "/notifications"))
                        (m/SizedBox .width 8.0)])])
 
@@ -166,12 +166,12 @@
                               (feed-ctrl/load-page! ctx "/feed" !posts !page !has-more? !refresh-loading? true))
                 
                 :scroll-controller scroll-ctrl
-                :background-color theme/bg-color
+                :background-color (theme/bg ctx)
                 
                 :not-armed-text "Татаж шинэчлэх"
                 :armed-text "Суллаж шинэчлэх"
                 :loading-text "Суллаж шинэчлэх"
-                :not-armed-color theme/border-color
+                :not-armed-color (theme/border ctx)
                 :armed-color theme/brand-blue
                 :text-style (m/TextStyle .fontFamily "OyunQaganTig" .color m/Colors.white .fontSize 14.0 .fontWeight m/FontWeight.bold)
                 :trigger-mode cri/IndicatorTriggerMode.anywhere

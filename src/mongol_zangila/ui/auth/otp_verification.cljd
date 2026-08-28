@@ -29,7 +29,9 @@
 (defn- otp-input-pillar 
   "A styled vertical text input column strictly for 6-digit OTP codes."
   [^m/TextEditingController ctrl label]
-  (m/Container
+  (theme/themed
+   (fn [ctx]
+     (m/Container
    .padding (m/EdgeInsets.only .top 24.0 .bottom 24.0 .right 24.0)
    .child
    (m/Row
@@ -40,7 +42,7 @@
                      .style (m/TextStyle .fontFamily "OyunQaganTig"
                                          .fontSize 15.0
                                          .fontWeight m/FontWeight.bold
-                                         .color theme/text-secondary))
+                                         .color (theme/text-2 ctx)))
      (m/SizedBox .width 16.0)
      
      ;; Native Vertical Input Field
@@ -50,16 +52,16 @@
       .maxLength 6
       .keyboardType m/TextInputType.number
       .inputFormatters [(services/FilteringTextInputFormatter.digitsOnly)]
-      .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 20.0 .letterSpacing 4.0 .color theme/text-primary)
+      .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 20.0 .letterSpacing 4.0 .color (theme/text ctx))
       .decoration (m/InputDecoration
                    .counterText "" ;; Hide the default counter
                    .hintText "------"
-                   .hintStyle (m/TextStyle .letterSpacing 4.0 .color theme/border-color)
+                   .hintStyle (m/TextStyle .letterSpacing 4.0 .color (theme/border ctx))
                    .filled true
-                   .fillColor theme/bg-color
+                   .fillColor (theme/bg ctx)
                    .border (m/OutlineInputBorder
                             .borderRadius (m/BorderRadius.circular 12.0)
-                            .borderSide m/BorderSide.none)))])))
+                            .borderSide m/BorderSide.none)))])))))
 
 ;; =============================================================================
 ;; 2. Main Screen
@@ -94,21 +96,21 @@
      :bind {:info info}
 
      (m/Scaffold
-      .backgroundColor m/Colors.white
+      .backgroundColor (theme/surface ctx)
 
       ;; --- Top App Bar ---
       .appBar
       (m/AppBar
-       .backgroundColor m/Colors.white
+       .backgroundColor (theme/surface ctx)
        .elevation 0.5
        .leading (m/IconButton
-                 .icon (m/Icon m/Icons.arrow_back_ios_new_rounded .color theme/text-primary .size 20.0)
+                 .icon (m/Icon m/Icons.arrow_back_ios_new_rounded .color (theme/text ctx) .size 20.0)
                  .onPressed #(nav/pop! ctx))
        .title (mgl/MongolText "Код баталгаажуулах" ;; "Verify Code"
                               .style (m/TextStyle .fontFamily "OyunQaganTig"
                                                   .fontSize 18.0
                                                   .fontWeight m/FontWeight.bold
-                                                  .color theme/text-primary)))
+                                                  .color (theme/text ctx))))
 
       .body
       (m/SafeArea
@@ -140,21 +142,21 @@
                  .children
                  [(m/Container
                    .padding (m/EdgeInsets.all 16.0)
-                   .decoration (m/BoxDecoration .color theme/bg-color .shape m/BoxShape.circle)
+                   .decoration (m/BoxDecoration .color (theme/bg ctx) .shape m/BoxShape.circle)
                    .child (m/Icon m/Icons.message_rounded .color theme/brand-blue .size 28.0))
                   (m/SizedBox .height 24.0)
                   (mgl/MongolText "Код баталгаажуулах" 
                                   .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold .fontSize 16.0))
                   (m/SizedBox .height 16.0)
                   (mgl/MongolText (str phone "\nдугаарт илгээсэн\nкодыг оруулна уу.") 
-                                  .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 13.0 .color theme/text-secondary))]))
+                                  .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 13.0 .color (theme/text-2 ctx)))]))
 
-               (m/VerticalDivider .width 1.0 .thickness 1.0 .color theme/border-color)
+               (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
 
                ;; Pillar 2: OTP Input Field
                (otp-input-pillar otp-ctrl "Баталгаажуулах код")
 
-               (m/VerticalDivider .width 1.0 .thickness 1.0 .color theme/border-color)
+               (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
 
                ;; Pillar 3: Actions (Verify + Resend)
                (m/Padding
@@ -184,7 +186,7 @@
                   ;; 3b. Resend Cooldown UI
                   (if (> countdown 0)
                     (mgl/MongolText (str "Дахин илгээх (" countdown "с)")
-                                    .style (m/TextStyle .fontFamily "OyunQaganTig" .color theme/text-secondary .fontSize 14.0))
+                                    .style (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text-2 ctx) .fontSize 14.0))
                     (mgl/MongolTextButton
                      ;; ⚡ Pure UI Delegation: Resend logic managed by controller
                      .onPressed #(auth-ctrl/resend-otp! ctx phone intent !resend-countdown)

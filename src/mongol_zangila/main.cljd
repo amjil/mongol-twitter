@@ -25,7 +25,8 @@
   (m/WidgetsFlutterBinding.ensureInitialized)
   
   ;; Await the actual Drift database initialization
-  (await (db/initialize-database!)))
+  (await (db/initialize-database!))
+  (await (theme/load-mode!)))
 
 (defn ^:async main []
   (await (init-app!))
@@ -43,11 +44,14 @@
 
   (f/run
    (f/widget
+    :watch [mode theme/!mode]
     (m/MaterialApp
      .title "Монгол Зангилаа"
      .debugShowCheckedModeBanner false
      .navigatorKey api/global-navigator-key
-     .theme theme/app-theme
+     .theme theme/light-theme
+     .darkTheme theme/dark-theme
+     .themeMode (theme/theme-mode-enum mode)
      .initialRoute "/splash"
      ;; ⚡ FIXED: Explicitly typed wrapper forces Dart to recognize the exact callback signature
      .onGenerateRoute (fn [^m/RouteSettings settings]

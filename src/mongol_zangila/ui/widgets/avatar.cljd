@@ -18,15 +18,17 @@
 (defn- default-placeholder 
   "Renders a clean, branded skeleton when the network fails or no URL is provided."
   [size]
-  (m/Container
-   .width size 
-   .height size
-   .decoration (m/BoxDecoration 
-                .color m/Colors.grey.shade100 
-                .shape m/BoxShape.circle)
-   .child (m/Icon m/Icons.person_rounded 
-                  .color m/Colors.grey.shade300 
-                  .size (* size 0.6))))
+  (theme/themed
+   (fn [ctx]
+     (m/Container
+      .width size
+      .height size
+      .decoration (m/BoxDecoration
+                   .color (theme/surface-2 ctx)
+                   .shape m/BoxShape.circle)
+      .child (m/Icon m/Icons.person_rounded
+                     .color (theme/text-2 ctx)
+                     .size (* size 0.6))))))
 
 ;; =============================================================================
 ;; 2. The Smart Avatar Widget

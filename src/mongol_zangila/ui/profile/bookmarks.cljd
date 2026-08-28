@@ -67,21 +67,21 @@
                   (feed-ctrl/load-page! ctx endpoint !posts !page !has-more? !initial-loading? true))
       .child
       (m/Scaffold
-       .backgroundColor theme/bg-color
+       .backgroundColor (theme/bg ctx)
        
        ;; --- Top App Bar ---
        .appBar
        (m/AppBar
-        .backgroundColor m/Colors.white
+        .backgroundColor (theme/surface ctx)
         .elevation 0.5
         .leading (m/IconButton 
-                  .icon (m/Icon m/Icons.arrow_back_rounded .color theme/text-primary)
+                  .icon (m/Icon m/Icons.arrow_back_rounded .color (theme/text ctx))
                   .onPressed #(nav/pop! ctx))
         .title (m/Text "Хадгалсан"
                        .style (m/TextStyle .fontFamily "OyunQaganTig" 
                                            .fontSize 18.0 
                                            .fontWeight m/FontWeight.bold 
-                                           .color theme/text-primary))
+                                           .color (theme/text ctx)))
         .actions [(m/IconButton
                    .icon (m/Icon m/Icons.refresh_rounded .color theme/brand-blue)
                    .onPressed #(feed-ctrl/load-page! ctx endpoint !posts !page !has-more? !refresh-loading? true))])
