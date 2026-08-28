@@ -1,200 +1,331 @@
 (ns mongol-zangila.ui.search.active-search
-  "The 'Active Search' viewport.
-   A lightweight typeahead panel that only searches for users and tags in real-time.
-   Provides an entry point to route to a full 'Post Search Results' page."
+  "Active search viewport.
+   Typeahead for users and topics, with a left-rail Mongol input and
+   a custom keyboard along the bottom."
   (:require
    ["package:flutter/material.dart" :as m]
    ["package:mongol/mongol.dart" :as mgl]
-   
+   ["dart:async" :as async]
+   ["dart:core" :as dc]
    [cljd.flutter :as f]
    [clojure.string :as str]
-
-   [components.toast :as toast]
-   
-   ;; System Controllers
    [mongol-zangila.controllers.search-ctrl :as search-ctrl]
    [mongol-zangila.controllers.chat-ctrl :as chat-ctrl]
    [mongol-zangila.state :as state]
-   
-   ;; UI & Shared Components
    [mongol-zangila.ui.theme :as theme]
    [mongol-zangila.utils.nav :as nav]
    [mongol-zangila.ui.widgets.empty-state :as empty-state]
    [mongol-zangila.ui.widgets.avatar :as smart-avatar]
    [mongol-zangila.ui.search.components.search-input :as search-input]
-   
-   ;; Keyboard Options
    [virtual-keyboard.keyboard :as keyboard]
    [virtual-keyboard.options :as options]))
 
 ;; =============================================================================
-;; 1. Sub-components (Action Tiles & User Tiles)
+;; 1. Search scheduling
 ;; =============================================================================
 
-(defn- user-result-tile 
-  "Transforms user search hits into high-contrast vertical account vectors."
+(defn- cancel-timer!
+  [!timer]
+  (when-let [t @!timer]
+    (.cancel ^async/Timer t)
+    (reset! !timer nil)))
+
+(defn- infer-kind
+  [q]
+  (let [trimmed (str/trim (str q))]
+    (cond
+      (str/starts-with? trimmed "#") :topic
+      (str/starts-with? trimmed "@") :user
+      :else nil)))
+
+(defn- run-search!
+  [ctx q kind !results !loading?]
+  (if (= kind :topic)
+    (search-ctrl/search-topics! ctx q !results !loading?)
+    (search-ctrl/search-users! ctx q !results !loading?)))
+
+(defn- apply-query!
+  "Debounced live search. Blank query clears results immediately."
+  [ctx q !query !kind !timer !results !loading?]
+  (when-let [inferred (infer-kind q)]
+    (reset! !kind inferred))
+  (reset! !query q)
+  (cancel-timer! !timer)
+  (if (str/blank? (str/trim (str q)))
+    (do
+      (reset! !results [])
+      (reset! !loading? false))
+    (reset! !timer
+            (async/Timer. (dc/Duration. .milliseconds 280)
+                          (fn []
+                            (reset! !timer nil)
+                            (run-search! ctx q @!kind !results !loading?))))))
+
+(defn- submit-query!
+  "Immediate search (keyboard Search / tab switch)."
+  [ctx q !query !kind !timer !results !loading?]
+  (when-let [inferred (infer-kind q)]
+    (reset! !kind inferred))
+  (reset! !query q)
+  (cancel-timer! !timer)
+  (if (str/blank? (str/trim (str q)))
+    (do
+      (reset! !results [])
+      (reset! !loading? false))
+    (run-search! ctx q @!kind !results !loading?)))
+
+;; =============================================================================
+;; 2. Result tiles
+;; =============================================================================
+
+(defn- user-result-tile
+  "Tappable account pillar. Whole card opens the profile; DM is a compact icon."
   [ctx user-data current-user-id]
   (let [user-id (get user-data "id")
         user-name (get user-data "name" "Unknown")
         handle (get user-data "handle" "user")
-        is-self? (= user-id current-user-id)]
-    (m/Container
-     .width 120.0
-     .padding (m/EdgeInsets.symmetric .vertical 24.0 .horizontal 8.0)
-     .decoration (m/BoxDecoration 
-                  .color (theme/surface ctx)
-                  .border (m/Border .right (m/BorderSide .color (theme/border ctx) .width 0.5)))
+        is-self? (= user-id current-user-id)
+        open-profile! #(nav/push! ctx "/profile/view" {:user-id user-id})]
+    (m/Material
+     .color (theme/surface ctx)
      .child
-     (m/Column
-      .crossAxisAlignment m/CrossAxisAlignment.center
-      .children
-      [;; Avatar Cluster (Top)
-       (smart-avatar/smart-avatar ctx user-id (get user-data "avatar_url") :size 56.0)
-       
-       (m/SizedBox .height 24.0)
-       
-       ;; Account Metadata (Middle)
-       (m/Expanded
-        .child
-        (m/Row
-         .mainAxisAlignment m/MainAxisAlignment.center
-         .crossAxisAlignment m/CrossAxisAlignment.start
-         .children
-         [(mgl/MongolText user-name
-                          .style (m/TextStyle .fontFamily "OyunQaganTig" 
-                                              .fontSize 15.0 
-                                              .fontWeight m/FontWeight.bold 
-                                              .color (theme/text ctx)))
-          (m/SizedBox .width 6.0)
-          (mgl/MongolText (str "@" handle)
-                          .style (m/TextStyle .fontFamily "OyunQaganTig" 
-                                              .fontSize 13.0
-                                              .color (theme/text-2 ctx)))]))
-       
-       (m/SizedBox .height 16.0)
-       
-       ;; Native Tactical Action Button (Bottom)
-       (mgl/MongolElevatedButton
-        .style (m/ElevatedButton.styleFrom 
-                .backgroundColor (theme/bg ctx)
-                .elevation 0.0
-                .minimumSize (m/Size 40.0 64.0)
-                .shape (m/RoundedRectangleBorder .borderRadius (m/BorderRadius.circular 16.0)))
-        .onPressed #(nav/push! ctx "/profile/view" {:user-id user-id})
-        .child (mgl/MongolText "Үзэх" .style (m/TextStyle .fontFamily "OyunQaganTig" .color theme/brand-blue)))
-       
-       ;; ⚡ Core fix: use if + SizedBox.shrink so nil never enters the widget tree
-       (if is-self?
-         (m/SizedBox.shrink)
-         (m/Column
-          .children
-          [(m/SizedBox .height 8.0)
-           (mgl/MongolOutlinedButton
-            .style (m/OutlinedButton.styleFrom
-                    .foregroundColor theme/brand-blue
-                    .side (m/BorderSide .color theme/brand-blue)
-                    .minimumSize (m/Size 40.0 64.0)
-                    .shape (m/RoundedRectangleBorder .borderRadius (m/BorderRadius.circular 16.0)))
-            .onPressed #(chat-ctrl/open-dm-with-user! ctx user-id user-name)
-            .child (mgl/MongolText "Зурвас илгээх"
-                                   .style (m/TextStyle .fontFamily "OyunQaganTig" .color theme/brand-blue)))]))]))))
+     (m/InkWell
+      .onTap open-profile!
+      .child
+      (m/Container
+       .width 120.0
+       .padding (m/EdgeInsets.symmetric .vertical 24.0 .horizontal 8.0)
+       .decoration (m/BoxDecoration
+                    .border (m/Border .right (m/BorderSide .color (theme/border ctx) .width 0.5)))
+       .child
+       (m/Column
+        .crossAxisAlignment m/CrossAxisAlignment.center
+        .children
+        [(smart-avatar/smart-avatar ctx user-id (get user-data "avatar_url")
+                                    :size 56.0
+                                    :on-tap open-profile!)
+
+         (m/SizedBox .height 24.0)
+
+         (m/Expanded
+          .child
+          (m/Row
+           .mainAxisAlignment m/MainAxisAlignment.center
+           .crossAxisAlignment m/CrossAxisAlignment.start
+           .children
+           [(mgl/MongolText user-name
+                            .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                                .fontSize 15.0
+                                                .fontWeight m/FontWeight.bold
+                                                .color (theme/text ctx))
+                            .maxLines 1
+                            .overflow m/TextOverflow.ellipsis)
+            (m/SizedBox .width 6.0)
+            (mgl/MongolText (str "@" handle)
+                            .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                                .fontSize 13.0
+                                                .color (theme/text-2 ctx))
+                            .maxLines 1
+                            .overflow m/TextOverflow.ellipsis)]))
+
+         (if is-self?
+           (m/SizedBox.shrink)
+           (m/Padding
+            .padding (m/EdgeInsets.only .top 12.0)
+            .child
+            (m/IconButton
+             .tooltip "Зурвас илгээх"
+             .icon (m/Icon m/Icons.chat_bubble_outline_rounded
+                           .color theme/brand-blue
+                           .size 22.0)
+             .onPressed #(chat-ctrl/open-dm-with-user! ctx user-id user-name))))]))))))
+
+(defn- topic-result-tile
+  [ctx topic-data]
+  (let [topic-name (str/replace-first (or (get topic-data "name") "") #"^#" "")
+        post-count (get topic-data "post_count" 0)]
+    (m/Material
+     .color (theme/surface ctx)
+     .child
+     (m/InkWell
+      .onTap #(when-not (str/blank? topic-name)
+                (nav/push! ctx "/search/topic" {:topic-name topic-name}))
+      .child
+      (m/Container
+       .width 110.0
+       .padding (m/EdgeInsets.symmetric .vertical 24.0 .horizontal 8.0)
+       .decoration (m/BoxDecoration
+                    .border (m/Border .right (m/BorderSide .color (theme/border ctx) .width 0.5)))
+       .child
+       (m/Column
+        .children
+        [(m/Container
+          .padding (m/EdgeInsets.all 12.0)
+          .decoration (m/BoxDecoration .color (theme/bg ctx) .shape m/BoxShape.circle)
+          .child (m/Icon m/Icons.tag_rounded .color theme/brand-blue .size 20.0))
+         (m/SizedBox .height 24.0)
+         (m/Expanded
+          .child
+          (m/Row
+           .mainAxisAlignment m/MainAxisAlignment.center
+           .crossAxisAlignment m/CrossAxisAlignment.start
+           .children
+           [(mgl/MongolText (str "#" topic-name)
+                            .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                                .fontSize 16.0
+                                                .fontWeight m/FontWeight.bold
+                                                .color (theme/text ctx))
+                            .maxLines 1
+                            .overflow m/TextOverflow.ellipsis)
+            (m/SizedBox .width 8.0)
+            (mgl/MongolText (str post-count " нийтлэл")
+                            .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                                .fontSize 13.0
+                                                .color (theme/text-2 ctx))
+                            .maxLines 1
+                            .overflow m/TextOverflow.ellipsis)]))]))))))
+
+(defn- kind-tab
+  [ctx id current on-switch]
+  (let [active? (= id current)
+        label (if (= id :user) "Хэрэглэгч" "Сэдэв")]
+    (m/InkWell
+     .onTap #(on-switch id)
+     .child
+     (m/Padding
+      .padding (m/EdgeInsets.symmetric .vertical 10.0 .horizontal 4.0)
+      .child
+      (mgl/MongolText label
+                      .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                          .fontSize 13.0
+                                          .fontWeight (if active? m/FontWeight.bold m/FontWeight.normal)
+                                          .color (if active? theme/brand-blue (theme/text-2 ctx))))))))
 
 ;; =============================================================================
-;; 2. The Main Active Search Screen Widget
+;; 3. Screen
 ;; =============================================================================
 
-(defn active-search-screen 
-  "The active search viewport. A lightweight typeahead panel."
+(defn active-search-screen
+  "Typeahead panel for users and topics."
   []
   (let [!query (atom "")
-        !user-results (atom [])
-        !loading-users? (atom false)
-        
-        keyboard-info (merge options/keyboard-option 
-                             {:keyboard/mongol-font-family "OyunQaganTig" 
-                              :keyboard/key-container-color m/Colors.grey.shade500 
-                              :keyboard/font-size 16})]
-    
+        !kind (atom :user)
+        !results (atom [])
+        !loading? (atom false)
+        !timer (atom nil)
+
+        cancel-search-timer!
+        (fn [_]
+          (cancel-timer! !timer)
+          nil)]
+
     (f/widget
      :context ctx
-     :managed [search-ctrl (m/TextEditingController.)]
-     :bind {:info keyboard-info}
-     
+     :managed [search-ctrl (m/TextEditingController.)
+               :dispose .dispose
+               dummy-timer nil
+               :dispose cancel-search-timer!]
+
      :watch [query !query
-             user-results !user-results
-             loading-users? !loading-users?
+             kind !kind
+             results !results
+             loading? !loading?
              current-user state/current-user]
-     
+
+     :let [keyboard-info (merge options/keyboard-option
+                                {:keyboard/mongol-font-family "OyunQaganTig"
+                                 :keyboard/key-container-color (theme/surface-2 ctx)
+                                 :keyboard/font-size 16})
+           blank? (str/blank? (str/trim (str query)))
+           switch-kind!
+           (fn [k]
+             (when (not= k @!kind)
+               (reset! !kind k)
+               (reset! !results [])
+               (when-not (str/blank? (str/trim (str @!query)))
+                 (submit-query! ctx @!query !query !kind !timer !results !loading?))))]
+
+     :bind {:info keyboard-info}
+
      (m/Scaffold
       .backgroundColor (theme/bg ctx)
-      
+      .resizeToAvoidBottomInset false
+
       .appBar
       (m/AppBar
        .backgroundColor (theme/surface ctx)
        .elevation 0.5
-       .leading (m/IconButton 
+       .leading (m/IconButton
                  .icon (m/Icon m/Icons.arrow_back_rounded .color (theme/text ctx))
                  .onPressed #(nav/pop! ctx))
        .title (m/Text "Хайлт"
-                      .style (m/TextStyle .fontFamily "OyunQaganTig" 
-                                          .fontSize 18.0 
-                                          .fontWeight m/FontWeight.bold 
+                      .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                          .fontSize 18.0
+                                          .fontWeight m/FontWeight.bold
                                           .color (theme/text ctx))))
-      
+
       .body
-      (m/SafeArea
-       .child
-       (m/Column
-        .children
-        [
-         ;; Layer 1. Upper Content Viewport
-         (m/Expanded
-          .child
-          (m/Stack
-           .children
-           [
-            ;; Base Content Layer
-            (m/Row
-             .children
-             [              ;; A. Left Rail: Scaled Vertical Search Box Component
-              (m/Container
-               .width 64.0
-               .padding (m/EdgeInsets.only .top 8.0 .bottom 24.0 .left 8.0 .right 8.0)
-               .decoration (m/BoxDecoration
-                            .color (theme/surface ctx)
-                            .border (m/Border .right (m/BorderSide .color (theme/border ctx) .width 1.0)))
-               .child (search-input/search-field
-                       search-ctrl
-                       (fn [val]
-                         (reset! !query val)
-                         (when-not (str/blank? val)
-                           ;; Live-search users only, to lighten backend and UI load
-                           (search-ctrl/search-users! ctx val !user-results !loading-users?)))
-                       :on-clear #(reset! !query "")))
+      (m/Column
+       .children
+       [(m/Expanded
+         .child
+         (m/Stack
+          .children
+          [(m/Row
+            .crossAxisAlignment m/CrossAxisAlignment.stretch
+            .children
+            [(m/Container
+              .width search-input/rail-width
+              .padding (m/EdgeInsets.only .top 8.0 .bottom 16.0 .left 8.0 .right 8.0)
+              .decoration (m/BoxDecoration
+                           .color (theme/surface ctx)
+                           .border (m/Border .right (m/BorderSide .color (theme/border ctx) .width 1.0)))
+              .child
+              (m/Column
+               .children
+               [(m/Expanded
+                 .child
+                 (search-input/search-field
+                  search-ctrl
+                  (fn [val]
+                    (submit-query! ctx val !query !kind !timer !results !loading?))
+                  :on-changed #(apply-query! ctx % !query !kind !timer !results !loading?)
+                  :on-clear #(apply-query! ctx "" !query !kind !timer !results !loading?)))
+                (m/SizedBox .height 8.0)
+                (kind-tab ctx :user kind switch-kind!)
+                (kind-tab ctx :topic kind switch-kind!)]))
 
-              ;; B. Right Content Flow: Lightweight Results Panel
-              (m/Expanded
-               .child
-               (cond
-                 (str/blank? query)
-                 (m/Center .child (mgl/MongolText "Хайх үгээ оруулна уу..." .style (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text-2 ctx))))
+             (m/Expanded
+              .child
+              (cond
+                blank?
+                (m/Center
+                 .child (mgl/MongolText "Хайх үгээ оруулна уу..."
+                                        .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                                            .color (theme/text-2 ctx))))
 
-                 loading-users?
-                 (m/Center .child (m/CircularProgressIndicator .color theme/brand-blue))
+                (and loading? (empty? results))
+                (m/Center .child (m/CircularProgressIndicator .color theme/brand-blue))
 
-                 :else
-                 (m/ListView.builder
-                  .scrollDirection m/Axis.horizontal
-                  .physics (m/BouncingScrollPhysics.)
-                  .padding (m/EdgeInsets.only .right 32.0)
-                  .itemCount (count user-results)
-                  .itemBuilder (fn [_ i]
-                                 (user-result-tile ctx (nth user-results i) (get current-user "id"))))))])
-            
-            ;; Floating Overlay: Custom Input Predictor Row
-            (keyboard/candidates (m/TextStyle .fontFamily "OyunQaganTig"
-                                              .fontSize 16.0
-                                              .color (theme/text ctx)))]))
-         
-         ;; Layer 2. Lower Viewport: Custom Static Input Engine Daemon
-         (keyboard/keyboard {:widget-key (m/ValueKey. "search-kb")})]))))))
+                (empty? results)
+                (empty-state/empty-search-view ctx query)
+
+                :else
+                (m/ListView.builder
+                 .scrollDirection m/Axis.horizontal
+                 .physics (m/BouncingScrollPhysics.)
+                 .padding (m/EdgeInsets.only .right 32.0)
+                 .itemCount (count results)
+                 .itemBuilder (fn [_ i]
+                                (let [item (nth results i)]
+                                  (if (= kind :topic)
+                                    (topic-result-tile ctx item)
+                                    (user-result-tile ctx item (get current-user "id"))))))))])
+
+           (keyboard/candidates (m/TextStyle .fontFamily "OyunQaganTig"
+                                             .fontSize 16.0
+                                             .color (theme/text ctx)))]))
+
+        (m/SafeArea
+         .top false
+         .child (keyboard/keyboard {:widget-key (m/ValueKey. "search-kb")}))])))))

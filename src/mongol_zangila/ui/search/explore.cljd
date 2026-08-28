@@ -1,63 +1,53 @@
 (ns mongol-zangila.ui.search.explore
-  "The 'Discovery' or 'Explore' viewport.
-   Serves as the root tab for search. Features a dummy search bar that routes to 
-   the active search view, allowing this page to focus purely on content discovery
-   via trending topics and recommended pillars.
-   ⚡ Fully refactored to use a native vertical Mongolian dummy search pill."
+  "The Discovery / Explore viewport.
+   Root search tab: a dummy search pill routes to active search;
+   the rest of the page is a horizontal gallery of trending topics."
   (:require
    ["package:flutter/material.dart" :as m]
    ["package:mongol/mongol.dart" :as mgl]
-   
-   ;; Centralized Dart Interop Interceptor
    ["package:mongol_zangila/post_frame_trigger.dart" :as pft]
-   
    [cljd.flutter :as f]
    [clojure.string :as str]
-   
-   ;; System Controllers
    [mongol-zangila.controllers.search-ctrl :as search-ctrl]
-   
-   ;; Shared UI Components (Removed external search-bar dependency)
    [mongol-zangila.ui.theme :as theme]
    [mongol-zangila.utils.nav :as nav]
-   [mongol-zangila.ui.layout.scaffold :as scaffold]))
+   [mongol-zangila.ui.layout.scaffold :as scaffold]
+   [mongol-zangila.ui.widgets.empty-state :as empty-state]
+   [mongol-zangila.ui.search.components.search-input :as search-input]))
 
 ;; =============================================================================
 ;; 1. Sub-components
 ;; =============================================================================
 
-(defn- dummy-search-bar 
-  "A visual component that perfectly mimics the vertical search-input styling.
-   Acts purely as a tactical navigation button to the active search route."
+(defn- dummy-search-bar
+  "Read-only pill that matches search-field styling and opens active search."
   [ctx]
   (m/GestureDetector
    .onTap #(nav/push! ctx "/search/active")
+   .behavior m/HitTestBehavior.opaque
    .child
    (m/Container
-    .width 64.0 ;; Match the active-search sidebar width
+    .width search-input/rail-width
     .padding (m/EdgeInsets.symmetric .vertical 16.0 .horizontal 12.0)
-    .decoration (m/BoxDecoration 
-                 .color (theme/surface ctx) ;; Pure white on a grayish background makes the input stand out
-                 .borderRadius (m/BorderRadius.circular 24.0)
-                 .border (m/Border.all .color (.withOpacity (theme/border ctx) 0.5) .width 1.0)
-                 .boxShadow [(m/BoxShadow .color (m/Color 0x0A000000) .blurRadius 8.0 .offset (m/Offset 0.0 2.0))])
+    .decoration (m/BoxDecoration
+                 .color (theme/surface-2 ctx)
+                 .borderRadius (m/BorderRadius.circular theme/radius-pill)
+                 .border (m/Border.all .color (theme/border ctx) .width 1.0))
     .child
     (m/Column
-     .mainAxisSize m/MainAxisSize.min
+     .crossAxisAlignment m/CrossAxisAlignment.center
      .children
-     [(m/Padding 
+     [(m/Padding
        .padding (m/EdgeInsets.only .top 12.0)
        .child (m/Icon m/Icons.search_rounded .color (theme/text-2 ctx) .size 20.0))
-      
       (m/SizedBox .height 12.0)
-      
       (mgl/MongolText "Хайх..."
-                      .style (m/TextStyle .fontFamily "OyunQaganTig" 
-                                          .fontSize 15.0 
+                      .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                          .fontSize 15.0
                                           .color (theme/text-2 ctx)))]))))
 
-(defn- trending-tile 
-  "Transforms trending topics into modular vertical pillars for the discovery gallery."
+(defn- trending-tile
+  "Vertical pillar for a trending hashtag."
   [ctx topic-data]
   (let [topic-name (str/replace-first (get topic-data "name" "") #"^#" "")
         post-count (get topic-data "post_count" 0)]
@@ -68,21 +58,19 @@
      (m/Container
       .width 110.0
       .padding (m/EdgeInsets.symmetric .vertical 24.0 .horizontal 8.0)
-      .decoration (m/BoxDecoration 
+      .decoration (m/BoxDecoration
                    .color (theme/surface ctx)
                    .border (m/Border .right (m/BorderSide .color (theme/border ctx) .width 0.5)))
       .child
       (m/Column
        .children
-       [;; Semantic Icon Anchor (Top)
-        (m/Container
+       [(m/Container
          .padding (m/EdgeInsets.all 12.0)
          .decoration (m/BoxDecoration .color (theme/bg ctx) .shape m/BoxShape.circle)
          .child (m/Icon m/Icons.tag_rounded .color theme/brand-blue .size 20.0))
-        
+
         (m/SizedBox .height 24.0)
-        
-        ;; Topic Metadata (Middle)
+
         (m/Expanded
          .child
          (m/Row
@@ -90,81 +78,105 @@
           .crossAxisAlignment m/CrossAxisAlignment.start
           .children
           [(mgl/MongolText (str "#" topic-name)
-                           .style (m/TextStyle .fontFamily "OyunQaganTig" 
-                                               .fontSize 16.0 
-                                               .fontWeight m/FontWeight.bold 
-                                               .color (theme/text ctx)))
+                           .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                               .fontSize 16.0
+                                               .fontWeight m/FontWeight.bold
+                                               .color (theme/text ctx))
+                           .maxLines 1
+                           .overflow m/TextOverflow.ellipsis)
            (m/SizedBox .width 8.0)
-           (mgl/MongolText (str post-count " нийтлэл") ;; "X posts"
-                           .style (m/TextStyle .fontFamily "OyunQaganTig" 
+           (mgl/MongolText (str post-count " нийтлэл")
+                           .style (m/TextStyle .fontFamily "OyunQaganTig"
                                                .fontSize 13.0
-                                               .color (theme/text-2 ctx)))]))])))))
+                                               .color (theme/text-2 ctx))
+                           .maxLines 1
+                           .overflow m/TextOverflow.ellipsis)]))])))))
+
+(defn- status-sliver
+  "A bounded-width column so empty-state/spinner can live in a horizontal sliver."
+  [child]
+  (m/SliverToBoxAdapter
+   .child
+   (m/SizedBox
+    .width 220.0
+    .child child)))
 
 ;; =============================================================================
-;; 2. Main Explore Screen Widget
+;; 2. Main Explore Screen
 ;; =============================================================================
 
 (defn explore-screen
   "The primary discovery feed without keyboard interference."
   []
   (let [!trends (atom [])
-        !loading-trends? (atom true)]
+        !loading-trends? (atom true)
+        !trends-error? (atom false)]
 
     (f/widget
      :context ctx
      :watch [trends !trends
-             loading? !loading-trends?]
+             loading? !loading-trends?
+             error? !trends-error?]
 
-     (pft/PostFrameTrigger
-      .onLayout #(search-ctrl/load-trending-topics! ctx !trends !loading-trends?)
-      .child
-      (scaffold/app-scaffold
-       ctx "/search"
-       (m/Scaffold
-        .backgroundColor (theme/bg ctx)
-        .appBar (m/AppBar .title (m/Text " ") .backgroundColor (theme/bg ctx) .elevation 0.0)
-        .body
-        (m/SafeArea
-         .child
-         (m/CustomScrollView
-          .scrollDirection m/Axis.horizontal
-          .physics (m/BouncingScrollPhysics.)
-          .slivers
-          [(m/SliverToBoxAdapter
-            .child
-            (m/Padding
-             .padding (m/EdgeInsets.only .left 16.0 .right 8.0 .top 16.0 .bottom 16.0)
-             .child
-             ;; ⚡ Use the hand-rolled vertical LTR fake search box
-             (dummy-search-bar ctx)))
+     (let [reload! #(search-ctrl/load-trending-topics! ctx !trends !loading-trends? !trends-error?)]
+       (pft/PostFrameTrigger
+        .onLayout reload!
+        .child
+        (scaffold/app-scaffold
+         ctx "/search"
+         ;; SafeArea.bottom false: the tab bar already consumes the home indicator.
+         (m/SafeArea
+          .bottom false
+          .child
+          (m/CustomScrollView
+           .scrollDirection m/Axis.horizontal
+           .physics (m/BouncingScrollPhysics.)
+           .slivers
+           (vec
+            (keep identity
+                  [(m/SliverToBoxAdapter
+                    .child
+                    (m/Padding
+                     .padding (m/EdgeInsets.only .left 16.0 .right 8.0 .top 16.0 .bottom 16.0)
+                     .child (dummy-search-bar ctx)))
 
-           (if loading?
-             (m/SliverToBoxAdapter
-              .child
-              (m/Container
-               .width 100.0
-               .child (m/Center .child (m/CircularProgressIndicator .color theme/brand-blue))))
-             (m/SliverToBoxAdapter .child (m/SizedBox.shrink)))
+                   (when loading?
+                     (status-sliver
+                      (m/Center .child (m/CircularProgressIndicator .color theme/brand-blue))))
 
-           (if (not loading?)
-             (m/SliverToBoxAdapter
-              .child
-              (m/Container
-               .width 56.0
-               .padding (m/EdgeInsets.only .top 24.0)
-               .alignment m/Alignment.topCenter
-               .child (mgl/MongolText "Тренд сэдвүүд"
-                                      .style (m/TextStyle .fontFamily "OyunQaganTig"
-                                                          .fontSize 14.0
-                                                          .fontWeight m/FontWeight.bold
-                                                          .color (theme/text-2 ctx)))))
-             (m/SliverToBoxAdapter .child (m/SizedBox.shrink)))
+                   (when (and (not loading?) error?)
+                     (status-sliver
+                      (empty-state/empty-view ctx
+                                              :icon-data m/Icons.wifi_off_rounded
+                                              :title "Тренд ачааллаж чадсангүй"
+                                              :subtitle "Сүлжээгээ шалгаад дахин оролдоно уу."
+                                              :action-label "Дахин оролдох"
+                                              :on-action reload!)))
 
-           (if (and (not loading?) (seq trends))
-             (m/SliverList
-              .delegate
-              (m/SliverChildBuilderDelegate
-               (f/build [i]
-                        (trending-tile ctx (nth trends i)))
-               .childCount (count trends)))
-             (m/SliverToBoxAdapter .child (m/SizedBox.shrink)))]))))))))
+                   (when (and (not loading?) (not error?) (empty? trends))
+                     (status-sliver
+                      (empty-state/empty-view ctx
+                                              :icon-data m/Icons.tag_rounded
+                                              :title "Тренд сэдэв алга"
+                                              :subtitle "Одоогоор популяр сэдэв байхгүй байна.")))
+
+                   (when (and (not loading?) (seq trends))
+                     (m/SliverToBoxAdapter
+                      .child
+                      (m/Container
+                       .width 56.0
+                       .padding (m/EdgeInsets.only .top 24.0)
+                       .alignment m/Alignment.topCenter
+                       .child (mgl/MongolText "Тренд сэдвүүд"
+                                              .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                                                  .fontSize 14.0
+                                                                  .fontWeight m/FontWeight.bold
+                                                                  .color (theme/text-2 ctx))))))
+
+                   (when (and (not loading?) (seq trends))
+                     (m/SliverList
+                      .delegate
+                      (m/SliverChildBuilderDelegate
+                       (f/build [i]
+                                (trending-tile ctx (nth trends i)))
+                       .childCount (count trends))))]))))))))))

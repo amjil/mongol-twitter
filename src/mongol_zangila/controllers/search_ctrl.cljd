@@ -1,7 +1,6 @@
 (ns mongol-zangila.controllers.search-ctrl
   "Domain controller for search capabilities.
-   Manages full-text query dispatching, user lookups, and trending topic hydration.
-   ⚡ Upgraded with Dart-Safe Payload Extraction (No map? checks)."
+   Manages user/topic lookups and trending topic hydration."
   (:require
    ["dart:core" :as dc]
    [clojure.string :as str]
@@ -12,72 +11,76 @@
 ;; 0. Interceptors & Sanitizers
 ;; =============================================================================
 
-(defn- extract-data 
+(defn- extract-data
   "Safely extracts list data from Dart JSON responses.
-   ⚡ Core Fix: Completely bypasses Clojure's type checks (map?, sequential?) 
-   which blindly fail on native Dart objects."
+   Bypasses Clojure's type checks (map?, sequential?) which fail on native Dart objects."
   [res]
   (try
     (let [d (get res "data")]
-      ;; Try the "data" field; if missing, the payload is already an array
       (vec (if (some? d) d res)))
     (catch dc/dynamic _ [])))
 
-(defn- clean-query 
-  "Strips leading @ or # symbols so the backend database can match raw handles/topics."
+(defn- clean-query
+  "Strips leading @ or # so the backend can match raw handles/topics."
   [q]
   (-> q str/trim (str/replace-first #"^[@#]" "")))
+
+(defn- dispatch-search!
+  [ctx query-text path !results !loading? err-prefix]
+  (let [query (clean-query query-text)]
+    (if (str/blank? query)
+      (do
+        (reset! !results [])
+        (reset! !loading? false))
+      (do
+        (reset! !loading? true)
+        (let [encoded-query (dc/Uri.encodeComponent query)]
+          (-> (api/get-req (str path encoded-query "&limit=20"))
+              (.then (fn [res]
+                       (reset! !results (extract-data res))
+                       (reset! !loading? false)))
+              (.catchError (fn [err]
+                             (reset! !loading? false)
+                             (toast/error ctx (str err-prefix err))))))))))
 
 ;; =============================================================================
 ;; 1. Discovery & Trends
 ;; =============================================================================
 
 (defn load-trending-topics!
-  "Fetches popular hashtags and trending themes to populate the default search view."
-  [ctx !trends !loading?]
+  "Fetches popular hashtags to populate the default search view.
+   !error? is set true on failure so the UI can offer a retry."
+  [ctx !trends !loading? !error?]
   (reset! !loading? true)
+  (reset! !error? false)
   (-> (api/get-req "/topics/trending")
       (.then (fn [res]
                (reset! !trends (extract-data res))
+               (reset! !error? false)
                (reset! !loading? false)))
       (.catchError (fn [err]
                      (reset! !loading? false)
+                     (reset! !error? true)
                      (toast/error ctx (str "Алдаа гарлаа: " err))))))
 
 ;; =============================================================================
-;; 2. Query Dispatching (Posts & Users)
+;; 2. Query Dispatching
 ;; =============================================================================
 
 (defn search-posts!
-  "Executes a full-text search against posts using the user's query text."
+  "Full-text search against posts."
   [ctx query-text !results !loading?]
-  (let [query (clean-query query-text)]
-    (if (str/blank? query)
-      (reset! !results [])
-      (do
-        (reset! !loading? true)
-        (let [encoded-query (dc/Uri.encodeComponent query)]
-          (-> (api/get-req (str "/search?q=" encoded-query))
-              (.then (fn [res]
-                       (reset! !results (extract-data res))
-                       (reset! !loading? false)))
-              (.catchError (fn [err]
-                             (reset! !loading? false)
-                             (toast/error ctx (str "Хайлт хийхэд алдаа гарлаа: " err))))))))))
+  (dispatch-search! ctx query-text "/search?q=" !results !loading?
+                    "Хайлт хийхэд алдаа гарлаа: "))
 
 (defn search-users!
   "Looks up user accounts or handles matching the given query text."
   [ctx query-text !users !loading?]
-  (let [query (clean-query query-text)]
-    (if (str/blank? query)
-      (reset! !users [])
-      (do
-        (reset! !loading? true)
-        (let [encoded-query (dc/Uri.encodeComponent query)]
-          (-> (api/get-req (str "/search/users?q=" encoded-query))
-              (.then (fn [res]
-                       (reset! !users (extract-data res))
-                       (reset! !loading? false)))
-              (.catchError (fn [err]
-                             (reset! !loading? false)
-                             (toast/error ctx (str "Хэрэглэгч хайхад алдаа гарлаа: " err))))))))))
+  (dispatch-search! ctx query-text "/search/users?q=" !users !loading?
+                    "Хэрэглэгч хайхад алдаа гарлаа: "))
+
+(defn search-topics!
+  "Looks up hashtags matching the given query text."
+  [ctx query-text !topics !loading?]
+  (dispatch-search! ctx query-text "/search/topics?q=" !topics !loading?
+                    "Сэдэв хайхад алдаа гарлаа: "))
