@@ -403,7 +403,7 @@
                    :else
                    (let [post-data (nth posts (dec i))]
                      (m/Container
-                      .margin (m/EdgeInsets.only .left 16.0 .top 16.0 .bottom 16.0)
+                      .margin post-card/timeline-card-margin
                       .child (post-card/post-card
                               ctx post-data
                               :on-mutate (fn [mutator]

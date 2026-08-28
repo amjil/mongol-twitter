@@ -30,14 +30,34 @@
    [mongol-zangila.ui.widgets.tag-search :as tag-search]))
 
 ;; =============================================================================
-;; 1. ⚡ Global state (sandbox-style so Flutter rebuilds do not reset it)
+;; 1. Per-mount editor session
 ;; =============================================================================
 
-(defonce !compose-editor-state (simple-editor/init-simple-state))
-(defonce !compose-media-urls (atom []))
-(defonce !compose-saved? (atom false))
-(defonce !compose-loading? (atom false))
-(defonce !compose-idk (atom ""))
+(defn- boot-editor-state
+  [{:keys [initial-content initial-entities reply-to-name reply-to-author-id]}]
+  (let [c-len (count (or initial-content ""))
+        st (simple-editor/init-simple-state)]
+    (when (not (str/blank? initial-content))
+      (swap! st (fn [s]
+                  (-> s
+                      (assoc-in [:blocks "main-post-id" :content] initial-content)
+                      (assoc-in [:blocks "main-post-id" :content-spans]
+                                (->> (or initial-entities [])
+                                     (map (fn [e]
+                                            (let [s (get e "start")
+                                                  en (get e "end")
+                                                  safe-start (max 0 (min (or s 0) c-len))
+                                                  safe-end (max safe-start (min (or en 0) c-len))]
+                                              (when (and s en (<= safe-start safe-end))
+                                                {:start safe-start
+                                                 :end safe-end
+                                                 :attrs {:tag true :entity-id (get e "entity_id")}}))))
+                                     (remove nil?)
+                                     vec))))))
+    (when (and reply-to-name reply-to-author-id (str/blank? initial-content))
+      (let [clean-name (str/replace-first reply-to-name #"^@" "")]
+        (simple-editor/insert-entity-at-cursor! st (str "@" clean-name) reply-to-author-id)))
+    st))
 
 ;; =============================================================================
 ;; 2. Payload Serialization & Auto-Save
@@ -168,168 +188,158 @@
   "The primary viewport for creating new posts, completely optimized for 
    vertical block-based rich text editing with absolute coordinate entity tracking."
   [{:keys [reply-to-id reply-to-name reply-to-author-id quote-id quote-author-name quote-post
-           draft-id outbox-id initial-content initial-media initial-entities initial-idempotency-key]}]
-  
-  (f/widget
-   :context ctx
-   
-   ;; ⚡ Lifecycle management
-   :managed [lifecycle-init 
-             (let [c-len (count (or initial-content ""))]
-               (reset! !compose-saved? false)
-               (reset! !compose-loading? false)
-               (reset! !compose-media-urls (vec (or initial-media [])))
-               (reset! !compose-idk (or initial-idempotency-key (str "idk-" (.-millisecondsSinceEpoch (dc/DateTime.now)) "-" (.nextInt (math/Random.) 1000000))))
-               
-               (let [st (simple-editor/init-simple-state)]
-                 (when (not (str/blank? initial-content))
-                   (swap! st (fn [s]
-                               (-> s
-                                   (assoc-in [:blocks "main-post-id" :content] initial-content)
-                                   (assoc-in [:blocks "main-post-id" :content-spans]
-                                             (->> (or initial-entities [])
-                                                  (map (fn [e]
-                                                         (let [s (get e "start")
-                                                               en (get e "end")
-                                                               safe-start (max 0 (min (or s 0) c-len))
-                                                               safe-end (max safe-start (min (or en 0) c-len))]
-                                                           (when (and s en (<= safe-start safe-end))
-                                                             {:start safe-start
-                                                              :end safe-end
-                                                              :attrs {:tag true :entity-id (get e "entity_id")}}))))
-                                                  (remove nil?)
-                                                  vec))))))
-                 
-                 (when (and reply-to-name reply-to-author-id (str/blank? initial-content))
-                   (let [clean-name (str/replace-first reply-to-name #"^@" "")]
-                     (simple-editor/insert-entity-at-cursor! st (str "@" clean-name) reply-to-author-id)))
-                 
-                 (reset! !compose-editor-state @st))
-               
-               (m/TextEditingController.))
-             :dispose .dispose]
-             
-   :watch [loading? !compose-loading?
-           media-urls !compose-media-urls
-           editor-state !compose-editor-state]
-   
-   (m/WillPopScope
-    .onWillPop (fn []
-                 (-> (save-draft-logic! ctx loading? !compose-saved? !compose-editor-state !compose-media-urls draft-id outbox-id 
-                                        reply-to-id reply-to-name reply-to-author-id quote-id quote-author-name quote-post @!compose-idk)
-                     (.then (fn [_] (dc/Future.value true)))))
-    .child
-    (m/Scaffold
-     .backgroundColor (theme/surface ctx)
-     
-     .appBar
-     (m/AppBar
-      .backgroundColor (theme/surface ctx)
-      .elevation 0.5
-      .leading (m/IconButton 
-                .icon (m/Icon m/Icons.close_rounded .color (theme/text ctx))
-                .onPressed (fn [] 
-                             (-> (save-draft-logic! ctx loading? !compose-saved? !compose-editor-state !compose-media-urls draft-id outbox-id 
-                                                    reply-to-id reply-to-name reply-to-author-id quote-id quote-author-name quote-post @!compose-idk)
-                                 (.then (fn [_] (nav/pop! ctx))))
-                             nil))
-      .actions
-      [(m/Padding
-        .padding (m/EdgeInsets.symmetric .horizontal 16.0 .vertical 8.0)
-        .child
-        (m/Container
-         .decoration (m/BoxDecoration .color theme/brand-blue .shape m/BoxShape.circle)
-         .child
-         (m/IconButton
-          .icon (if loading?
-                  (m/SizedBox .width 16.0 .height 16.0 
-                              .child (m/CircularProgressIndicator .strokeWidth 2.0 .color m/Colors.white))
-                  (m/Icon m/Icons.send_rounded .color m/Colors.white .size 18.0))
-          .onPressed (if loading? 
-                       nil 
-                       (fn [] 
-                         (let [serialized-data (serialize-post @!compose-editor-state)]
-                           (publish-ctrl/submit-post! ctx serialized-data media-urls reply-to-id quote-id !compose-loading? 
-                                                      :draft-id draft-id 
-                                                      :outbox-id outbox-id
-                                                      :reply-to-name reply-to-name
-                                                      :reply-to-author-id reply-to-author-id
-                                                      :quote-author-name quote-author-name
-                                                      :quote-post quote-post
-                                                      :idempotency-key @!compose-idk
-                                                      :on-success (fn [] (reset! !compose-saved? true)))))))))])
-     
-     .body
-     (m/SafeArea
+           draft-id outbox-id initial-content initial-media initial-entities initial-idempotency-key]
+    :as args}]
+
+  (let [!editor-state (boot-editor-state args)
+        !media-urls (atom (vec (or initial-media [])))
+        !saved? (atom false)
+        !loading? (atom false)
+        !idk (atom (or initial-idempotency-key
+                       (str "idk-" (.-millisecondsSinceEpoch (dc/DateTime.now)) "-"
+                            (.nextInt (math/Random.) 1000000))))
+        app-title (cond
+                    reply-to-id "Хариулах"
+                    quote-id "Иш татах"
+                    :else "Нийтлэл")]
+
+    (f/widget
+     :context ctx
+
+     :watch [loading? !loading?
+             media-urls !media-urls
+             editor-state !editor-state]
+
+     (m/WillPopScope
+      .onWillPop (fn []
+                   (-> (save-draft-logic! ctx loading? !saved? !editor-state !media-urls draft-id outbox-id
+                                          reply-to-id reply-to-name reply-to-author-id quote-id quote-author-name quote-post @!idk)
+                       (.then (fn [_] (dc/Future.value true)))))
       .child
-      (simple-editor/simple-editor
-       !compose-editor-state
+      (m/Scaffold
+       .backgroundColor (theme/surface ctx)
 
-       ;; rich-editor reads :block-style (not :block-styles) to override the default white text
-       :editor-config
-       {:block-style
-        {:paragraph (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text ctx) .fontSize 16.0)
-         :heading-1 (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text ctx) .fontSize 20.0 .fontWeight m/FontWeight.bold)
-         :heading-2 (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text ctx) .fontSize 18.0 .fontWeight m/FontWeight.bold)
-         :list-item (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text ctx) .fontSize 16.0)
-         :blockquote (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text-2 ctx) .fontSize 15.0)}}
+       .appBar
+       (m/AppBar
+        .backgroundColor (theme/surface ctx)
+        .elevation 0.5
+        .title (m/Text app-title
+                       .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                           .fontSize 18.0
+                                           .fontWeight m/FontWeight.bold
+                                           .color (theme/text ctx)))
+        .leading (m/IconButton
+                  .icon (m/Icon m/Icons.close_rounded .color (theme/text ctx))
+                  .onPressed (fn []
+                               (-> (save-draft-logic! ctx loading? !saved? !editor-state !media-urls draft-id outbox-id
+                                                      reply-to-id reply-to-name reply-to-author-id quote-id quote-author-name quote-post @!idk)
+                                   (.then (fn [_] (nav/pop! ctx))))
+                               nil))
+        .actions
+        [(m/Padding
+          .padding (m/EdgeInsets.symmetric .horizontal 16.0 .vertical 8.0)
+          .child
+          (m/Container
+           .decoration (m/BoxDecoration .color theme/brand-blue .shape m/BoxShape.circle)
+           .child
+           (m/IconButton
+            .icon (if loading?
+                    (m/SizedBox .width 16.0 .height 16.0
+                                .child (m/CircularProgressIndicator .strokeWidth 2.0 .color m/Colors.white))
+                    (m/Icon m/Icons.send_rounded .color m/Colors.white .size 18.0))
+            .onPressed (if loading?
+                         nil
+                         (fn []
+                           (let [serialized-data (serialize-post @!editor-state)]
+                             (publish-ctrl/submit-post! ctx serialized-data media-urls reply-to-id quote-id !loading?
+                                                        :draft-id draft-id
+                                                        :outbox-id outbox-id
+                                                        :reply-to-name reply-to-name
+                                                        :reply-to-author-id reply-to-author-id
+                                                        :quote-author-name quote-author-name
+                                                        :quote-post quote-post
+                                                        :idempotency-key @!idk
+                                                        :on-success (fn [] (reset! !saved? true)))))))))])
 
-       :leading
-       (m/Container
-        .width 60.0
-        .height (.-infinity dc/double)
-        .decoration (m/BoxDecoration
-                     .color (theme/surface ctx)
-                     .border (m/Border .right (m/BorderSide .color (theme/border ctx) .width 0.5)))
-        .padding (m/EdgeInsets.symmetric .vertical 16.0)
+       .body
+       (m/SafeArea
         .child
-        (m/Column
-         .children
-         [(m/IconButton
-           .icon (m/Icon m/Icons.image_outlined .color theme/brand-blue)
-           .onPressed (fn []
-                        (media-attach/pick-and-upload! ctx #(swap! !compose-media-urls conj %))
-                        nil))
+        (simple-editor/simple-editor
+         !editor-state
 
-          (m/SizedBox .height 16.0)
+         :editor-config
+         {:block-style
+          {:paragraph (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text ctx) .fontSize 16.0)
+           :heading-1 (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text ctx) .fontSize 20.0 .fontWeight m/FontWeight.bold)
+           :heading-2 (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text ctx) .fontSize 18.0 .fontWeight m/FontWeight.bold)
+           :list-item (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text ctx) .fontSize 16.0)
+           :blockquote (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text-2 ctx) .fontSize 15.0)}}
 
-          (m/IconButton
-           .icon (m/Icon m/Icons.alternate_email_rounded .color (theme/text-2 ctx))
-           .onPressed (fn []
-                        (tag-search/show-tag-modal! ctx !compose-editor-state simple-editor/insert-entity-at-cursor!)
-                        nil))
+         :leading
+         (m/Container
+          .width 60.0
+          .height (.-infinity dc/double)
+          .decoration (m/BoxDecoration
+                       .color (theme/surface ctx)
+                       .border (m/Border .right (m/BorderSide .color (theme/border ctx) .width 0.5)))
+          .padding (m/EdgeInsets.symmetric .vertical 16.0)
+          .child
+          (m/Column
+           .children
+           [(m/IconButton
+             .icon (m/Icon m/Icons.image_outlined .color theme/brand-blue)
+             .onPressed (fn []
+                          (media-attach/pick-and-upload! ctx #(swap! !media-urls conj %))
+                          nil))
 
-          (m/SizedBox .height 16.0)
+            (m/SizedBox .height 16.0)
 
-          (m/IconButton
-           .icon (m/Icon m/Icons.tag_rounded .color (theme/text-2 ctx))
-           .onPressed (fn []
-                        (tag-search/show-tag-modal! ctx !compose-editor-state simple-editor/insert-entity-at-cursor!)
-                        nil))
+            (m/IconButton
+             .icon (m/Icon m/Icons.alternate_email_rounded .color (theme/text-2 ctx))
+             .onPressed (fn []
+                          (tag-search/show-tag-modal! ctx !editor-state simple-editor/insert-entity-at-cursor!
+                                                      :initial-kind :user)
+                          nil))
 
-          (m/SizedBox .height 24.0)
+            (m/SizedBox .height 16.0)
 
-          (if (not-empty media-urls)
-            (vertical-media-gallery media-urls !compose-media-urls)
-            (m/SizedBox.shrink))]))
+            (m/IconButton
+             .icon (m/Icon m/Icons.tag_rounded .color (theme/text-2 ctx))
+             .onPressed (fn []
+                          (tag-search/show-tag-modal! ctx !editor-state simple-editor/insert-entity-at-cursor!
+                                                      :initial-kind :topic)
+                          nil))
 
-       :trailing
-       (m/Row
-        .mainAxisSize m/MainAxisSize.min
-        .children
-        [(if (empty? quote-author-name)
-           (m/SizedBox.shrink)
-           (mgl/MongolText (str "Иш татах: @" (str/replace-first quote-author-name #"^@" ""))
-                           .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 16.0 .color (theme/text-2 ctx))))
-         (if quote-post
-           (quoted-post-widget/quoted-post-card
-            ctx quote-post
-            :margin (m/EdgeInsets.only .right 16.0 .top 16.0 .bottom 16.0)
-            :padding (m/EdgeInsets.all 16.0)
-            :bg-color (theme/bg ctx)
-            :show-handle? true
-            :show-divider? false
-            :author-font-size 14.0
-            :content-font-size 14.0
-            :max-lines 2)
-           (m/SizedBox.shrink))])))))))
+            (m/SizedBox .height 24.0)
+
+            (if (not-empty media-urls)
+              (vertical-media-gallery media-urls !media-urls)
+              (m/SizedBox.shrink))]))
+
+         :trailing
+         (m/Row
+          .mainAxisSize m/MainAxisSize.min
+          .children
+          [(if (str/blank? reply-to-name)
+             (m/SizedBox.shrink)
+             (m/Padding
+              .padding (m/EdgeInsets.only .right 12.0 .top 16.0 .bottom 16.0)
+              .child
+              (mgl/MongolText (str "Хариулах: @" (str/replace-first reply-to-name #"^@" ""))
+                              .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 16.0 .color (theme/text-2 ctx)))))
+           (if (empty? quote-author-name)
+             (m/SizedBox.shrink)
+             (mgl/MongolText (str "Иш татах: @" (str/replace-first quote-author-name #"^@" ""))
+                             .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 16.0 .color (theme/text-2 ctx))))
+           (if quote-post
+             (quoted-post-widget/quoted-post-card
+              ctx quote-post
+              :margin (m/EdgeInsets.only .right 16.0 .top 16.0 .bottom 16.0)
+              :padding (m/EdgeInsets.all 16.0)
+              :bg-color (theme/bg ctx)
+              :show-handle? true
+              :show-divider? false
+              :author-font-size 14.0
+              :content-font-size 14.0
+              :max-lines 2)
+             (m/SizedBox.shrink))]))))))))

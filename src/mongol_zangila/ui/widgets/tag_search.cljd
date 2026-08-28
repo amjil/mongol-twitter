@@ -49,10 +49,10 @@
 ;; =============================================================================
 
 (defn- tag-search-view
-  [modal-h !search-state on-insert-fn]
+  [modal-h !search-state on-insert-fn initial-kind]
   (let [!raw-results (atom [])
         !loading? (atom false)
-        !search-type (atom :user)
+        !search-type (atom (or initial-kind :user))
         ;; The mobile virtual keyboard only updates TextEditingController; it does not sync rich-editor block content
         !query (atom "")
         
@@ -268,7 +268,7 @@
 ;; =============================================================================
 
 (defn show-tag-modal!
-  [ctx !target-editor-state on-insert-fn]
+  [ctx !target-editor-state on-insert-fn & {:keys [initial-kind] :or {initial-kind :user}}]
   (let [!search-state (fresh-tag-search-state)
         captured-active-id (:active-block-id @!target-editor-state)
         media-q (m/MediaQuery.of ctx)
@@ -287,7 +287,8 @@
          .builder (fn [_sheet-ctx]
                     (tag-search-view modal-h !search-state
                                      (fn [display-text entity-id]
-                                       (on-insert-fn !target-editor-state display-text entity-id)))))
+                                       (on-insert-fn !target-editor-state display-text entity-id))
+                                     initial-kind)))
         (.whenComplete
          (fn []
            (when (nil? (:active-block-id @!target-editor-state))

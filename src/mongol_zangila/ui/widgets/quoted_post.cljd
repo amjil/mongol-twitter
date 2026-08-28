@@ -55,7 +55,8 @@
           (if show-divider?
             (m/SizedBox .width 12.0)
             (m/SizedBox.shrink))
-          (m/Flexible
+          (m/Container
+           .constraints (m/BoxConstraints .maxWidth 140.0)
            .child
            (mgl/MongolText content
                            .maxLines max-lines

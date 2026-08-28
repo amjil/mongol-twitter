@@ -32,9 +32,12 @@
 (defn load-page! 
   [ctx endpoint !posts !page !has-more? !loading? is-refresh?]
   (cond
-    @!loading?
+    ;; Screens start !initial-loading? as true so the first frame can spin.
+    ;; Only skip when a request is actually in flight (we already have posts,
+    ;; or this is pagination rather than the first refresh).
+    (and @!loading? (or (seq @!posts) (not is-refresh?)))
     (do
-      (when is-refresh?
+      (when (and is-refresh? (seq @!posts))
         (toast/info ctx "Уншиж байна, түр хүлээнэ үү..."))
       (dc/Future.value true))
     
@@ -53,35 +56,37 @@
             query-sep (if (str/includes? endpoint "?") "&" "?")
             url (str endpoint query-sep "limit=15&page=" current-page)]
         
-        (-> (api/get-req url)
-            (.then (fn [res]
-                     (let [fetched-posts (get res "data" [])
-                           is-full-page? (= (count fetched-posts) 15)]
-                       
+        (let [commit-page!
+              (fn [res blocked-ids]
+                (let [fetched-posts (get res "data" [])
+                      is-full-page? (= (count fetched-posts) 15)
+                      blocked (or blocked-ids #{})
+                      clean-posts (remove (fn [p]
+                                            (let [author-id (get-in p ["author" "id"])]
+                                              (or (contains? blocked author-id)
+                                                  (get-in p ["author" "is_blocked_by_me"] false))))
+                                          fetched-posts)]
+                  (if is-refresh?
+                    (reset! !posts (vec clean-posts))
+                    (swap! !posts (fn [existing]
+                                    (let [existing-ids (set (map #(get % "id") existing))
+                                          new-posts (remove #(existing-ids (get % "id")) clean-posts)]
+                                      (vec (concat existing new-posts))))))
+                  (reset! !page (inc current-page))
+                  (reset! !has-more? is-full-page?)
+                  (reset! !loading? false)
+                  (.complete completer true)))]
+          (-> (api/get-req url)
+              (.then (fn [res]
                        (-> (db/get-blocked-user-ids)
-                           (.then (fn [blocked-ids]
-                                    (let [clean-posts (remove (fn [p] 
-                                                                (let [author-id (get-in p ["author" "id"])]
-                                                                  (or (contains? blocked-ids author-id)
-                                                                      (get-in p ["author" "is_blocked_by_me"] false))))
-                                                              fetched-posts)]
-                                      
-                                      (if is-refresh?
-                                        (reset! !posts (vec clean-posts))
-                                        (swap! !posts (fn [existing]
-                                                        (let [existing-ids (set (map #(get % "id") existing))
-                                                              new-posts (remove #(existing-ids (get % "id")) clean-posts)]
-                                                          (vec (concat existing new-posts))))))
-                                      
-                                      (reset! !page (inc current-page))
-                                      (reset! !has-more? is-full-page?)
-                                      (reset! !loading? false)
-                                      (.complete completer true))))))))
-            
-            (.catchError (fn [err]
-                           (reset! !loading? false)
-                           (.completeError completer err)
-                           (toast/error ctx (str "Алдаа гарлаа: " err)))))
+                           (.then (fn [ids] (commit-page! res ids)))
+                           (.catchError (fn [_]
+                                          (commit-page! res #{})
+                                          true)))))
+              (.catchError (fn [err]
+                             (reset! !loading? false)
+                             (.completeError completer err)
+                             (toast/error ctx (str "Алдаа гарлаа: " err))))))
         
         (.-future completer)))))
 
@@ -175,21 +180,31 @@
                          (toast/error ctx "Хадгалахад алдаа гарлаа. Дараа дахин оролдоно уу.")))))))
 
 (defn delete-post!
+  "Optimistically removes `post-id` from `!posts` when it holds a vector of posts.
+   `!posts` may be nil (e.g. deleting the anchor post on the detail screen).
+   Broadcasts a feed refresh after a successful delete or offline enqueue."
   [ctx post-id !posts]
   (let [net-status @state/network-status
         idk (str "idk-" (.-millisecondsSinceEpoch (dc/DateTime.now)) "-" (.nextInt (math/Random.) 1000000))
-        original-posts @!posts
+        original-posts (when !posts @!posts)
         outbox-payload {"post_id" post-id}]
-    
-    (reset! !posts (vec (remove #(= (get % "id") post-id) original-posts)))
+
+    (when (and !posts (sequential? original-posts))
+      (reset! !posts (vec (remove #(= (get % "id") post-id) original-posts))))
     (toast/success ctx "Нийтлэлийг устгалаа.")
-    
+
     (if (= net-status :offline)
-      (write-buffer/enqueue! "delete-post" outbox-payload idk)
+      (do
+        (write-buffer/enqueue! "delete-post" outbox-payload idk)
+        (trigger-feed-refresh!))
       (-> (api/delete-req (str "/tweets/" post-id))
+          (.then (fn [_] (trigger-feed-refresh!)))
           (.catchError (fn [err]
                          (if (and (.-response err) (not= (.-statusCode (.-response err)) 503))
-                           (do 
-                             (reset! !posts original-posts)
+                           (do
+                             (when (and !posts (sequential? original-posts))
+                               (reset! !posts original-posts))
                              (toast/error ctx "Нийтлэл устгах үйлдэл амжилтгүй боллоо."))
-                           (write-buffer/enqueue! "delete-post" outbox-payload idk))))))))
+                           (do
+                             (write-buffer/enqueue! "delete-post" outbox-payload idk)
+                             (trigger-feed-refresh!)))))))))

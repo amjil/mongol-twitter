@@ -98,8 +98,8 @@
              blocked-ids !blocked-ids
              init-loading? !initial-loading?
              page-loading? !pagination-loading?
-             current-user state/current-user
-             unread-notes state/unread-notifications-count]
+             has-more? !has-more?
+             current-user state/current-user]
 
      (let [user-id (get current-user "id")
            avatar-url (get current-user "avatar_url")
@@ -109,12 +109,9 @@
            visible-posts (vec (remove #(contains? blocked-ids (get-in % ["author" "id"])) posts))]
 
        (pft/PostFrameTrigger
-        .onLayout (fn [] 
-                    (reset! !initial-loading? false)
+        .onLayout (fn []
                     (feed-ctrl/load-page! ctx "/feed" !posts !page !has-more? !initial-loading? true)
-                    ;; ⚡ Load the local blocklist on init
                     (-> (db/get-blocked-user-ids) (.then #(reset! !blocked-ids %)))
-                    ;; ⚡ Return nil so the callback is not a void Function() (avoids a type crash)
                     nil)
         .child
         
@@ -139,18 +136,9 @@
            .title (m/Icon m/Icons.water_drop_rounded .color theme/brand-blue .size 32.0)
            .centerTitle true
 
-           .actions [(m/Row
-                      .mainAxisSize m/MainAxisSize.min
-                      .children
-                      [(network-status-indicator)
-                       (m/SizedBox .width 8.0)
-                       (m/IconButton
-                        .icon (m/Badge
-                               .label (m/Text (str unread-notes))
-                               .isLabelVisible (> unread-notes 0)
-                               .child (m/Icon m/Icons.notifications_none_rounded .color (theme/text ctx)))
-                        .onPressed #(nav/push! ctx "/notifications"))
-                       (m/SizedBox .width 8.0)])])
+           .actions [(m/Padding
+                      .padding (m/EdgeInsets.only .right 8.0)
+                      .child (network-status-indicator))])
 
           .body
           (if init-loading?
@@ -170,14 +158,13 @@
                 
                 :not-armed-text "Татаж шинэчлэх"
                 :armed-text "Суллаж шинэчлэх"
-                :loading-text "Суллаж шинэчлэх"
+                :loading-text "Шинэчилж байна"
                 :not-armed-color (theme/border ctx)
                 :armed-color theme/brand-blue
                 :text-style (m/TextStyle .fontFamily "OyunQaganTig" .color m/Colors.white .fontSize 14.0 .fontWeight m/FontWeight.bold)
                 :trigger-mode cri/IndicatorTriggerMode.anywhere
                 
-                ;; ⚡ Use the filtered visible-posts count
-                :item-count (if (and @!has-more? page-loading?) (inc (count visible-posts)) (count visible-posts))
+                :item-count (if (and has-more? page-loading?) (inc (count visible-posts)) (count visible-posts))
                 :separator-builder (fn [_ _] (m/SizedBox .width 0.0))
                 :box-shadow []
                 
@@ -191,9 +178,7 @@
                     ;; ⚡ Render from visible-posts
                     (let [post-data (nth visible-posts i)]
                       (m/Container
-                       ;; ⚡ Core change: drop a hard-coded width; use maxWidth so cards can shrink to content
-                       ;.constraints (m/BoxConstraints .maxWidth 320.0)
-                       .margin (m/EdgeInsets.only .left 16.0 .right 8.0 .top 16.0 .bottom 16.0)
+                       .margin post-card/timeline-card-margin
                        .child (post-card/post-card 
                                ctx post-data
                                :on-mutate (fn [mutator]

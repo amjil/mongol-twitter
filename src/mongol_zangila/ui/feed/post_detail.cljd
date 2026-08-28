@@ -29,18 +29,21 @@
 ;; 1. Core Data Fetching Engine
 ;; =============================================================================
 
-(defn- fetch-thread! 
-  [ctx post-id !post-data !replies !loading? & [is-refresh?]]
+(defn- fetch-thread!
+  [ctx post-id !post-data !replies !loading? !error? & [is-refresh?]]
   (when-not is-refresh?
     (reset! !loading? true))
+  (reset! !error? false)
   (-> (api/get-req (str "/posts/" post-id "/thread"))
       (.then (fn [res]
                (let [data (get res "data" {})]
                  (reset! !post-data (get data "post"))
                  (reset! !replies (get data "replies" []))
+                 (reset! !error? false)
                  (reset! !loading? false))))
       (.catchError (fn [err]
                      (reset! !loading? false)
+                     (reset! !error? true)
                      (toast/error ctx (str "Мэдээлэл татахад алдаа гарлаа: " err))))))
 
 (defn- cleanup-refresh-watch [k]
@@ -56,7 +59,8 @@
   
   (let [!post-data (atom nil)
         !replies (atom [])
-        !loading? (atom true)]
+        !loading? (atom true)
+        !error? (atom false)]
     
     (f/widget
      :context ctx
@@ -68,105 +72,109 @@
                               (add-watch feed-ctrl/!feed-refresh-trigger key
                                          (fn [_ _ old-val new-val]
                                            (when (> new-val old-val)
-                                             (fetch-thread! ctx post-id !post-data !replies !loading? true))))
+                                             (fetch-thread! ctx post-id !post-data !replies !loading? !error? true))))
                               key)
                :dispose cleanup-refresh-watch]
                
      :watch [post-data !post-data
              replies !replies
-             loading? !loading?]
+             loading? !loading?
+             load-error? !error?]
      
-     (pft/PostFrameTrigger
-      .onLayout #(fetch-thread! ctx post-id !post-data !replies !loading? false)
-      .child
-      (m/Scaffold
-       .backgroundColor (theme/bg ctx)
-       
-       .appBar
-       (m/AppBar
-        .backgroundColor (theme/surface ctx)
-        .elevation 0.5
-        .leading (m/IconButton 
-                  .icon (m/Icon m/Icons.arrow_back_rounded .color (theme/text ctx))
-                  .onPressed #(nav/pop! ctx))
-        .title (m/Text "Нийтлэл"
-                       .style (m/TextStyle .fontFamily "OyunQaganTig" 
-                                           .fontSize 18.0 
-                                           .fontWeight m/FontWeight.bold 
-                                           .color (theme/text ctx))))
-       
-       .floatingActionButton
-       (when post-data
-         (m/FloatingActionButton
-          .backgroundColor theme/brand-blue
-          .elevation 4.0
-          .onPressed #(nav/push-fullscreen! ctx "/feed/compose"
-                                            {:reply-to-id post-id
-                                             :reply-to-author-id (get-in post-data ["author" "id"])
-                                             :reply-to-name (get-in post-data ["author" "handle"]
-                                                                    (get-in post-data ["author" "name"]))})
-          .child (m/Icon m/Icons.reply_rounded .color m/Colors.white)))
-       
-       .body
-       (cond
-         loading?
-         (m/Center .child (m/CircularProgressIndicator .color theme/brand-blue))
+     (let [reload! #(fetch-thread! ctx post-id !post-data !replies !loading? !error? false)]
+       (pft/PostFrameTrigger
+        .onLayout reload!
+        .child
+        (m/Scaffold
+         .backgroundColor (theme/bg ctx)
          
-         (nil? post-data)
-         (empty-state/empty-view ctx 
-                                 :icon-data m/Icons.visibility_off_rounded
-                                 :title "Устгагдсан байна"
-                                 :subtitle "Энэ нийтлэл устгагдсан эсвэл танд харах эрх алга.")
+         .appBar
+         (m/AppBar
+          .backgroundColor (theme/surface ctx)
+          .elevation 0.5
+          .leading (m/IconButton 
+                    .icon (m/Icon m/Icons.arrow_back_rounded .color (theme/text ctx))
+                    .onPressed #(nav/pop! ctx))
+          .title (m/Text "Нийтлэл"
+                         .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                             .fontSize 18.0 
+                                             .fontWeight m/FontWeight.bold 
+                                             .color (theme/text ctx))))
          
-         :else
-         (m/ListView.builder
-          .controller scroll-ctrl
-          .scrollDirection m/Axis.horizontal
-          .physics (m/AlwaysScrollableScrollPhysics.)
-          .itemCount (+ 2 (count replies))
-          .itemBuilder
-          (fn [_ i]
-           (cond
-             ;; 1. The Anchor Post
-             (= i 0)
-             (m/Container
-              .padding (m/EdgeInsets.only .left 16.0 .right 16.0 .top 16.0 .bottom 16.0)
-              .child (post-card/post-card 
-                      ctx post-data 
-                      :is-detail-view true
-                      :on-mutate (fn [mutator] (swap! !post-data mutator))
-                      :on-delete (fn []
-                                   (feed-ctrl/delete-post! ctx post-id !replies)
-                                   (nav/pop! ctx))))
-             
-             ;; 2. Visual Separator
-             (= i 1)
-             (m/Container
-              .color (theme/bg ctx)
-              .padding (m/EdgeInsets.symmetric .horizontal 16.0 .vertical 16.0)
-              .alignment m/Alignment.topCenter
-              .child (mgl/MongolText (str (count replies) " сэтгэгдэл")
-                                     .style (m/TextStyle .fontFamily "OyunQaganTig" 
-                                                         .color (theme/text-2 ctx) 
-                                                         .fontWeight m/FontWeight.bold)))
-             
-             ;; 3. The Conversation Thread (Comments)
-             :else
-             (let [idx (- i 2)]
-               (if (< idx (count replies))
-                 (let [reply-data (nth replies idx)]
-                   (m/Container
-                    .padding (m/EdgeInsets.only .top 32.0 .right 16.0 .bottom 16.0)
-                    .child (post-card/post-card 
-                            ctx reply-data 
-                            :is-reply true
-                            ;; ⚡ Core change: pass the parent post id to every comment card
-                            :root-post-id post-id
-                            :on-mutate (fn [mutator]
-                                         (swap! !replies (fn [rs]
-                                                           (mapv #(if (= (get % "id") (get reply-data "id"))
-                                                                    (mutator %)
-                                                                    %)
-                                                                 rs))))
-                            :on-delete #(feed-ctrl/delete-post! ctx (get reply-data "id") !replies))))
-                 (m/SizedBox.shrink))))))))))))
+         .floatingActionButton
+         (when post-data
+           (m/FloatingActionButton
+            .backgroundColor theme/brand-blue
+            .elevation 4.0
+            .onPressed #(nav/push-fullscreen! ctx "/feed/compose"
+                                              {:reply-to-id post-id
+                                               :reply-to-author-id (get-in post-data ["author" "id"])
+                                               :reply-to-name (get-in post-data ["author" "handle"]
+                                                                      (get-in post-data ["author" "name"]))})
+            .child (m/Icon m/Icons.reply_rounded .color m/Colors.white)))
+         
+         .body
+         (cond
+           loading?
+           (m/Center .child (m/CircularProgressIndicator .color theme/brand-blue))
+
+           load-error?
+           (empty-state/offline-view ctx reload!)
+           
+           (nil? post-data)
+           (empty-state/empty-view ctx 
+                                   :icon-data m/Icons.visibility_off_rounded
+                                   :title "Устгагдсан байна"
+                                   :subtitle "Энэ нийтлэл устгагдсан эсвэл танд харах эрх алга.")
+           
+           :else
+           (m/ListView.builder
+            .controller scroll-ctrl
+            .scrollDirection m/Axis.horizontal
+            .physics (m/AlwaysScrollableScrollPhysics.)
+            .itemCount (+ 2 (count replies))
+            .itemBuilder
+            (fn [_ i]
+             (cond
+               ;; 1. The Anchor Post
+               (= i 0)
+               (m/Container
+                .margin post-card/timeline-card-margin
+                .child (post-card/post-card 
+                        ctx post-data 
+                        :is-detail-view true
+                        :on-mutate (fn [mutator] (swap! !post-data mutator))
+                        :on-delete (fn []
+                                     (feed-ctrl/delete-post! ctx post-id nil)
+                                     (nav/pop! ctx))))
+               
+               ;; 2. Visual Separator
+               (= i 1)
+               (m/Container
+                .color (theme/bg ctx)
+                .padding (m/EdgeInsets.symmetric .horizontal 16.0 .vertical 16.0)
+                .alignment m/Alignment.topCenter
+                .child (mgl/MongolText (str (count replies) " сэтгэгдэл")
+                                       .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                                           .color (theme/text-2 ctx) 
+                                                           .fontWeight m/FontWeight.bold)))
+               
+               ;; 3. The Conversation Thread (Comments)
+               :else
+               (let [idx (- i 2)]
+                 (if (< idx (count replies))
+                   (let [reply-data (nth replies idx)]
+                     (m/Container
+                      .margin post-card/timeline-card-margin
+                      .child (post-card/post-card 
+                              ctx reply-data 
+                              :is-reply true
+                              :root-post-id post-id
+                              :on-mutate (fn [mutator]
+                                           (swap! !replies (fn [rs]
+                                                             (mapv #(if (= (get % "id") (get reply-data "id"))
+                                                                      (mutator %)
+                                                                      %)
+                                                                   rs))))
+                              :on-delete #(feed-ctrl/delete-post! ctx (get reply-data "id") !replies))))
+                   (m/SizedBox.shrink)))))))))))))

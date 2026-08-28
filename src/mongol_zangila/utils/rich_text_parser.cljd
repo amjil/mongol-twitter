@@ -122,10 +122,12 @@
    - content: Raw text string.
    - entities: Vector of entities containing coordinate indices.
    - :base-size - Font size for rendering (Default: 15.0).
-   - :is-me? - Set to true if rendered inside an outgoing message bubble to invert colors."
-  [ctx content entities & {:keys [base-size is-me?] :or {base-size 15.0 is-me? false}}]
+   - :is-me? - Set to true if rendered inside an outgoing message bubble to invert colors.
+   - :max-lines / :overflow - forwarded to MongolText.rich (timeline cards pass 3 + ellipsis)."
+  [ctx content entities & {:keys [base-size is-me? max-lines overflow]
+                           :or {base-size 15.0 is-me? false}}]
   (f/widget
-   :key (m/ValueKey (hash [content entities base-size is-me?]))
+   :key (m/ValueKey (hash [content entities base-size is-me? max-lines overflow]))
    
    :managed [!recognizers (create-registry)
              :dispose dispose-registry
@@ -160,5 +162,9 @@
                            tokens))
              :dispose nil]
    
-   (mgl/MongolText.rich
-    (m/TextSpan .children spans))))
+   (let [span (m/TextSpan .children spans)]
+     (if max-lines
+       (mgl/MongolText.rich span
+                            .maxLines max-lines
+                            .overflow (or overflow m/TextOverflow.ellipsis))
+       (mgl/MongolText.rich span)))))

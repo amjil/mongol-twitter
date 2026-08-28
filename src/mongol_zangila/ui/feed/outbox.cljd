@@ -122,82 +122,90 @@
                          (= m-type "bookmark-tweet") (if (= action "unbookmark") "Хадгалсныг цуцалсан" "Нийтлэлийг хадгалсан")
                          :else "Тодорхойгүй үйлдэл"))
         
-        has-errors? (and (not is-draft?) (> retries 0))]
-    
-    (m/GestureDetector
-     .onTap (fn []
-              (when can-edit?
-                (nav/push-fullscreen! ctx "/feed/compose"
-                                      (cond-> {:initial-content initial-content
-                                               :initial-media initial-media
-                                               :initial-entities initial-entities
-                                               :initial-idempotency-key initial-idempotency-key}
-                                        is-draft? (assoc :draft-id tx-id)
-                                        is-post-mutation? (assoc :outbox-id tx-id)
-                                        reply-to-id (assoc :reply-to-id reply-to-id)
-                                        reply-to-name (assoc :reply-to-name reply-to-name)
-                                        reply-to-author-id (assoc :reply-to-author-id reply-to-author-id)
-                                        quote-id (assoc :quote-id quote-id)
-                                        quote-author-name (assoc :quote-author-name quote-author-name)
-                                        quote-post (assoc :quote-post quote-post)))))
-     .child
-     (m/Container
-      .width 160.0
-      .margin (m/EdgeInsets.only .right 16.0 .top 16.0 .bottom 16.0)
-      .padding (m/EdgeInsets.all 16.0)
-      .decoration (m/BoxDecoration 
-                   .color (theme/surface ctx)
-                   .borderRadius (m/BorderRadius.circular 12.0)
-                   .border (m/Border.all .color (if has-errors? (.withOpacity theme/error-red 0.3) (theme/border ctx)) .width 1.0)
-                   .boxShadow [(m/BoxShadow .color (.withOpacity m/Colors.black 0.02) .blurRadius 8.0)])
-      .child
-      (m/Column
-       .crossAxisAlignment m/CrossAxisAlignment.center
-       .children
-       [;; 1. Status Icon
-        (m/Padding
-         .padding (m/EdgeInsets.only .bottom 16.0)
-         .child (m/Icon (cond
-                          is-draft? m/Icons.edit_note_rounded
-                          has-errors? m/Icons.error_outline_rounded
-                          :else m/Icons.cloud_upload_outlined)
-                        .color (if has-errors? theme/error-red (theme/text-2 ctx))
-                        .size 32.0))
-        
-        ;; 2. Content Preview
-        (m/Expanded
+        has-errors? (and (not is-draft?) (> retries 0))
+        open-editor! (fn []
+                       (nav/push-fullscreen! ctx "/feed/compose"
+                                             (cond-> {:initial-content initial-content
+                                                      :initial-media initial-media
+                                                      :initial-entities initial-entities
+                                                      :initial-idempotency-key initial-idempotency-key}
+                                               is-draft? (assoc :draft-id tx-id)
+                                               is-post-mutation? (assoc :outbox-id tx-id)
+                                               reply-to-id (assoc :reply-to-id reply-to-id)
+                                               reply-to-name (assoc :reply-to-name reply-to-name)
+                                               reply-to-author-id (assoc :reply-to-author-id reply-to-author-id)
+                                               quote-id (assoc :quote-id quote-id)
+                                               quote-author-name (assoc :quote-author-name quote-author-name)
+                                               quote-post (assoc :quote-post quote-post))))
+        card
+        (m/Container
+         .width 160.0
+         .margin (m/EdgeInsets.only .right 16.0 .top 16.0 .bottom 16.0)
+         .padding (m/EdgeInsets.all 16.0)
+         .decoration (m/BoxDecoration
+                      .color (theme/surface ctx)
+                      .borderRadius (m/BorderRadius.circular 12.0)
+                      .border (m/Border.all .color (if has-errors? (.withOpacity theme/error-red 0.3) (theme/border ctx)) .width 1.0)
+                      .boxShadow [(m/BoxShadow .color (.withOpacity m/Colors.black 0.02) .blurRadius 8.0)])
          .child
-         (m/Row
-          .crossAxisAlignment m/CrossAxisAlignment.start
-          .mainAxisAlignment m/MainAxisAlignment.center
+         (m/Column
+          .crossAxisAlignment m/CrossAxisAlignment.center
           .children
-          [(mgl/MongolText (cond
-                             is-draft? "Ноорог"
-                             (= m-type "create-post") "Нийтлэл"
-                             (= m-type "like-tweet") "Таалагдсан"
-                             (= m-type "repost-tweet") "Дахин нийтлэх"
-                             (= m-type "bookmark-tweet") "Хадгалсан"
-                             :else "Үйлдэл")
-                           .style (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text-2 ctx) .fontSize 14.0))
-           (m/SizedBox .width 8.0)
-           (mgl/MongolText preview-text
-                           .maxLines 2
-                           .overflow m/TextOverflow.ellipsis
-                           .style (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text ctx) .fontSize 16.0))
-           (if has-errors?
-             (m/Padding
-              .padding (m/EdgeInsets.only .left 12.0)
-              .child (mgl/MongolText (str "Оролдлого: " retries)
-                                     .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 14.0 .color theme/error-red)))
-             (m/SizedBox.shrink))]))
-        
-        ;; 3. Actions (Delete)
-        (m/Padding
-         .padding (m/EdgeInsets.only .top 16.0)
-         .child
-         (m/IconButton
-          .icon (m/Icon m/Icons.delete_outline_rounded .color (theme/text-2 ctx))
-          .onPressed #(delete-pending-item! ctx item)))])))))
+          [;; 1. Status Icon
+           (m/Padding
+            .padding (m/EdgeInsets.only .bottom 16.0)
+            .child (m/Icon (cond
+                             is-draft? m/Icons.edit_note_rounded
+                             has-errors? m/Icons.error_outline_rounded
+                             :else m/Icons.cloud_upload_outlined)
+                           .color (if has-errors? theme/error-red (theme/text-2 ctx))
+                           .size 32.0))
+
+           ;; 2. Content Preview
+           (m/Expanded
+            .child
+            (m/Row
+             .crossAxisAlignment m/CrossAxisAlignment.start
+             .mainAxisAlignment m/MainAxisAlignment.center
+             .children
+             [(mgl/MongolText (cond
+                                is-draft? "Ноорог"
+                                (= m-type "create-post") "Нийтлэл"
+                                (= m-type "like-tweet") "Таалагдсан"
+                                (= m-type "repost-tweet") "Дахин нийтлэх"
+                                (= m-type "bookmark-tweet") "Хадгалсан"
+                                :else "Үйлдэл")
+                              .style (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text-2 ctx) .fontSize 14.0))
+              (m/SizedBox .width 8.0)
+              (mgl/MongolText preview-text
+                              .maxLines 2
+                              .overflow m/TextOverflow.ellipsis
+                              .style (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text ctx) .fontSize 16.0))
+              (if has-errors?
+                (m/Padding
+                 .padding (m/EdgeInsets.only .left 12.0)
+                 .child (mgl/MongolText (str "Оролдлого: " retries)
+                                        .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 14.0 .color theme/error-red)))
+                (m/SizedBox.shrink))]))
+
+           ;; 3. Actions
+           (m/Padding
+            .padding (m/EdgeInsets.only .top 16.0)
+            .child
+            (m/Row
+             .mainAxisSize m/MainAxisSize.min
+             .children
+             [(if has-errors?
+                (m/IconButton
+                 .icon (m/Icon m/Icons.refresh_rounded .color theme/brand-blue)
+                 .onPressed #(trigger-manual-sync! ctx))
+                (m/SizedBox.shrink))
+              (m/IconButton
+               .icon (m/Icon m/Icons.delete_outline_rounded .color (theme/text-2 ctx))
+               .onPressed #(delete-pending-item! ctx item))]))]))]
+    (if can-edit?
+      (m/GestureDetector .onTap open-editor! .child card)
+      card)))
 
 ;; =============================================================================
 ;; 3. The Main Screen Widget

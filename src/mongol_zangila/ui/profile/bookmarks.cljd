@@ -58,12 +58,11 @@
      
      :watch [posts !posts
              init-loading? !initial-loading?
-             page-loading? !pagination-loading?]
+             page-loading? !pagination-loading?
+             has-more? !has-more?]
      
      (pft/PostFrameTrigger
-      ;; ⚡ Upgrade 2: reuse the robust loader in feed-ctrl
       .onLayout (fn []
-                  (reset! !initial-loading? false)
                   (feed-ctrl/load-page! ctx endpoint !posts !page !has-more? !initial-loading? true))
       .child
       (m/Scaffold
@@ -101,9 +100,8 @@
             .controller scroll-ctrl
             .scrollDirection m/Axis.horizontal
             .physics (m/BouncingScrollPhysics.)
-            .padding (m/EdgeInsets.only .left 16.0 .right 32.0)
-            ;; ⚡ Upgrade 3: if more pages exist and a page is loading, render an extra spinner slot
-            .itemCount (if (and @!has-more? page-loading?) (inc (count posts)) (count posts))
+            .padding (m/EdgeInsets.only .right 32.0)
+            .itemCount (if (and has-more? page-loading?) (inc (count posts)) (count posts))
             .itemBuilder
             (fn [_ i]
               (if (and page-loading? (= i (count posts)))
@@ -114,8 +112,7 @@
                 (let [post-data (nth posts i)
                       post-id (get post-data "id")]
                   (m/Container
-                   .width 340.0
-                   .margin (m/EdgeInsets.only .right 16.0 .top 16.0 .bottom 16.0)
+                   .margin post-card/timeline-card-margin
                    .child (post-card/post-card 
                            ctx post-data
                            :on-mutate (fn [mutator]

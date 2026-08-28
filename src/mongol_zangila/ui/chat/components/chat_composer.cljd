@@ -147,7 +147,8 @@
                                                        
                                                        (m/IconButton 
                                                         .icon (m/Icon m/Icons.tag_rounded .color (theme/text-2 ctx) .size 22.0) 
-                                                        .onPressed #(tag-search/show-tag-modal! d-ctx !editor-state simple-editor/insert-entity-at-cursor!))
+                                                        .onPressed #(tag-search/show-tag-modal! d-ctx !editor-state simple-editor/insert-entity-at-cursor!
+                                                                                                 :initial-kind :topic))
                                                        
                                                        (m/SizedBox .width 16.0)
                                                        

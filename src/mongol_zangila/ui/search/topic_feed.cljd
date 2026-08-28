@@ -54,7 +54,8 @@
      :watch [posts !posts
              init-loading? !initial-loading?
              page-loading? !pagination-loading?
-             refresh-loading? !refresh-loading?]
+             refresh-loading? !refresh-loading?
+             has-more? !has-more?]
 
      (let [refresh! #(feed-ctrl/load-page! ctx topic-endpoint !posts !page !has-more? !refresh-loading? true)]
        (pft/PostFrameTrigger
@@ -118,7 +119,7 @@
                                        .fontSize 14.0
                                        .fontWeight m/FontWeight.bold)
               :trigger-mode cri/IndicatorTriggerMode.anywhere
-              :item-count (if (and @!has-more? page-loading?)
+              :item-count (if (and has-more? page-loading?)
                             (inc (count posts))
                             (count posts))
               :separator-builder (fn [_ _] (m/SizedBox .width 0.0))
@@ -133,7 +134,7 @@
                                             .color theme/brand-blue)))
                   (let [post-data (nth posts i)]
                     (m/Container
-                     .margin (m/EdgeInsets.only .right 16.0 .top 16.0 .bottom 16.0)
+                     .margin post-card/timeline-card-margin
                      .child (post-card/post-card
                              ctx post-data
                              :on-mutate (fn [mutator]

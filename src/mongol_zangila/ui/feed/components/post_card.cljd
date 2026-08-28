@@ -25,8 +25,12 @@
    ;; Domain Widgets
    [mongol-zangila.ui.widgets.avatar :as smart-avatar]
    [mongol-zangila.ui.widgets.post-media-gallery :as post-media-gallery]
-  [mongol-zangila.ui.widgets.quoted-post :as quoted-post-widget]
+   [mongol-zangila.ui.widgets.quoted-post :as quoted-post-widget]
    [mongol-zangila.utils.rich-text-parser :as rich-text-parser]))
+
+(def timeline-card-margin
+  "Shared inset for post-card hosts in a horizontal gallery."
+  (m/EdgeInsets.only .left 16.0 .right 16.0 .top 16.0 .bottom 16.0))
 
 ;; =============================================================================
 ;; 1. UI Helper Functions
@@ -50,27 +54,27 @@
   (theme/themed
    (fn [ctx]
      (m/InkWell
-   .onTap on-tap
-   .borderRadius (m/BorderRadius.circular 16.0)
-   .child
-   (m/Padding
-    .padding (m/EdgeInsets.symmetric .horizontal 4.0 .vertical 8.0)
-    .child
-    (m/Column
-     .mainAxisSize m/MainAxisSize.min
-     .children
-     [(m/Icon icon-data 
-              .size 20.0 
-              .color (if is-active? active-color (theme/text-2 ctx)))
-      (if (> count-val 0)
-        (m/Padding
-         .padding (m/EdgeInsets.only .top 6.0)
-         .child (m/Text (str count-val)
-                        .style (m/TextStyle .fontFamily "OyunQaganTig"
-                                            .fontSize 13.0
-                                            .color (if is-active? active-color (theme/text-2 ctx)))))
-        (m/SizedBox.shrink))
-      (m/SizedBox .height 12.0)]))))))
+      .onTap on-tap
+      .borderRadius (m/BorderRadius.circular 16.0)
+      .child
+      (m/Padding
+       .padding (m/EdgeInsets.symmetric .horizontal 4.0 .vertical 8.0)
+       .child
+       (m/Column
+        .mainAxisSize m/MainAxisSize.min
+        .children
+        [(m/Icon icon-data
+                 .size 20.0
+                 .color (if is-active? active-color (theme/text-2 ctx)))
+         (if (> count-val 0)
+           (m/Padding
+            .padding (m/EdgeInsets.only .top 6.0)
+            .child (m/Text (str count-val)
+                           .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                               .fontSize 13.0
+                                               .color (if is-active? active-color (theme/text-2 ctx)))))
+           (m/SizedBox.shrink))
+         (m/SizedBox .height 12.0)]))))))
 
 (defn- show-post-options! 
   [ctx post-data on-mutate on-delete]
@@ -183,9 +187,11 @@
         .children
         [(m/Icon m/Icons.block_rounded .color (theme/text-2 ctx) .size 20.0)
          (m/SizedBox .height 8.0)
-         (m/Flexible
+         (m/Expanded
           .child (mgl/MongolText (str "@" (get author "handle" "user") " хэрэглэгчийг блоклосон байна.")
-                                 .style (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text-2 ctx) .fontWeight m/FontWeight.bold)))]))
+                                 .style (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text-2 ctx) .fontWeight m/FontWeight.bold)
+                                 .maxLines 2
+                                 .overflow m/TextOverflow.ellipsis))]))
       
       ;; --- Normal post UI: three-pillar horizontal flow ---
       (let [content (get post-data "content" "")
@@ -252,46 +258,46 @@
 
            ;; ----------------------------------------------------
            ;; Pillar 2. Main Content Area (Middle)
+           ;; Intrinsic width: truncated vertical text + quote + media.
+           ;; Do not wrap in Flexible — horizontal ListView width is unbounded.
            ;; ----------------------------------------------------
-           (m/Flexible
-            .child
-            (m/Row
-             .crossAxisAlignment m/CrossAxisAlignment.stretch
-             .mainAxisSize m/MainAxisSize.min
-             .children
-             [;; A. Vertical rich text
-              (m/GestureDetector
-               .onTap (when-not is-detail-view #(open-post-detail! ctx post-id))
-               .behavior m/HitTestBehavior.opaque
+           (m/Row
+            .crossAxisAlignment m/CrossAxisAlignment.stretch
+            .mainAxisSize m/MainAxisSize.min
+            .children
+            [;; A. Vertical rich text
+             (m/GestureDetector
+              .onTap (when-not is-detail-view #(open-post-detail! ctx post-id))
+              .behavior m/HitTestBehavior.opaque
+              .child
+              (m/Container
+               .constraints (m/BoxConstraints .minWidth 60.0)
                .child
-               (m/Container
-                .constraints (m/BoxConstraints .minWidth 60.0)
+               (rich-text-parser/rich-text-view
+                ctx content entities
+                :base-size (if is-detail-view 18.0 15.0)
+                :max-lines (if is-detail-view nil 3)
+                :overflow (if is-detail-view nil m/TextOverflow.ellipsis))))
+
+             ;; B. Quote card
+             (if quoted-post
+               (m/Padding
+                .padding (m/EdgeInsets.only .left 16.0)
                 .child
-                (rich-text-parser/rich-text-view
-                 ctx content entities
-                 :base-size (if is-detail-view 18.0 15.0)
-                 :max-lines (if is-detail-view nil 3)
-                 :overflow (if is-detail-view nil m/TextOverflow.ellipsis))))
-
-              ;; B. Quote card
-              (if quoted-post
-                (m/Padding
-                 .padding (m/EdgeInsets.only .left 16.0)
+                (m/GestureDetector
+                 .onTap (when-not is-detail-view #(open-post-detail! ctx (get quoted-post "id")))
                  .child
-                 (m/GestureDetector
-                  .onTap (when-not is-detail-view #(open-post-detail! ctx (get quoted-post "id")))
-                  .child
-                  (quoted-post-widget/quoted-post-card ctx quoted-post)))
-                (m/SizedBox.shrink))
+                 (quoted-post-widget/quoted-post-card ctx quoted-post)))
+               (m/SizedBox.shrink))
 
-              ;; C. Multi-image matrix
-              (if (not-empty media-urls)
-                (m/Padding
-                 .padding (m/EdgeInsets.only .left 16.0)
-                 .child (m/Align
-                         .alignment m/Alignment.topCenter
-                         .child (post-media-gallery/multi-media-gallery ctx media-urls)))
-                (m/SizedBox.shrink))]))
+             ;; C. Multi-image matrix
+             (if (not-empty media-urls)
+               (m/Padding
+                .padding (m/EdgeInsets.only .left 16.0)
+                .child (m/Align
+                        .alignment m/Alignment.topCenter
+                        .child (post-media-gallery/multi-media-gallery ctx media-urls)))
+               (m/SizedBox.shrink))])
 
            (m/SizedBox .width 12.0)
            (m/Container .width 0.5 .color (theme/border ctx))
