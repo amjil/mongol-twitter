@@ -1,4 +1,4 @@
-# Mongol Zangila (Монгол Зангилаа)
+# Mongol Zangila
 
 A traditional Mongolian script social network for Flutter, written in [ClojureDart](https://github.com/tensegritics/ClojureDart). The UI is built for **vertical Mongolian typography** (left-to-right columns) with a custom IME, and talks to a Phoenix API for feed, chat, and realtime events.
 
