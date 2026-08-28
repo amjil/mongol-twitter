@@ -21,7 +21,8 @@
    - ctrl: A Flutter TextEditingController instance.
    - on-submit: A callback function triggered with the query string when the user hits 'Search' on the keyboard.
    - on-clear: An optional callback function triggered when the user taps the clear (X) icon."
-  [^m/TextEditingController ctrl on-submit & {:keys [on-clear]}]
+  [^m/TextEditingController ctrl on-submit & {:keys [on-clear on-changed autofocus]
+                                              :or {autofocus true}}]
   (theme/themed
    (fn [ctx]
      (m/Container
@@ -36,9 +37,10 @@
     .controller ctrl
     ;; ⚡ Enforce strict single-line input to prevent layout breaking
     .maxLines 1
-    .autofocus true
+    .autofocus autofocus
     ;; Maps the mobile keyboard's bottom right button to a 'Search' magnifying glass
     .textInputAction m/TextInputAction.search
+    .onChanged (fn [val] (when on-changed (on-changed val)))
     .onSubmitted on-submit
     .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 15.0 .color (theme/text ctx))
     
@@ -69,6 +71,7 @@
                             .icon (m/Icon m/Icons.cancel_rounded .color (theme/text-2 ctx) .size 18.0)
                             .onPressed (fn []
                                          (.clear ctrl)
+                                         (when on-changed (on-changed ""))
                                          (when on-clear
                                            (on-clear))))))))
      

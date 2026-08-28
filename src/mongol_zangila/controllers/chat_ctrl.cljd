@@ -88,18 +88,39 @@
       (.catchError (fn [_] nil))))
 
 (defn open-dm-with-user!
-  "Ensures a DM thread exists with the given user, then navigates to the chat screen."
-  [ctx partner-id partner-name]
-  (-> (api/post-req "/chat/threads/ensure" {"user_id" partner-id})
+  "Ensures a DM thread exists with the given user, then navigates to the chat screen.
+   Pass :replace? true to consume the current route (e.g. the new-chat picker)."
+  [ctx partner-id partner-name & {:keys [replace?]}]
+  (let [go! (if replace? nav/push-replacement! nav/push!)]
+    (-> (api/post-req "/chat/threads/ensure" {"user_id" partner-id})
+        (.then (fn [res]
+                 (let [thread (get res "data")
+                       thread-id (get thread "id")]
+                   (go! ctx "/chat/dm"
+                        {:thread-id thread-id
+                         :partner-name partner-name
+                         :partner-id partner-id}))))
+        (.catchError (fn [err]
+                       (toast/error ctx (str "Зурвас эхлүүлэхэд алдаа гарлаа: " err)))))))
+
+(defn create-group!
+  "Creates a group chat and replaces the current screen with the new group viewport."
+  [ctx group-name member-ids !creating?]
+  (reset! !creating? true)
+  (-> (api/post-req "/chat/groups"
+                    {"name" group-name
+                     "member_ids" (vec member-ids)})
       (.then (fn [res]
-               (let [thread (get res "data")
-                     thread-id (get thread "id")]
-                 (nav/push! ctx "/chat/dm"
-                            {:thread-id thread-id
-                             :partner-name partner-name
-                             :partner-id partner-id}))))
+               (reset! !creating? false)
+               (toast/success ctx "Групп амжилттай үүслээ.")
+               (let [group-id (get-in res ["data" "id"])]
+                 (nav/push-replacement! ctx "/chat/group"
+                                        {:group-id group-id
+                                         :group-name group-name
+                                         :member-count (inc (count member-ids))}))))
       (.catchError (fn [err]
-                     (toast/error ctx (str "Зурвас эхлүүлэхэд алдаа гарлаа: " err))))))
+                     (reset! !creating? false)
+                     (toast/error ctx (str "Групп үүсгэхэд алдаа гарлаа: " err))))))
 
 (defn load-inbox!
   "Fetches the user's active direct messages and group chats.

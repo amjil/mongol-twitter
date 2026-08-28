@@ -5,11 +5,6 @@
   (:require
    ["package:flutter/material.dart" :as m]
    ["package:custom_refresh_indicator/custom_refresh_indicator.dart" :as cri]
-   ["package:mongol/mongol.dart" :as mgl]
-   ["dart:async" :as async]
-   ["dart:core" :as dc]
-
-   ;; Centralized Dart Interop Interceptor
    ["package:mongol_zangila/post_frame_trigger.dart" :as pft]
 
    [cljd.flutter :as f]
@@ -32,41 +27,7 @@
    [pull-to-refresh.refresh :as ptr]))
 
 ;; =============================================================================
-;; 1. Sub-components (Action Sheets)
-;; =============================================================================
-
-(defn- show-new-chat-options! 
-  "Presents a Bottom Action Sheet to choose between a new DM or creating a new Group."
-  [ctx]
-  (m/showModalBottomSheet
-   .context ctx
-   .backgroundColor (theme/surface ctx)
-   .shape (m/RoundedRectangleBorder .borderRadius (m/BorderRadius.vertical .top (m/Radius.circular 16.0)))
-   .builder
-   (fn [b-ctx]
-     (m/SafeArea
-      .child
-      (m/Column
-       .mainAxisSize m/MainAxisSize.min
-       .children
-       [(m/ListTile
-         .leading (m/Icon m/Icons.person_search_rounded .color theme/brand-blue)
-         .title (mgl/MongolText "Хэрэглэгч хайх" ;; "Search user"
-                                .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold .fontSize 16.0 .color (theme/text ctx)))
-         .onTap (fn []
-                  (nav/pop! b-ctx)
-                  (nav/push! ctx "/search")))
-        
-        (m/ListTile
-         .leading (m/Icon m/Icons.group_add_rounded .color theme/brand-blue)
-         .title (mgl/MongolText "Шинэ групп үүсгэх" ;; "Create new group"
-                                .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold .fontSize 16.0 .color (theme/text ctx)))
-         .onTap (fn []
-                  (nav/pop! b-ctx)
-                  (nav/push! ctx "/chat/create-group")))])))))
-
-;; =============================================================================
-;; 2. Main Inbox Screen Widget
+;; 1. Main Inbox Screen Widget
 ;; =============================================================================
 
 (defn inbox-screen
@@ -127,7 +88,7 @@
                                             .color (theme/text ctx)))
          .actions [(m/IconButton
                     .icon (m/Icon m/Icons.add_comment_rounded .color theme/brand-blue)
-                    .onPressed #(show-new-chat-options! ctx))]) ;; ⚡ Show Action Sheet
+                    .onPressed #(nav/push! ctx "/chat/new"))])
 
         ;; --- Main Body: Horizontal Pull-to-Refresh Chat List ---
         .body
@@ -141,8 +102,7 @@
                                            chats))]
             
             (if (empty? visible-chats)
-              ;; ⚡ Empty-state button also opens the Action Sheet
-              (empty-state/empty-chat-view ctx #(show-new-chat-options! ctx))
+              (empty-state/empty-chat-view ctx #(nav/push! ctx "/chat/new"))
 
               (ptr/horizontal-refresh
                {:on-refresh (fn []
