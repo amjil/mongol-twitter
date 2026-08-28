@@ -9,45 +9,74 @@
    ["package:mongol/mongol.dart" :as mgl]
    ["dart:core" :as dc]
    ["dart:async" :as async]
+   ["dart:ui" :as ui]
    [cljd.flutter :as f]
    [clojure.string :as str]
    
    ;; UI & Shared Components
+   [mongol-zangila.state :as state]
    [mongol-zangila.ui.theme :as theme]
    [mongol-zangila.utils.nav :as nav]
    [components.toast :as toast]))
+
+(def ^:private user-payload-prefix "mz://user/")
+(def ^:private scan-window-size 280.0)
 
 ;; =============================================================================
 ;; 1. Payload Parsing & Routing Logic
 ;; =============================================================================
 
+(defn- parse-user-id
+  "Extracts a non-blank user id from `mz://user/{id}` payloads."
+  [raw]
+  (let [s (str/trim (str raw))]
+    (when (str/starts-with? s user-payload-prefix)
+      (let [remainder (str/trim (subs s (count user-payload-prefix)))
+            id (first (str/split remainder #"[?#/]"))]
+        (when-not (str/blank? id)
+          id)))))
+
+(defn- cancel-cooldown!
+  [!cooldown]
+  (when-let [^async/Timer t @!cooldown]
+    (.cancel t)
+    (reset! !cooldown nil)))
+
+(defn- resume-scanner-later!
+  [!scanned? ^ms/MobileScannerController scanner-ctrl !cooldown]
+  (cancel-cooldown! !cooldown)
+  (reset! !cooldown
+          (async/Timer.
+           (dc/Duration. .seconds 2)
+           (fn []
+             (reset! !cooldown nil)
+             (reset! !scanned? false)
+             (-> (.start scanner-ctrl)
+                 (.catchError (fn [_] nil)))
+             nil))))
+
+(defn- route-scanned-user!
+  [ctx user-id]
+  (if (= user-id (get @state/current-user "id"))
+    (nav/pop! ctx)
+    (nav/push-replacement! ctx "/profile/view" {:user-id user-id})))
+
 (defn- handle-scan-capture!
-  [ctx ^ms/BarcodeCapture capture !scanned? ^ms/MobileScannerController scanner-ctrl]
+  [ctx ^ms/BarcodeCapture capture !scanned? ^ms/MobileScannerController scanner-ctrl !cooldown]
   (when-not @!scanned?
     (let [barcodes (.-barcodes capture)]
       (when-let [^ms/Barcode first-code (first barcodes)]
         (let [raw-value (.-rawValue first-code)]
           (when-not (str/blank? raw-value)
-            ;; Lock state
             (reset! !scanned? true)
-            ;; Stop camera hardware immediately
             (.stop scanner-ctrl)
             (services/HapticFeedback.vibrate)
             
-            (if (str/starts-with? raw-value "mz://user/")
-              (let [user-id (subs raw-value 10)]
-                (nav/pop! ctx)
-                (nav/push! ctx "/profile/view" {:user-id user-id}))
-              
-              ;; Fallback for invalid codes
+            (if-let [user-id (parse-user-id raw-value)]
+              (route-scanned-user! ctx user-id)
               (do
                 (toast/info ctx "Тодорхойгүй код байна.")
-                (async/Timer. 
-                 (dc/Duration. .seconds 2)
-                 (fn []
-                   (reset! !scanned? false)
-                   (.start scanner-ctrl)
-                   nil))))))))) 
+                (resume-scanner-later! !scanned? scanner-ctrl !cooldown))))))))
   nil)
 
 ;; =============================================================================
@@ -55,17 +84,38 @@
 ;; =============================================================================
 
 (defn- scanner-overlay []
-  (m/Stack
-   .children
-   [(m/Container .color (.withOpacity m/Colors.black 0.6))
-    (m/Center
-     .child
-     (m/Container
-      .width 280.0
-      .height 280.0
-      .decoration (m/BoxDecoration
-                   .borderRadius (m/BorderRadius.circular 16.0)
-                   .border (m/Border.all .color theme/brand-blue .width 3.0))))]))
+  (m/IgnorePointer
+   .child
+   (m/Stack
+    .fit m/StackFit.expand
+    .children
+    [;; srcOut punches a transparent hole so the camera stays visible in the window.
+     (m/ColorFiltered
+      .colorFilter (ui/ColorFilter.mode (.withOpacity m/Colors.black 0.55) ui/BlendMode.srcOut)
+      .child
+      (m/Stack
+       .fit m/StackFit.expand
+       .children
+       [(m/Container
+         .decoration (m/BoxDecoration
+                      .color m/Colors.black
+                      .backgroundBlendMode ui/BlendMode.dstOut))
+        (m/Center
+         .child
+         (m/Container
+          .width scan-window-size
+          .height scan-window-size
+          .decoration (m/BoxDecoration
+                       .color m/Colors.white
+                       .borderRadius (m/BorderRadius.circular 16.0))))]))
+     (m/Center
+      .child
+      (m/Container
+       .width scan-window-size
+       .height scan-window-size
+       .decoration (m/BoxDecoration
+                    .borderRadius (m/BorderRadius.circular 16.0)
+                    .border (m/Border.all .color theme/brand-blue .width 3.0))))])))
 
 ;; =============================================================================
 ;; 3. The Main Scanner Screen Widget
@@ -78,11 +128,13 @@
     (f/widget
      :context ctx
      
-     ;; ⚡ Minimal lifecycle: only create/dispose the controller; no delayed mount
      :managed [scanner-ctrl (ms/MobileScannerController. 
                              .facing ms/CameraFacing.back
                              .detectionSpeed ms/DetectionSpeed.noDuplicates)
-               :dispose .dispose]
+               :dispose .dispose
+               
+               !cooldown (atom nil)
+               :dispose cancel-cooldown!]
                
      :watch [torch-on? !torch-on?]
 
@@ -96,9 +148,8 @@
         ;; --- A. Camera Feed ---
         (ms/MobileScanner
          .controller scanner-ctrl
-         .onDetect #(handle-scan-capture! ctx % !scanned? scanner-ctrl)
+         .onDetect #(handle-scan-capture! ctx % !scanned? scanner-ctrl !cooldown)
          
-         ;; ⚡ Safety net: take over if permission is denied or a hardware error occurs, to prevent a crash
          .errorBuilder (fn [c error _]
                          (m/Center 
                           .child (m/Column
