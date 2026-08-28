@@ -55,7 +55,7 @@ These sibling repos must sit next to this project (paths from `deps.edn` / `pubs
 | Path | Role |
 | --- | --- |
 | `mgl-components` | Shared Mongolian UI components |
-| `monol-virtual-keyboard` | Mongolian virtual keyboard |
+| `mongol-virtual-keyboard` | Mongolian virtual keyboard |
 | `mongol-ime` | Desktop IME |
 | `mgl-richtext-editor` | Rich-text composer (`mgl_editor_core`) |
 | `horizontal-pull-to-refresh` | Horizontal pull-to-refresh |
@@ -129,7 +129,6 @@ Traditional Mongolian rendering and encoding:
 
 - [suragch/mongol](https://github.com/suragch/mongol) — vertical Mongolian widgets for Flutter
 - [suragch/mongol_code](https://github.com/suragch/mongol_code) — Unicode conversion for traditional Mongolian script
-- [suragch/mongol-library](https://github.com/suragch/mongol-library) — vertical Mongolian support on Android
 
 Compile toolchain: [ClojureDart](https://github.com/tensegritics/ClojureDart).
 
