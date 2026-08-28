@@ -1,0 +1,24 @@
+(ns mongol-zangila.ui.chat.member-helpers
+  "Normalizes group-member payloads that arrive as nested user maps or flat users.")
+
+(defn user-id
+  [node]
+  (or (get node "user_id")
+      (get-in node ["user" "id"])
+      (get node "id")))
+
+(defn user-map
+  [node]
+  (or (get node "user")
+      {"id" (get node "id")
+       "name" (get node "name" "Unknown")
+       "handle" (get node "handle" "user")
+       "avatar_url" (get node "avatar_url" "")}))
+
+(defn role
+  [node]
+  (get node "role" "member"))
+
+(defn admin?
+  [node]
+  (= (role node) "admin"))

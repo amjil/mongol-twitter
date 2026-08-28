@@ -21,6 +21,7 @@
    [mongol-zangila.ui.theme :as theme]
    [mongol-zangila.utils.nav :as nav]
    [mongol-zangila.ui.widgets.avatar :as smart-avatar]
+   [mongol-zangila.ui.chat.member-helpers :as member]
    [components.toast :as toast]))
 
 ;; =============================================================================
@@ -70,12 +71,12 @@
   (let [prev-members @!members]
     (swap! !members
            (fn [members]
-             (mapv #(if (= (get % "id") target-user-id)
+             (mapv #(if (= (member/user-id %) target-user-id)
                       (assoc % "role" "admin")
                       %)
                    members)))
     (-> (api/post-req (str "/chat/groups/" group-id "/promote") {"user_id" target-user-id})
-        (.then (fn [_] (toast/success ctx "Админ эрх өгөгдлөө."))) ;; "Admin rights granted."
+        (.then (fn [_] (toast/success ctx "Админ эрх өгөгдлөө.")))
         (.catchError (fn [err]
                        (reset! !members prev-members)
                        (toast/error ctx (str "Алдаа гарлаа: " err)))))))
@@ -83,14 +84,14 @@
 (defn- kick-member! 
   "Removes a participant from the group and optimistically updates the local member array."
   [ctx group-id target-user-id !members]
-  
-  (swap! !members (fn [current-list] 
-                    (vec (remove #(= (get % "id") target-user-id) current-list))))
-  
-  (-> (api/post-req (str "/chat/groups/" group-id "/kick") {"user_id" target-user-id})
-      (.then (fn [_] (toast/success ctx "Гишүүнийг хаслаа."))) ;; "Member removed."
-      (.catchError (fn [err]
-                     (toast/error ctx (str "Үйлдэл амжилтгүй боллоо: " err))))))
+  (let [prev-members @!members]
+    (swap! !members (fn [current-list] 
+                      (vec (remove #(= (member/user-id %) target-user-id) current-list))))
+    (-> (api/post-req (str "/chat/groups/" group-id "/kick") {"user_id" target-user-id})
+        (.then (fn [_] (toast/success ctx "Гишүүнийг хаслаа.")))
+        (.catchError (fn [err]
+                       (reset! !members prev-members)
+                       (toast/error ctx (str "Үйлдэл амжилтгүй боллоо: " err)))))))
 
 ;; =============================================================================
 ;; 2. Sub-components (Vertical Pillars)
@@ -115,9 +116,10 @@
   "Transforms the standard horizontal ListTile into a vertical member administration pillar."
   [ctx group-id member !members current-user-id]
   
-  (let [member-id (get member "id")
-        member-name (get member "name" "Unknown")
-        role (get member "role" "member")
+  (let [user (member/user-map member)
+        member-id (member/user-id member)
+        member-name (get user "name" "Unknown")
+        role (member/role member)
         is-self? (= member-id current-user-id)]
     
     (m/Container
@@ -132,7 +134,7 @@
       .children
       [
        ;; 1. Avatar (Top)
-       (smart-avatar/smart-avatar ctx member-id (get member "avatar_url") :size 56.0)
+       (smart-avatar/smart-avatar ctx member-id (get user "avatar_url") :size 56.0)
        (m/SizedBox .height 16.0)
        
        ;; 2. Name & Identity (Middle)
@@ -193,7 +195,8 @@
     (f/widget
      :context ctx
      
-     :managed [name-ctrl (m/TextEditingController.)]
+     :managed [name-ctrl (m/TextEditingController.)
+               :dispose .dispose]
      :watch [members !members
              loading? !loading?
              saving? !saving?]
@@ -267,10 +270,10 @@
                  .child
                  (m/TextField
                   .controller name-ctrl
-                  .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 16.0)
+                  .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 16.0 .color (theme/text ctx))
                   .decoration (m/InputDecoration
                                .filled true
-                               .fillColor m/Colors.white
+                               .fillColor (theme/input-fill ctx)
                                .border (m/OutlineInputBorder
                                         .borderRadius (m/BorderRadius.circular 12.0)
                                         .borderSide m/BorderSide.none)

@@ -103,6 +103,14 @@
               :action-label "Шинэ зурвас"
               :on-action on-start-chat-fn))
 
+(defn empty-thread-view
+  "Rendered inside an open conversation that has no messages yet."
+  [ctx]
+  (empty-view ctx
+              :icon-data m/Icons.chat_bubble_outline_rounded
+              :title "Яриа эхлүүлэх"
+              :subtitle "Эхний зурвасаа илгээнэ үү."))
+
 (defn empty-feed-view 
   "Rendered when the timeline has no posts to show."
   [ctx on-compose-fn]

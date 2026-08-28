@@ -15,28 +15,11 @@
    [mongol-zangila.ui.widgets.cached-image :as cached-image]
    [mongol-zangila.infrastructure.media :as media]
    [mongol-zangila.ui.media.viewer :as media-viewer]
-   
-   ;; ⚡ Import the rich-text parser for @mentions and #hashtags
+   [mongol-zangila.utils.time-format :as time-format]
    [mongol-zangila.utils.rich-text-parser :as rich-parser]))
 
 ;; =============================================================================
-;; 1. Helper Functions
-;; =============================================================================
-
-(defn- format-message-time 
-  "Extracts the HH:mm portion from an ISO 8601 timestamp for concise bubble rendering."
-  [iso-string]
-  (if (str/blank? iso-string) 
-    ""
-    (try
-      (let [dt (dc/DateTime.parse iso-string)
-            h (str (.toString (.hour dt)) ":")
-            m (.padLeft (.toString (.minute dt)) 2 "0")]
-        (str h m))
-      (catch dc/Exception _ ""))))
-
-;; =============================================================================
-;; 2. System Event Bubble
+;; 1. System Event Bubble
 ;; =============================================================================
 
 (defn system-bubble 
@@ -175,7 +158,7 @@
             (m/Row
              .mainAxisSize m/MainAxisSize.min
              .children
-             [(mgl/MongolText (format-message-time timestamp)
+             [(mgl/MongolText (time-format/format-clock timestamp)
                               .style (m/TextStyle .fontSize 10.0
                                                   .color (if is-me? (.withOpacity m/Colors.white 0.7) (theme/text-2 ctx))))
 

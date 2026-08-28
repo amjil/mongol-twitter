@@ -26,20 +26,36 @@
 ;; 1. Core Data Fetching Engine
 ;; =============================================================================
 
+(defn- muted-flag
+  [data]
+  (boolean (or (get data "muted")
+               (get data "is_muted")
+               (get data "notifications_muted"))))
+
 (defn- load-partner-profile! 
   "Fetches the extended profile data and thread settings for the chat partner."
-  [ctx partner-id !profile-data !loading?]
+  [ctx partner-id thread-id !profile-data !muted? !loading?]
   
   (reset! !loading? true)
   (-> (api/get-req (str "/users/" partner-id "/profile"))
       (.then (fn [res]
                (let [fetched-data (get res "data" {})]
                  (reset! !profile-data fetched-data)
+                 (reset! !muted? (muted-flag fetched-data))
                  (reset! !loading? false))))
       
       (.catchError (fn [err]
                      (reset! !loading? false)
-                     (toast/error ctx (str "Мэдээлэл татахад алдаа гарлаа: " err)))))) ;; "Failed to fetch data"
+                     (toast/error ctx (str "Мэдээлэл татахад алдаа гарлаа: " err)))))
+  (when thread-id
+    (-> (api/get-req (str "/chat/threads/" thread-id))
+        (.then (fn [res]
+                 (let [d (get res "data" {})]
+                   (when (or (contains? d "muted")
+                             (contains? d "is_muted")
+                             (contains? d "notifications_muted"))
+                     (reset! !muted? (muted-flag d))))))
+        (.catchError (fn [_] nil)))))
 
 ;; =============================================================================
 ;; 2. Mutation Handlers (Privacy Controls)
@@ -187,7 +203,7 @@
              muted? !muted?]
      
      (pft/PostFrameTrigger
-      .onLayout #(load-partner-profile! ctx partner-id !profile-data !loading?)
+      .onLayout #(load-partner-profile! ctx partner-id thread-id !profile-data !muted? !loading?)
       .child
       (m/Scaffold
        .backgroundColor (theme/bg ctx)
@@ -234,23 +250,25 @@
                   .mainAxisAlignment m/MainAxisAlignment.center
                   .crossAxisAlignment m/CrossAxisAlignment.start
                   .children
-                  [(mgl/MongolText display-name
-                                   .style (m/TextStyle .fontFamily "OyunQaganTig" 
-                                                       .fontSize 22.0 
-                                                       .fontWeight m/FontWeight.bold 
-                                                       .color (theme/text ctx)))
-                   (m/SizedBox .width 8.0)
-                   (mgl/MongolText (str "@" handle)
-                                   .style (m/TextStyle .fontFamily "OyunQaganTig" 
-                                                       .fontSize 15.0 
-                                                       .color (theme/text-2 ctx)))
-                   (when-not (empty? bio)
-                     (m/Padding
-                      .padding (m/EdgeInsets.only .left 16.0)
-                      .child (mgl/MongolText bio
-                                             .style (m/TextStyle .fontFamily "OyunQaganTig" 
-                                                                 .fontSize 14.0 
-                                                                 .color (theme/text ctx)))))]))]))
+                  (vec
+                   (keep identity
+                         [(mgl/MongolText display-name
+                                          .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                                              .fontSize 22.0
+                                                              .fontWeight m/FontWeight.bold
+                                                              .color (theme/text ctx)))
+                          (m/SizedBox .width 8.0)
+                          (mgl/MongolText (str "@" handle)
+                                          .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                                              .fontSize 15.0
+                                                              .color (theme/text-2 ctx)))
+                          (when-not (or (nil? bio) (empty? bio))
+                            (m/Padding
+                             .padding (m/EdgeInsets.only .left 16.0)
+                             .child (mgl/MongolText bio
+                                                    .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                                                        .fontSize 14.0
+                                                                        .color (theme/text ctx)))))]))))]))
              
              (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
              
@@ -263,65 +281,22 @@
                .mainAxisAlignment m/MainAxisAlignment.spaceEvenly
                .children
                [(action-icon-button m/Icons.person_outline_rounded 
-                                    "Профайл" ;; "Profile"
+                                    "Профайл"
                                     #(nav/push! ctx "/profile/view" {:user-id partner-id}))
                 
-                ;; ⚡ Toast placeholder: search messages
-                (action-icon-button m/Icons.search_rounded 
-                                    "Хайх" ;; "Search"
-                                    #(toast/info ctx "Зурвасаас хайх"))
-                
                 (action-icon-button (if muted? m/Icons.notifications_off_outlined m/Icons.notifications_none_rounded)
-                                    "Мэдэгдэл" ;; "Notifications"
+                                    "Мэдэгдэл"
                                     #(toggle-mute! ctx thread-id !muted?)
                                     :color (if muted? (theme/text-2 ctx) theme/brand-blue))]))
              
              (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
              
-             ;; 3. Shared Resources Section
-             (section-header "Мэдээлэл") ;; "Information"
-             
-             ;; ⚡ Toast placeholder: photos, videos
-             (vertical-list-tile m/Icons.photo_library_outlined 
-                                 "Зураг, бичлэг" ;; "Photos, videos"
-                                 "24 файл"
-                                 #(toast/info ctx "Медиа үзэх"))
-                                 
-             ;; ⚡ Toast placeholder: files, links
-             (vertical-list-tile m/Icons.insert_drive_file_outlined 
-                                 "Файл, линк" ;; "Files, links"
-                                 nil
-                                 #(toast/info ctx "Файл үзэх"))
-             
-             (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
-             
-             ;; 4. Privacy & Moderation Section
-             (section-header "Тохиргоо") ;; "Settings"
-             
-             ;; Mute Toggle Switch
-             (vertical-list-tile m/Icons.notifications_off_outlined 
-                                 "Мэдэгдэл хаах" ;; "Mute notifications"
-                                 nil
-                                 nil
-                                 ;; Rotate the Switch 90° with RotatedBox to match vertical flow
-                                 :trailing (m/RotatedBox
-                                            .quarterTurns 1
-                                            .child (m/Switch 
-                                                    .value muted? 
-                                                    .onChanged (fn [_] (toggle-mute! ctx thread-id !muted?))
-                                                    .activeColor theme/brand-blue)))
+             (section-header "Тохиргоо")
              
              (vertical-list-tile m/Icons.block_rounded 
-                                 "Блоклох" ;; "Block"
+                                 "Блоклох"
                                  nil
                                  #(block-user! ctx partner-id display-name) 
-                                 :color theme/error-red)
-             
-             ;; ⚡ Toast placeholder: report
-             (vertical-list-tile m/Icons.flag_outlined 
-                                 "Репорт хийх" ;; "Report"
-                                 nil
-                                 #(toast/info ctx "Репорт хийх цонх")
                                  :color theme/error-red)
              
              (m/SizedBox .width 48.0)]))))))))

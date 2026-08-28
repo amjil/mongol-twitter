@@ -407,9 +407,9 @@
              step !step
              creating? !creating?]
 
-     :let [keyboard-info (merge options/keyboard-option
+     :let [           keyboard-info (merge options/keyboard-option
                                 {:keyboard/mongol-font-family "OyunQaganTig"
-                                 :keyboard/key-container-color m/Colors.grey.shade500
+                                 :keyboard/key-container-color (theme/surface-2 ctx)
                                  :keyboard/font-size 16})
            pick-step? (= step :pick)
            sel-count (count selected-ids)
@@ -490,7 +490,7 @@
               .children
               [;; Left rail: search (pick) or group name (name step)
                (m/Container
-                .width (if pick-step? 72.0 120.0)
+                .width (if pick-step? 88.0 120.0)
                 .padding (m/EdgeInsets.only .top 8.0 .bottom 16.0 .left 8.0 .right 8.0)
                 .decoration (m/BoxDecoration
                              .color (theme/surface ctx)
@@ -506,8 +506,14 @@
                             (search-input/search-field
                              search-ctrl
                              (fn [val]
+                               (when-let [t @!search-timer]
+                                 (.cancel ^async/Timer t)
+                                 (reset! !search-timer nil))
                                (reset! !query val)
-                               (when-not (str/blank? val)
+                               (if (str/blank? (str/trim (str val)))
+                                 (do
+                                   (reset! !remote [])
+                                   (reset! !loading-remote? false))
                                  (search-ctrl/search-users! ctx val !remote !loading-remote?)))
                              :autofocus false
                              :on-changed #(apply-query! ctx %)
@@ -548,5 +554,7 @@
                   :selected-users selected-users
                   :on-toggle on-toggle!
                   :on-card-tap on-card-tap!}))])
-             (keyboard/candidates {:widget-key (m/ValueKey. "new-chat-cand")})]))
+             (keyboard/candidates (m/TextStyle .fontFamily "OyunQaganTig"
+                                               .fontSize 16.0
+                                               .color (theme/text ctx)))]))
           (keyboard/keyboard {:widget-key (m/ValueKey. "new-chat-kb")})])))))))

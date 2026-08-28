@@ -1,134 +1,32 @@
 (ns mongol-zangila.ui.chat.group
-  "Group messaging thread viewport.
-   Supports infinite scroll pagination, offline retries, and immersive media viewing."
+  "Group conversation. Thin wrapper around the shared thread shell."
   (:require
-   ["package:flutter/material.dart" :as m]
-   ["package:mongol_zangila/post_frame_trigger.dart" :as pft]
-   [cljd.flutter :as f]
-
    [mongol-zangila.state :as state]
    [mongol-zangila.controllers.chat-ctrl :as chat-ctrl]
-
-   [rich-editor.components.simple-editor :as simple-editor]
-
-   [mongol-zangila.ui.theme :as theme]
-   [mongol-zangila.utils.nav :as nav]
-   
-   [mongol-zangila.ui.chat.components.message-bubble :as msg-bubble]
-   [mongol-zangila.ui.chat.components.voice-bubble :as voice-bubble]
-   [mongol-zangila.ui.chat.components.chat-composer :as composer]))
+   [mongol-zangila.ui.chat.thread :as thread]))
 
 (defn group-chat-screen
   [group-id group-name member-count]
-  (let [!messages (atom [])
-        !loading? (atom true)
-        !chat-topic (atom nil)
-        
-        ;; ⚡ Core fix: take the atom from the layer below; never nest it
-        !editor-state (simple-editor/init-simple-state)
-        
-        !input-mode (atom :text)
-        !is-recording? (atom false)
-        
-        ;; ⚡ Pagination state
-        !loading-more? (atom false)
-        !has-more? (atom true)
-        
-        current-user @state/current-user
-        current-user-id (get current-user "id")
-        
-        cleanup-fn! (fn [_]
-                      (when-let [topic @!chat-topic]
-                        (chat-ctrl/unsubscribe-thread! topic)))]
-
-    (f/widget
-     :context ctx
-     
-     ;; ⚡ Init ScrollController and listen for near-top load-more
-     :managed [scroll-ctrl (let [sc (m/ScrollController.)]
-                             (.addListener sc 
-                                           (fn []
-                                             (let [pos (.-position sc)]
-                                               ;; Prefetch when within 200 px of the top (maxScrollExtent because reverse=true)
-                                               (when (and (>= (.-pixels pos) (- (.-maxScrollExtent pos) 200.0))
-                                                          (not @!loading-more?)
-                                                          @!has-more?)
-                                                 (reset! !loading-more? true)
-                                                 ;; Pass group-topic so the correct group thread is found in the DB
-                                                 (-> (chat-ctrl/load-older-messages! ctx (chat-ctrl/group-topic group-id) (count @!messages) !messages !has-more?)
-                                                     (.whenComplete #(reset! !loading-more? false)))))))
-                             sc)
-               :dispose .dispose
-               
-               dummy-ctrl nil :dispose cleanup-fn!]
-               
-     :watch [messages !messages
-             loading? !loading?
-             has-more? !has-more?]
-
-     (pft/PostFrameTrigger
-      .onLayout #(chat-ctrl/initialize-group-thread! ctx group-id !messages !loading? current-user-id !chat-topic)
-      .child
-      (m/Scaffold
-       .backgroundColor (theme/bg ctx)
-
-       .appBar
-       (m/AppBar
-        .backgroundColor (theme/surface ctx)
-        .elevation 0.5
-        .leading (m/IconButton .icon (m/Icon m/Icons.arrow_back_rounded .color (theme/text ctx)) .onPressed #(nav/pop! ctx))
-        .title (m/Column .crossAxisAlignment m/CrossAxisAlignment.start
-                         .children [(m/Text group-name .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 18.0 .fontWeight m/FontWeight.bold .color (theme/text ctx)))
-                                    (m/Text (str member-count " гишүүнтэй") .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 12.0 .color (theme/text-2 ctx)))])
-        .actions [(m/IconButton .icon (m/Icon m/Icons.info_outline_rounded .color theme/brand-blue) .onPressed #(nav/push! ctx "/chat/group-info" {:group-id group-id}))])
-
-       .body
-       (m/Column
-        .children
-        [
-         ;; --- A. Feed ---
-         (m/Expanded
-          .child
-          (if loading?
-            (m/Center .child (m/CircularProgressIndicator .color theme/brand-blue))
-            (m/ListView.builder
-             .controller scroll-ctrl ;; ⚡ Bind the scroll controller
-             .scrollDirection m/Axis.horizontal
-             .reverse true
-             .padding (m/EdgeInsets.symmetric .horizontal 16.0)
-             .physics (m/AlwaysScrollableScrollPhysics. .parent (m/BouncingScrollPhysics.)) ;; ⚡ Keep scrolling enabled even when content is short
-             
-             ;; ⚡ Reserve a slot for the top loading spinner
-             .itemCount (if has-more? (inc (count messages)) (count messages))
-             
-             .itemBuilder
-             (fn [_ i]
-               ;; ⚡ Show a spinner when rendering the extra sentinel index
-               (if (= i (count messages))
-                 (m/Padding 
-                  .padding (m/EdgeInsets.only .right 24.0 .left 24.0)
-                  .child (m/Center .child (m/SizedBox .width 24.0 .height 24.0 
-                                                      .child (m/CircularProgressIndicator .strokeWidth 2.0 .color theme/brand-blue))))
-                 
-                 (let [msg (nth messages i) m-type (get msg "type" "text")]
-                   (cond
-                     (= m-type "system") (msg-bubble/system-bubble (get msg "content"))
-                     (= m-type "audio")  (voice-bubble/voice-bubble ctx msg current-user-id
-                                                                    :show-sender-info? true
-                                                                    :on-retry! #(chat-ctrl/retry-message! ctx group-id % !messages))
-                     ;; ⚡ Pass the on-retry! resend callback
-                     :else               (msg-bubble/chat-bubble ctx msg current-user-id
-                                                                 :show-sender-info? true
-                                                                 :on-retry! #(chat-ctrl/retry-message! ctx group-id % !messages)))))))))
-
-         ;; --- B. Bottom Area ---
-         ;; ⚡ The Reusable Composer
-         (composer/chat-composer 
-          ctx 
-          !editor-state 
-          !input-mode 
-          !is-recording? 
-          (fn [content entities]
-            (chat-ctrl/dispatch-group-message! ctx group-id content entities !messages current-user))
-          (chat-ctrl/send-image-message! ctx group-id (str "/chat/groups/" group-id "/messages") !messages :extra-fields {"sender" current-user})
-          (chat-ctrl/send-voice-message! ctx group-id (str "/chat/groups/" group-id "/messages") !messages :extra-fields {"sender" current-user}))]))))))
+  (let [current-user @state/current-user]
+    (thread/thread-screen
+     {:title (or group-name "")
+      :subtitle (when member-count (str member-count " гишүүнтэй"))
+      :info-route "/chat/group-info"
+      :info-args {:group-id group-id}
+      :topic (chat-ctrl/group-topic group-id)
+      :initialize! (fn [ctx !messages !loading? current-user-id !chat-topic]
+                     (chat-ctrl/initialize-group-thread! ctx group-id !messages !loading? current-user-id !chat-topic))
+      :retry-id group-id
+      :show-sender-info? true
+      :on-send-text (fn [ctx !messages content entities]
+                      (chat-ctrl/dispatch-group-message! ctx group-id content entities !messages current-user))
+      :make-send-image (fn [ctx !messages]
+                         (chat-ctrl/send-image-message! ctx group-id
+                                                        (str "/chat/groups/" group-id "/messages")
+                                                        !messages
+                                                        :extra-fields {"sender" current-user}))
+      :make-send-voice (fn [ctx !messages]
+                         (chat-ctrl/send-voice-message! ctx group-id
+                                                        (str "/chat/groups/" group-id "/messages")
+                                                        !messages
+                                                        :extra-fields {"sender" current-user}))})))

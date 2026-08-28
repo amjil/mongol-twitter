@@ -58,20 +58,18 @@
 (defn unregister-inbox! []
   (reset! !active-inbox-atom nil))
 
+(defn- sync-inbox-unread-badge!
+  [!chats]
+  (when !chats
+    (reset! state/unread-messages-count (inbox-helpers/total-unread @!chats))))
+
 (defn- clear-local-unread!
   "Optimistically clears the unread count in the inbox UI and global badge."
   [chat-id]
   (when-let [!chats @!active-inbox-atom]
-    (let [chats-val @!chats
-          target-chat (first (filter #(= (get % "id") chat-id) chats-val))
-          unread-count (get target-chat "unread_count" 0)]
-      (when (> unread-count 0)
-        (swap! state/unread-messages-count #(max 0 (- % unread-count)))
-        (swap! !chats (fn [msgs]
-                        (mapv #(if (= (get % "id") chat-id)
-                                 (assoc (clj-map %) "unread_count" 0)
-                                 %)
-                              msgs)))))))
+    (when (get @!chats chat-id)
+      (swap! !chats update chat-id assoc "unread_count" 0)
+      (sync-inbox-unread-badge! !chats))))
 
 (defn mark-thread-read!
   "Marks a DM thread as read on the backend silently."
@@ -135,11 +133,9 @@
         (-> (api/get-req "/chat/inbox")
             (.then (fn [res]
                      (let [fetched-threads (mapv clj-map (get res "data" []))]
-                       (reset! !inbox-items fetched-threads)
+                       (reset! !inbox-items (inbox-helpers/items-to-threads-map fetched-threads))
                        (reset! !loading? false)
-                       ;; Recalculate global unread badge securely
-                       (let [total-unread (reduce + (map #(get % "unread_count" 0) fetched-threads))]
-                         (reset! state/unread-messages-count total-unread))
+                       (sync-inbox-unread-badge! !inbox-items)
                        (.complete completer true))))
             (.catchError (fn [err]
                            (reset! !loading? false)
@@ -153,7 +149,8 @@
   [!threads current-user-id !callback-atom]
   (when-not @!callback-atom
     (let [cb (fn [event-type payload]
-               (inbox-helpers/apply-inbox-event! !threads event-type payload current-user-id))]
+               (inbox-helpers/apply-inbox-event! !threads event-type payload current-user-id)
+               (sync-inbox-unread-badge! !threads))]
       (reset! !callback-atom cb)
       (socket/on-inbox-event! cb))))
 

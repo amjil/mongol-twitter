@@ -35,6 +35,16 @@
       ;; ⚡ Precision Catch: DateTime.parse specifically throws FormatException on bad data
       (catch dc/FormatException _ iso-str))))
 
+(defn format-clock
+  "HH:mm in local time for chat bubbles."
+  [iso-str]
+  (if (or (nil? iso-str) (empty? iso-str))
+    ""
+    (try
+      (let [date-time (parse-local iso-str)]
+        (str (pad-zero (.-hour date-time)) ":" (pad-zero (.-minute date-time))))
+      (catch dc/FormatException _ ""))))
+
 (defn format-inbox-time
   "Compact timestamp for chat inbox rows (HH:mm, 'Өчигдөр', or yyyy-MM-dd)."
   [iso-str]

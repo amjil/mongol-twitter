@@ -7,8 +7,8 @@
   "Fallback snippet when media messages have empty content."
   [msg-type]
   (case msg-type
-    "image" "📷 Зураг"
-    "audio" "🎤 Дуут зурвас"
+    "image" "Зураг"
+    "audio" "Дуут зурвас"
     ""))
 
 (defn last-message-preview
@@ -34,32 +34,45 @@
 ;; 1. High-Performance State Reducers
 ;; =============================================================================
 
+(defn- payload-thread-id
+  [payload]
+  (or (get payload "thread_id")
+      (get payload "group_id")
+      (get payload "id")))
+
+(defn- last-message-from-payload
+  [payload]
+  {"type" (get payload "type" "text")
+   "content" (get payload "content" "")
+   "created_at" (get payload "created_at" "")})
+
 (defn- handle-new-message
   "Processes incoming message payloads and updates the index map in O(1) time."
   [threads-map payload current-user-id]
-  (let [thread-id (get payload "thread_id")
+  (let [thread-id (payload-thread-id payload)
         sender-id (get payload "sender_id")
-        from-self? (= sender-id current-user-id)]
-
-    (if-let [existing-thread (get threads-map thread-id)]
-      ;; Thread exists: Perform granular associative patch
-      (assoc threads-map thread-id
-             (assoc existing-thread
-                    "last_message" {"type" (get payload "type" "text")
-                                    "content" (get payload "content" "")
-                                    "created_at" (get payload "created_at" "")}
-                    "unread_count" (if from-self?
-                                     (get existing-thread "unread_count" 0)
-                                     (inc (get existing-thread "unread_count" 0)))))
-
-      ;; Thread does not exist: Initialize new minimal thread entity
-      (assoc threads-map thread-id
-             {"id" thread-id
-              "type" "dm"
-              "last_message" {"type" (get payload "type" "text")
-                              "content" (get payload "content" "")
-                              "created_at" (get payload "created_at" "")}
-              "unread_count" (if from-self? 0 1)}))))
+        from-self? (= sender-id current-user-id)
+        stamp (or (get payload "created_at") (get payload "updated_at") "")]
+    (if-not thread-id
+      threads-map
+      (if-let [existing-thread (get threads-map thread-id)]
+        (assoc threads-map thread-id
+               (assoc existing-thread
+                      "last_message" (last-message-from-payload payload)
+                      "updated_at" stamp
+                      "unread_count" (if from-self?
+                                       (get existing-thread "unread_count" 0)
+                                       (inc (get existing-thread "unread_count" 0)))))
+        (assoc threads-map thread-id
+               (merge {"id" thread-id
+                       "type" (or (get payload "thread_type")
+                                  (when (get payload "group_id") "group")
+                                  "dm")
+                       "last_message" (last-message-from-payload payload)
+                       "updated_at" stamp
+                       "unread_count" (if from-self? 0 1)}
+                      (select-keys payload ["partner" "partner_id" "name" "avatar_url"
+                                            "member_count"])))))))
 
 (defn apply-inbox-event!
   "Pops the atom state container and executes specialized mutative reductions."
@@ -69,9 +82,11 @@
     (swap! !threads-map handle-new-message payload current-user-id)
 
     :thread_updated
-    (let [thread-id (get payload "thread_id")]
+    (let [thread-id (payload-thread-id payload)]
       (when thread-id
-        (swap! !threads-map update thread-id merge payload)))
+        (swap! !threads-map update thread-id
+               (fn [existing]
+                 (merge (or existing {"id" thread-id}) payload)))))
 
     nil))
 
@@ -82,7 +97,15 @@
 (defn items-to-threads-map
   "Converts a paginated API response vector into the O(1) inbox index map."
   [items]
-  (into {} (map (fn [item] [(get item "id") item]) items)))
+  (into {} (keep (fn [item]
+                   (when-let [id (get item "id")]
+                     [id item]))
+                 items)))
+
+(defn total-unread
+  "Sum of unread_count across the inbox index map."
+  [threads-map]
+  (reduce + 0 (map #(get % "unread_count" 0) (vals threads-map))))
 
 ;; =============================================================================
 ;; 3. View Selectors

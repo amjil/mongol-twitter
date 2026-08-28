@@ -5,22 +5,17 @@
   (:require
    ["package:flutter/material.dart" :as m]
    ["package:mongol/mongol.dart" :as mgl]
-   ["dart:core" :as dc]
-   
-   ;; Centralized Dart Interop Interceptor
    ["package:mongol_zangila/post_frame_trigger.dart" :as pft]
    
    [cljd.flutter :as f]
-   [clojure.string :as str]
    
-   ;; System Infrastructure
    [mongol-zangila.infrastructure.api :as api]
    [mongol-zangila.state :as state]
    
-   ;; UI & Shared Components
    [mongol-zangila.ui.theme :as theme]
    [mongol-zangila.utils.nav :as nav]
    [mongol-zangila.ui.widgets.avatar :as smart-avatar]
+   [mongol-zangila.ui.chat.member-helpers :as member]
    [components.toast :as toast]))
 
 ;; =============================================================================
@@ -41,49 +36,12 @@
                      (reset! !loading? false)
                      (toast/error ctx (str "Группийн мэдээлэл татахад алдаа гарлаа: " err))))))
 
-(defn- rename-group-dialog!
-  "Presents a formal dialog containing a MongolTextField to re-configure group name."
-  [ctx group-id current-name !group-data]
-  (m/showDialog
-   .context ctx
-   .builder
-   (fn [d-ctx]
-     (f/widget
-      ;; ⚡ Fix: put it under :managed to avoid leaks and macro-compile traps
-      :managed [!name-ctrl (m/TextEditingController. .text current-name)
-                :dispose .dispose]
-      (m/AlertDialog.
-       .title (mgl/MongolText "Группийн нэр өөрчлөх")
-       .content (m/Container
-                 .width 100.0 .height 150.0
-                 .child (mgl/MongolTextField 
-                         .controller !name-ctrl
-                         .autofocus true
-                         .decoration (m/InputDecoration .hintText "Шинэ нэр...")))
-       .actions [(m/TextButton.
-                  .onPressed #(nav/pop! d-ctx)
-                  .child (m/Text "Цуцлах")) ;; Cancel
-                 (m/TextButton.
-                  .onPressed (fn []
-                               (let [new-name (str/trim (.-text !name-ctrl))]
-                                 (if (str/blank? new-name)
-                                   (toast/warn ctx "Нэр хоосон байж болохгүй.")
-                                   (do
-                                     (nav/pop! d-ctx)
-                                     (-> (api/post-req (str "/chat/groups/" group-id "/update") {"name" new-name})
-                                         (.then (fn [res]
-                                                  (swap! !group-data assoc "name" (get-in res ["data" "name"]))
-                                                  (toast/success ctx "Группийн нэр шинэчлэгдлээ.")))
-                                         (.catchError (fn [err]
-                                                        (toast/error ctx (str "Алдаа гарлаа: " err)))))))))
-                  .child (m/Text "Хадгалах"))]))))) ;; Save
-
 (defn- kick-member!
   "Hard-kicks a member from the group. Applies optimistic eviction instantly."
   [ctx group-id target-user-id target-name !members]
   (let [original-members @!members]
     ;; Optimistic Eviction
-    (reset! !members (vec (remove #(= (get % "user_id") target-user-id) original-members)))
+    (reset! !members (vec (remove #(= (member/user-id %) target-user-id) original-members)))
     (toast/success ctx (str target-name " хэрэглэгчийг группээс хаслаа."))
     
     (-> (api/post-req (str "/chat/groups/" group-id "/kick") {"user_id" target-user-id})
@@ -98,7 +56,7 @@
   (-> (api/post-req (str "/chat/groups/" group-id "/leave") {})
       (.then (fn [_]
                (toast/success ctx "Группээс гарлаа.") ;; "Left group."
-               (nav/pop-until! ctx "/feed/home")))
+               (nav/reset-to! ctx "/chat/inbox")))
       (.catchError (fn [_] (toast/error ctx "Группээс гарах боломжгүй байна." :fade)))))
 
 ;; =============================================================================
@@ -107,7 +65,7 @@
 
 (defn- group-hero-pillar
   "The fixed anchor pillar displaying primary metadata and structural operational triggers."
-  [ctx group-id group-name member-count is-owner? !group-data]
+  [ctx group-id group-name member-count is-owner?]
   (m/Container
    .width 170.0
    .padding (m/EdgeInsets.only .top 32.0 .bottom 32.0 .left 16.0 .right 16.0)
@@ -138,30 +96,30 @@
      ;; Contextual Control Buttons
      (m/Column
       .children
-      [(when is-owner?
-         (m/Padding
-          .padding (m/EdgeInsets.only .bottom 12.0)
-          .child
-          (mgl/MongolOutlinedButton
-           .style (m/OutlinedButton.styleFrom .foregroundColor theme/brand-blue .side (m/BorderSide .color theme/brand-blue) .padding (m/EdgeInsets.symmetric .vertical 16.0 .horizontal 4.0))
-           .onPressed #(rename-group-dialog! ctx group-id group-name !group-data)
-           .child (mgl/MongolText "Нэр өөрчлөх" .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold)))))
-       
-       (mgl/MongolOutlinedButton
-        .style (m/OutlinedButton.styleFrom .foregroundColor theme/error-red .side (m/BorderSide .color theme/error-red) .padding (m/EdgeInsets.symmetric .vertical 24.0 .horizontal 4.0))
-        .onPressed #(leave-group! ctx group-id)
-        .child (mgl/MongolText "Группээс гарах" .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold)))])])))
+      (vec
+       (keep identity
+             [(when is-owner?
+                (m/Padding
+                 .padding (m/EdgeInsets.only .bottom 12.0)
+                 .child
+                 (mgl/MongolOutlinedButton
+                  .style (m/OutlinedButton.styleFrom .foregroundColor theme/brand-blue .side (m/BorderSide .color theme/brand-blue) .padding (m/EdgeInsets.symmetric .vertical 16.0 .horizontal 4.0))
+                  .onPressed #(nav/push! ctx "/chat/admin" {:group-id group-id})
+                  .child (mgl/MongolText "Тохиргоо" .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold)))))
+              (mgl/MongolOutlinedButton
+               .style (m/OutlinedButton.styleFrom .foregroundColor theme/error-red .side (m/BorderSide .color theme/error-red) .padding (m/EdgeInsets.symmetric .vertical 24.0 .horizontal 4.0))
+               .onPressed #(leave-group! ctx group-id)
+               .child (mgl/MongolText "Группээс гарах" .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold)))])))])))
 
 (defn- member-vertical-card
   "A singular vertical gallery pillar mapping user public identities and eviction controls."
   [ctx group-id member-node is-i-owner? !members]
-  (let [user-map (get member-node "user" {})
-        u-id (get user-map "id")
+  (let [user-map (member/user-map member-node)
+        u-id (member/user-id member-node)
         name (get user-map "name" "Unknown")
         handle (get user-map "handle" "user")
         avatar (get user-map "avatar_url" "")
-        role (get member-node "role" "member")
-        is-owner? (= role "admin")
+        is-owner? (member/admin? member-node)
         is-me? (= u-id (get @state/current-user "id"))]
     (m/Container
      .width 120.0
@@ -241,14 +199,14 @@
          
          (let [group-name (get group-data "name" "Unknown Group")
                ;; Locate current user's profile node inside the member roster to evaluate admin powers
-               my-node (first (filter #(= (get % "user_id") current-user-id) members))
-               is-i-owner? (= (get my-node "role") "admin")]
+               my-node (first (filter #(= (member/user-id %) current-user-id) members))
+               is-i-owner? (member/admin? my-node)]
            
            (m/Row
             .crossAxisAlignment m/CrossAxisAlignment.stretch
             .children
             [;; Pillar 1: Group Control Center
-             (group-hero-pillar ctx group-id group-name (count members) is-i-owner? !group-data)
+             (group-hero-pillar ctx group-id group-name (count members) is-i-owner?)
              
              ;; Pillar 2: Smooth Horizontal Scroll Manifest Gallery
              (m/Expanded

@@ -1,151 +1,28 @@
 (ns mongol-zangila.ui.chat.dm
-  "The primary viewport for an active direct message conversation."
+  "Direct message conversation. Thin wrapper around the shared thread shell."
   (:require
-   ["package:flutter/material.dart" :as m]
-   ["package:mongol_zangila/post_frame_trigger.dart" :as pft]
-   ["package:mongol/mongol.dart" :as mgl]
-   ["dart:core" :as dc]
-   [cljd.flutter :as f]
-   
-   [mongol-zangila.state :as state]
-   [mongol-zangila.infrastructure.db :as db]
    [mongol-zangila.controllers.chat-ctrl :as chat-ctrl]
-   [mongol-zangila.controllers.profile-ctrl :as profile-ctrl]
-   
-   [mongol-zangila.ui.theme :as theme]
-   [mongol-zangila.utils.nav :as nav]
-   [rich-editor.components.simple-editor :as simple-editor]
-   
-   [mongol-zangila.ui.chat.components.message-bubble :as msg-bubble]
-   [mongol-zangila.ui.chat.components.voice-bubble :as voice-bubble]
-   [mongol-zangila.ui.chat.components.chat-composer :as composer]))
+   [mongol-zangila.ui.chat.thread :as thread]))
 
-(defn dm-screen 
+(defn dm-screen
   [thread-id partner-name partner-id]
-  (let [!messages (atom [])
-        !loading? (atom true)
-        !chat-topic (atom nil)
-        
-        !editor-state (simple-editor/init-simple-state)
-        
-        !is-blocked? (atom false)
-        !input-mode (atom :text)
-        !is-recording? (atom false)
-        
-        !loading-more? (atom false)
-        !has-more? (atom true)
-        
-        current-user-id (get @state/current-user "id")
-        
-        cleanup-fn! (fn [_] 
-                      (when-let [topic @!chat-topic]
-                        (chat-ctrl/unsubscribe-thread! topic))
-                      nil)]
-    
-    (f/widget
-     :context ctx
-     
-     :managed [scroll-ctrl (let [sc (m/ScrollController.)]
-                             (.addListener sc 
-                                           (fn []
-                                             (let [pos (.-position sc)]
-                                               (when (and (>= (.-pixels pos) (- (.-maxScrollExtent pos) 200.0))
-                                                          (not @!loading-more?)
-                                                          @!has-more?)
-                                                 (reset! !loading-more? true)
-                                                 (-> (chat-ctrl/load-older-messages! ctx (chat-ctrl/thread-topic thread-id) (count @!messages) !messages !has-more?)
-                                                     (.whenComplete #(reset! !loading-more? false)))))))
-                             sc)
-               :dispose .dispose
-               
-               dummy-ctrl nil :dispose cleanup-fn!]
-               
-     :watch [messages !messages
-             loading? !loading?
-             is-blocked? !is-blocked?
-             has-more? !has-more?]
-     
-     (pft/PostFrameTrigger
-      .onLayout (fn []
-                  (chat-ctrl/initialize-dm-thread! ctx thread-id !messages !loading? current-user-id !chat-topic)
-                  (when partner-id
-                    (-> (db/get-blocked-user-ids)
-                        (.then #(reset! !is-blocked? (contains? % partner-id)))))
-                  nil)
-      .child
-      (m/Scaffold
-       .backgroundColor (theme/bg ctx)
-       
-       .appBar
-       (m/AppBar
-        .backgroundColor (theme/surface ctx)
-        .elevation 0.5
-        .leading (m/IconButton .icon (m/Icon m/Icons.arrow_back_rounded .color (theme/text ctx)) .onPressed #(nav/pop! ctx))
-        .title (m/Text partner-name .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 18.0 .fontWeight m/FontWeight.bold .color (theme/text ctx)))
-        .actions (vec (keep identity [(when partner-id (m/IconButton .icon (m/Icon m/Icons.info_outline_rounded .color theme/brand-blue) .onPressed #(nav/push! ctx "/chat/dm-info" {:thread-id thread-id :partner-id partner-id :initial-name partner-name})))])))
-       
-       .body
-       (m/Column
-        .children
-        [
-         ;; --- A. Feed ---
-         (m/Expanded
-          .child
-          (if loading?
-            (m/Center .child (m/CircularProgressIndicator .color theme/brand-blue))
-            (m/ListView.builder
-             .controller scroll-ctrl
-             .scrollDirection m/Axis.horizontal
-             .reverse true
-             .padding (m/EdgeInsets.symmetric .horizontal 16.0)
-             .physics (m/AlwaysScrollableScrollPhysics. .parent (m/BouncingScrollPhysics.))
-             
-             .itemCount (if (and has-more? (not-empty messages)) (inc (count messages)) (count messages))
-             
-             .itemBuilder 
-             (fn [_ i] 
-               ;; ⚡ Hardening: try-catch plus nil checks so dirty data cannot crash the list
-               (try
-                 (let [rendered-widget
-                       (if (>= i (count messages))
-                         (m/Padding 
-                          .padding (m/EdgeInsets.only .right 24.0 .left 24.0)
-                          .child (m/Center .child (m/SizedBox .width 24.0 .height 24.0 
-                                                              .child (m/CircularProgressIndicator .strokeWidth 2.0 .color theme/brand-blue))))
-                         (let [msg (nth messages i) 
-                               m-type (get msg "type" "text")]
-                           (cond
-                             (= m-type "system") (msg-bubble/system-bubble (get msg "content"))
-                             (= m-type "audio")  (voice-bubble/voice-bubble ctx msg current-user-id
-                                                                            :on-retry! #(chat-ctrl/retry-message! ctx thread-id % !messages))
-                             :else               (msg-bubble/chat-bubble ctx msg current-user-id 
-                                                                         :on-retry! #(chat-ctrl/retry-message! ctx thread-id % !messages)))))]
-                   ;; Never return nil, no matter what
-                   (if (nil? rendered-widget) 
-                     (m/SizedBox.shrink) 
-                     rendered-widget))
-                 (catch dc/dynamic _ 
-                   ;; On severe dirty data, silently fall back to an invisible placeholder
-                   (m/SizedBox.shrink)))))))
-         
-         ;; --- B. Bottom Area ---
-         (if is-blocked?
-           (m/Container
-            .height 100.0 .decoration (m/BoxDecoration .color (theme/surface ctx) .border (m/Border .top (m/BorderSide .color (theme/border ctx) .width 0.5))) .padding (m/EdgeInsets.all 16.0)
-            .child (m/Row .mainAxisAlignment m/MainAxisAlignment.center .crossAxisAlignment m/CrossAxisAlignment.center
-                          .children [(m/Icon m/Icons.block_rounded .color theme/error-red .size 24.0)
-                                     (m/SizedBox .width 8.0)
-                                     (mgl/MongolText "Блоклосон хэрэглэгч" .style (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text-2 ctx) .fontWeight m/FontWeight.bold))
-                                     (m/SizedBox .width 16.0)
-                                     (mgl/MongolElevatedButton .style (m/ElevatedButton.styleFrom .backgroundColor theme/brand-blue .elevation 0.0 .shape (m/RoundedRectangleBorder .borderRadius (m/BorderRadius.circular 16.0)))
-                                                               .onPressed #(profile-ctrl/unblock-user! ctx partner-id partner-name (fn [] (reset! !is-blocked? false)))
-                                                               .child (mgl/MongolText "Блок гаргах" .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold .color m/Colors.white)))]))
-           
-           (composer/chat-composer 
-            ctx 
-            !editor-state 
-            !input-mode 
-            !is-recording? 
-            (fn [content entities] (chat-ctrl/dispatch-message! ctx thread-id content entities !messages))
-            (chat-ctrl/send-image-message! ctx thread-id (str "/chat/threads/" thread-id "/messages") !messages)
-            (chat-ctrl/send-voice-message! ctx thread-id (str "/chat/threads/" thread-id "/messages") !messages)))]))))))
+  (thread/thread-screen
+   {:title (or partner-name "")
+    :info-route (when partner-id "/chat/dm-info")
+    :info-args {:thread-id thread-id :partner-id partner-id :initial-name partner-name}
+    :topic (chat-ctrl/thread-topic thread-id)
+    :initialize! (fn [ctx !messages !loading? current-user-id !chat-topic]
+                   (chat-ctrl/initialize-dm-thread! ctx thread-id !messages !loading? current-user-id !chat-topic))
+    :retry-id thread-id
+    :partner-id partner-id
+    :partner-name partner-name
+    :on-send-text (fn [ctx !messages content entities]
+                    (chat-ctrl/dispatch-message! ctx thread-id content entities !messages))
+    :make-send-image (fn [ctx !messages]
+                       (chat-ctrl/send-image-message! ctx thread-id
+                                                      (str "/chat/threads/" thread-id "/messages")
+                                                      !messages))
+    :make-send-voice (fn [ctx !messages]
+                       (chat-ctrl/send-voice-message! ctx thread-id
+                                                      (str "/chat/threads/" thread-id "/messages")
+                                                      !messages))}))

@@ -192,7 +192,9 @@
                                  (user-result-tile ctx (nth user-results i) (get current-user "id"))))))])
             
             ;; Floating Overlay: Custom Input Predictor Row
-            (keyboard/candidates {:widget-key (m/ValueKey. "search-cand")})]))
+            (keyboard/candidates (m/TextStyle .fontFamily "OyunQaganTig"
+                                              .fontSize 16.0
+                                              .color (theme/text ctx)))]))
          
          ;; Layer 2. Lower Viewport: Custom Static Input Engine Daemon
          (keyboard/keyboard {:widget-key (m/ValueKey. "search-kb")})]))))))

@@ -15,6 +15,7 @@
    [mongol-zangila.ui.theme :as theme]
    [mongol-zangila.ui.widgets.avatar :as smart-avatar]
    [mongol-zangila.infrastructure.media :as media]
+   [mongol-zangila.utils.time-format :as time-format]
    [components.toast :as toast]))
 
 ;; =============================================================================
@@ -23,18 +24,6 @@
 
 ;; Tracks the currently playing audio URL to ensure only one bubble plays at a time.
 (defonce !active-playing-url (atom nil))
-
-(defn- format-message-time 
-  "Extracts the HH:mm portion from an ISO 8601 timestamp."
-  [iso-string]
-  (if (str/blank? iso-string) 
-    ""
-    (try
-      (let [dt (dc/DateTime.parse iso-string)
-            h (str (.toString (.hour dt)) ":")
-            m (.padLeft (.toString (.minute dt)) 2 "0")]
-        (str h m))
-      (catch dc/Exception _ ""))))
 
 (defn- ensure-playback-session!
   "Switches the OS audio session to playback mode (needed after mic recording)."
@@ -67,7 +56,7 @@
   (let [sender (get message-data "sender" {})
         sender-id (get sender "id" (get message-data "sender_id"))
         sender-name (get sender "name" "Unknown")
-        sender-avatar (get sender "avatar_url" "")
+        sender-avatar (media/absolute-media-url (get sender "avatar_url" ""))
         
         is-me? (or (= sender-id current-user-id) (= sender-id "self"))
         timestamp (get message-data "created_at" "")
@@ -202,11 +191,11 @@
             (if (and show-sender-info? (not is-me?))
               (m/Padding
                .padding (m/EdgeInsets.only .left 4.0 .bottom 4.0)
-               .child (m/Text sender-name
-                              .style (m/TextStyle .fontFamily "OyunQaganTig" 
-                                                  .fontSize 12.0 
-                                                  .fontWeight m/FontWeight.bold 
-                                                  .color (theme/text-2 ctx))))
+               .child (mgl/MongolText sender-name
+                                      .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                                          .fontSize 12.0 
+                                                          .fontWeight m/FontWeight.bold 
+                                                          .color (theme/text-2 ctx))))
               (m/SizedBox.shrink))
             
             ;; 2. ⚡ The Vertical Bubble Geometry
@@ -287,16 +276,16 @@
             (m/Row
              .mainAxisSize m/MainAxisSize.min
              .children
-             [(mgl/MongolText (format-message-time timestamp)
+             [(mgl/MongolText (time-format/format-clock timestamp)
                               .style (m/TextStyle .fontSize 10.0
-                                                  .color (if is-me? (.withOpacity m/Colors.white 0.7) (theme/text-2 ctx))))
+                                                  .color (theme/text-2 ctx)))
 
               (if is-me?
                 (m/Padding
                  .padding (m/EdgeInsets.only .left 4.0)
                  .child (cond
                           (= status "sending")
-                          (m/Icon m/Icons.access_time_rounded .size 12.0 .color (.withOpacity m/Colors.white 0.5))
+                          (m/Icon m/Icons.access_time_rounded .size 12.0 .color (theme/text-2 ctx))
 
                           (= status "failed")
                           (m/GestureDetector
@@ -307,14 +296,14 @@
                                    .child (m/Icon m/Icons.error_outline_rounded .size 14.0 .color theme/warning-yellow)))
 
                           (= status "sent")
-                          (m/Icon m/Icons.done_rounded .size 12.0 .color (.withOpacity m/Colors.white 0.6))
+                          (m/Icon m/Icons.done_rounded .size 12.0 .color (theme/text-2 ctx))
 
                           (= status "delivered")
-                          (m/Icon m/Icons.done_all_rounded .size 12.0 .color (.withOpacity m/Colors.white 0.6))
+                          (m/Icon m/Icons.done_all_rounded .size 12.0 .color (theme/text-2 ctx))
 
                           (= status "queued")
-                          (m/Icon m/Icons.cloud_off_rounded .size 12.0 .color (.withOpacity m/Colors.white 0.5))
+                          (m/Icon m/Icons.cloud_off_rounded .size 12.0 .color (theme/text-2 ctx))
 
                           :else
-                          (m/Icon m/Icons.done_all_rounded .size 12.0 .color m/Colors.white)))
+                          (m/Icon m/Icons.done_all_rounded .size 12.0 .color theme/brand-blue)))
                 (m/SizedBox.shrink))])])]))))))

@@ -66,7 +66,7 @@
         has-unread? (> unread-count 0)]
     
     (m/Container
-     ;; ⚡ Adapt 1: drop a fixed width; let content wrap
+     .width 180.0
      .margin (m/EdgeInsets.only .top 16.0 .bottom 16.0)
      .decoration (m/BoxDecoration
                   .color (if has-unread? (theme/surface ctx) (theme/bg ctx))
@@ -96,7 +96,7 @@
        .child
        ;; ⚡ Adapt 2: Column layout — avatar on top, LTR flow below
        (m/Column
-        .crossAxisAlignment m/CrossAxisAlignment.start
+        .crossAxisAlignment m/CrossAxisAlignment.stretch
         .children
         [
          ;; --- Top: avatar ---
@@ -124,18 +124,19 @@
             (m/SizedBox .width 12.0)
 
             ;; 2. Last Message Pillar (⚡ Adapt 3: drop Expanded; width grows with text)
-            (mgl/MongolText (if (str/blank? last-msg) "Зурвас илгээх..." last-msg)
-                            .style (m/TextStyle .fontFamily "OyunQaganTig"
-                                                .fontSize 14.0
-                                                .height 1.4
-                                                .fontStyle (if (str/blank? last-msg) m/FontStyle.italic m/FontStyle.normal)
-                                                .color (cond
-                                                         (str/blank? last-msg) (theme/text-2 ctx)
-                                                         has-unread? (theme/text ctx)
-                                                         :else (theme/text-2 ctx)))
-                            ;; Keep a max-line cap so a huge message cannot stretch the screen infinitely
-                            .maxLines 3
-                            .overflow m/TextOverflow.ellipsis)
+            (m/Expanded
+             .child
+             (mgl/MongolText (if (str/blank? last-msg) "Зурвас илгээх..." last-msg)
+                             .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                                 .fontSize 14.0
+                                                 .height 1.4
+                                                 .fontStyle (if (str/blank? last-msg) m/FontStyle.italic m/FontStyle.normal)
+                                                 .color (cond
+                                                          (str/blank? last-msg) (theme/text-2 ctx)
+                                                          has-unread? (theme/text ctx)
+                                                          :else (theme/text-2 ctx)))
+                             .maxLines 3
+                             .overflow m/TextOverflow.ellipsis))
 
             (m/SizedBox .width 12.0)
 

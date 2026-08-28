@@ -9,33 +9,31 @@
 
    [cljd.flutter :as f]
    
-   ;; System Controllers & State
    [mongol-zangila.state :as state] 
-   [mongol-zangila.infrastructure.db :as db] ;; ⚡ Import local offline filter store
+   [mongol-zangila.infrastructure.db :as db]
    [mongol-zangila.controllers.chat-ctrl :as chat-ctrl]
 
-   ;; Shared UI Components
    [mongol-zangila.ui.theme :as theme]
    [mongol-zangila.utils.nav :as nav]
    [mongol-zangila.ui.widgets.empty-state :as empty-state]
-   [mongol-zangila.ui.layout.scaffold :as scaffold] ;; ⚡ Global layout
+   [mongol-zangila.ui.layout.scaffold :as scaffold]
    
-   ;; Unified tile component that handles DM/Group routing
+   [mongol-zangila.ui.chat.inbox-helpers :as inbox-helpers]
    [mongol-zangila.ui.chat.components.inbox-tile :as inbox-tile]
-
-   ;; Custom Horizontal Pull-to-Refresh Library
    [pull-to-refresh.refresh :as ptr]))
 
-;; =============================================================================
-;; 1. Main Inbox Screen Widget
-;; =============================================================================
+(defn- blocked-thread?
+  [chat blocked-ids]
+  (let [p-id (or (get chat "partner_id") (get-in chat ["partner" "id"]))]
+    (and p-id (contains? blocked-ids p-id))))
 
 (defn inbox-screen
   "The primary viewport for direct messaging conversations."
   []
-  (let [!chats (atom [])
-        !blocked-ids (atom #{}) ;; ⚡ Core blocklist set
+  (let [!chats (atom {})
+        !blocked-ids (atom #{})
         !initial-loading? (atom true)
+        !load-error? (atom false)
         !refresh-loading? (atom false)
         
         !realtime-cb (atom nil)
@@ -44,7 +42,14 @@
         cleanup-realtime! (fn [_] 
                             (chat-ctrl/unbind-inbox-realtime! !realtime-cb)
                             (chat-ctrl/unregister-inbox!)
-                            nil)]
+                            nil)
+
+        refresh-inbox!
+        (fn [ctx]
+          (reset! !load-error? false)
+          (-> (chat-ctrl/load-inbox! ctx !chats !refresh-loading? true)
+              (.then (fn [_] (reset! !load-error? false)))
+              (.catchError (fn [_] (reset! !load-error? true)))))]
 
     (f/widget
      :context ctx
@@ -57,15 +62,16 @@
 
      :watch [chats !chats
              blocked-ids !blocked-ids
-             init-loading? !initial-loading?]
+             init-loading? !initial-loading?
+             load-error? !load-error?]
 
      (pft/PostFrameTrigger
       .onLayout (fn [] 
                   (chat-ctrl/register-inbox! !chats)
-                  (chat-ctrl/load-inbox! ctx !chats !initial-loading? true)
+                  (reset! !load-error? false)
+                  (-> (chat-ctrl/load-inbox! ctx !chats !initial-loading? true)
+                      (.catchError (fn [_] (reset! !load-error? true))))
                   (chat-ctrl/bind-inbox-realtime! !chats current-user-id !realtime-cb)
-                  
-                  ;; ⚡ Load local SQLite blocklist asynchronously
                   (-> (db/get-blocked-user-ids)
                       (.then (fn [ids] (reset! !blocked-ids ids)))))
       .child
@@ -75,7 +81,6 @@
        (m/Scaffold
         .backgroundColor (theme/bg ctx)
 
-        ;; --- Top App Bar ---
         .appBar
         (m/AppBar
          .backgroundColor (theme/surface ctx)
@@ -90,32 +95,33 @@
                     .icon (m/Icon m/Icons.add_comment_rounded .color theme/brand-blue)
                     .onPressed #(nav/push! ctx "/chat/new"))])
 
-        ;; --- Main Body: Horizontal Pull-to-Refresh Chat List ---
         .body
         (if init-loading?
           (m/Center .child (m/CircularProgressIndicator .color theme/brand-blue))
 
-          ;; ⚡ Live filter: drop threads that intersect the blocklist
-          (let [visible-chats (vec (remove (fn [chat]
-                                             (let [p-id (or (get chat "partner_id") (get-in chat ["partner" "id"]))]
-                                               (and p-id (contains? blocked-ids p-id))))
-                                           chats))]
+          (let [visible-chats (->> (inbox-helpers/get-sorted-threads-list chats)
+                                   (remove #(blocked-thread? % blocked-ids))
+                                   vec)]
             
-            (if (empty? visible-chats)
+            (cond
+              (and load-error? (empty? visible-chats))
+              (empty-state/offline-view ctx #(refresh-inbox! ctx))
+
+              (empty? visible-chats)
               (empty-state/empty-chat-view ctx #(nav/push! ctx "/chat/new"))
 
+              :else
               (ptr/horizontal-refresh
                {:on-refresh (fn []
-                              ;; ⚡ Refresh the blocklist on pull-to-refresh in case it changed
                               (-> (db/get-blocked-user-ids) (.then #(reset! !blocked-ids %)))
-                              (chat-ctrl/load-inbox! ctx !chats !refresh-loading? true))
+                              (refresh-inbox! ctx))
 
                 :scroll-controller scroll-ctrl
                 :background-color (theme/bg ctx)
 
                 :not-armed-text "Татаж шинэчлэх"
                 :armed-text "Суллаж шинэчлэх"
-                :loading-text "Суллаж шинэчлэх"
+                :loading-text "Шинэчилж байна"
                 :not-armed-color (theme/border ctx)
                 :armed-color theme/brand-blue
                 :text-style (m/TextStyle .fontFamily "OyunQaganTig" .color m/Colors.white .fontSize 14.0 .fontWeight m/FontWeight.bold)

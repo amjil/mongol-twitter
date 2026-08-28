@@ -1,0 +1,196 @@
+(ns mongol-zangila.ui.chat.thread
+  "Shared DM/group conversation viewport: horizontal reverse feed + composer."
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol_zangila/post_frame_trigger.dart" :as pft]
+   ["package:mongol/mongol.dart" :as mgl]
+   ["dart:core" :as dc]
+   [cljd.flutter :as f]
+
+   [mongol-zangila.state :as state]
+   [mongol-zangila.infrastructure.db :as db]
+   [mongol-zangila.controllers.chat-ctrl :as chat-ctrl]
+   [mongol-zangila.controllers.profile-ctrl :as profile-ctrl]
+
+   [rich-editor.components.simple-editor :as simple-editor]
+
+   [mongol-zangila.ui.theme :as theme]
+   [mongol-zangila.utils.nav :as nav]
+   [mongol-zangila.ui.widgets.empty-state :as empty-state]
+
+   [mongol-zangila.ui.chat.components.message-bubble :as msg-bubble]
+   [mongol-zangila.ui.chat.components.voice-bubble :as voice-bubble]
+   [mongol-zangila.ui.chat.components.chat-composer :as composer]))
+
+(def ^:private default-app-bar-height 56.0)
+(def ^:private subtitle-app-bar-height 72.0)
+
+(defn- app-bar-title [ctx title subtitle]
+  (let [title-style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 18.0
+                                 .fontWeight m/FontWeight.bold .color (theme/text ctx))]
+    (if subtitle
+      (m/Column
+       .mainAxisSize m/MainAxisSize.min
+       .crossAxisAlignment m/CrossAxisAlignment.start
+       .children [(m/Text title .style title-style .maxLines 1 .overflow m/TextOverflow.ellipsis)
+                  (m/Text subtitle
+                          .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 12.0
+                                              .color (theme/text-2 ctx))
+                          .maxLines 1 .overflow m/TextOverflow.ellipsis)])
+      (m/Text title .style title-style .maxLines 1 .overflow m/TextOverflow.ellipsis))))
+
+(defn- message-item
+  [ctx msg current-user-id retry-id !messages show-sender-info?]
+  (let [m-type (get msg "type" "text")
+        on-retry! #(chat-ctrl/retry-message! ctx retry-id % !messages)]
+    (cond
+      (= m-type "system") (msg-bubble/system-bubble (get msg "content"))
+      (= m-type "audio") (voice-bubble/voice-bubble ctx msg current-user-id
+                                                    :show-sender-info? show-sender-info?
+                                                    :on-retry! on-retry!)
+      :else (msg-bubble/chat-bubble ctx msg current-user-id
+                                    :show-sender-info? show-sender-info?
+                                    :on-retry! on-retry!))))
+
+(defn- older-spinner []
+  (m/Padding
+   .padding (m/EdgeInsets.only .right 24.0 .left 24.0)
+   .child (m/Center .child (m/SizedBox .width 24.0 .height 24.0
+                                       .child (m/CircularProgressIndicator .strokeWidth 2.0 .color theme/brand-blue)))))
+
+(defn- blocked-banner [ctx partner-id partner-name !is-blocked?]
+  (let [bottom-inset (.-bottom (.-viewPadding (m/MediaQuery.of ctx)))]
+    (m/Container
+     .decoration (m/BoxDecoration .color (theme/surface ctx)
+                                  .border (m/Border .top (m/BorderSide .color (theme/border ctx) .width 0.5)))
+     .padding (m/EdgeInsets.only .top 16.0 .left 16.0 .right 16.0 .bottom (max 16.0 (+ bottom-inset 8.0)))
+     .child
+     (m/Row
+      .mainAxisAlignment m/MainAxisAlignment.center
+      .crossAxisAlignment m/CrossAxisAlignment.center
+      .children [(m/Icon m/Icons.block_rounded .color theme/error-red .size 24.0)
+                 (m/SizedBox .width 8.0)
+                 (mgl/MongolText "Блоклосон хэрэглэгч"
+                                 .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                                     .color (theme/text-2 ctx)
+                                                     .fontWeight m/FontWeight.bold))
+                 (m/SizedBox .width 16.0)
+                 (mgl/MongolElevatedButton
+                  .style (m/ElevatedButton.styleFrom .backgroundColor theme/brand-blue .elevation 0.0
+                                                     .shape (m/RoundedRectangleBorder .borderRadius (m/BorderRadius.circular 16.0)))
+                  .onPressed #(profile-ctrl/unblock-user! ctx partner-id partner-name
+                                                          (fn [] (reset! !is-blocked? false)))
+                  .child (mgl/MongolText "Блок гаргах"
+                                         .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                                             .fontWeight m/FontWeight.bold
+                                                             .color m/Colors.white)))]))))
+
+(defn thread-screen
+  "Shared conversation shell.
+   Required keys: :title :topic :initialize! :retry-id
+                  :on-send-text :make-send-image :make-send-voice
+   Optional: :subtitle :info-route :info-args :show-sender-info? :partner-id :partner-name"
+  [{:keys [title subtitle info-route info-args topic initialize! retry-id
+           show-sender-info? partner-id partner-name
+           on-send-text make-send-image make-send-voice]}]
+  (let [app-bar-height (if subtitle subtitle-app-bar-height default-app-bar-height)
+        !messages (atom [])
+        !loading? (atom true)
+        !chat-topic (atom nil)
+        !editor-state (simple-editor/init-simple-state)
+        !input-mode (atom :text)
+        !is-recording? (atom false)
+        !is-blocked? (atom false)
+        !loading-more? (atom false)
+        !has-more? (atom true)
+        current-user-id (get @state/current-user "id")
+        cleanup-fn! (fn [_]
+                      (when-let [t @!chat-topic]
+                        (chat-ctrl/unsubscribe-thread! t))
+                      nil)]
+    (f/widget
+     :context ctx
+
+     :managed [scroll-ctrl (let [sc (m/ScrollController.)]
+                             (.addListener sc
+                                           (fn []
+                                             (let [pos (.-position sc)]
+                                               (when (and (>= (.-pixels pos) (- (.-maxScrollExtent pos) 200.0))
+                                                          (not @!loading-more?)
+                                                          @!has-more?)
+                                                 (reset! !loading-more? true)
+                                                 (-> (chat-ctrl/load-older-messages! ctx topic (count @!messages) !messages !has-more?)
+                                                     (.whenComplete #(reset! !loading-more? false)))))))
+                             sc)
+               :dispose .dispose
+               dummy-ctrl nil :dispose cleanup-fn!]
+
+     :watch [messages !messages
+             loading? !loading?
+             is-blocked? !is-blocked?
+             has-more? !has-more?]
+
+     (pft/PostFrameTrigger
+      .onLayout (fn []
+                  (initialize! ctx !messages !loading? current-user-id !chat-topic)
+                  (when partner-id
+                    (-> (db/get-blocked-user-ids)
+                        (.then #(reset! !is-blocked? (contains? % partner-id)))))
+                  nil)
+      .child
+      (m/Scaffold
+       .backgroundColor (theme/bg ctx)
+       .appBar
+       (m/AppBar
+        .backgroundColor (theme/surface ctx)
+        .elevation 0.5
+        .toolbarHeight app-bar-height
+        .leading (m/IconButton .icon (m/Icon m/Icons.arrow_back_rounded .color (theme/text ctx))
+                               .onPressed #(nav/pop! ctx))
+        .title (app-bar-title ctx title subtitle)
+        .actions (vec (keep identity
+                            [(when info-route
+                               (m/IconButton
+                                .icon (m/Icon m/Icons.info_outline_rounded .color theme/brand-blue)
+                                .onPressed #(nav/push! ctx info-route (or info-args {}))))])))
+
+       .body
+       (m/Column
+        .children
+        [(m/Expanded
+          .child
+          (cond
+            loading?
+            (m/Center .child (m/CircularProgressIndicator .color theme/brand-blue))
+
+            (empty? messages)
+            (empty-state/empty-thread-view ctx)
+
+            :else
+            (m/ListView.builder
+             .controller scroll-ctrl
+             .scrollDirection m/Axis.horizontal
+             .reverse true
+             .padding (m/EdgeInsets.symmetric .horizontal 16.0)
+             .physics (m/AlwaysScrollableScrollPhysics. .parent (m/BouncingScrollPhysics.))
+             .itemCount (if (and has-more? (not-empty messages))
+                          (inc (count messages))
+                          (count messages))
+             .itemBuilder
+             (fn [_ i]
+               (try
+                 (let [rendered (if (>= i (count messages))
+                                  (older-spinner)
+                                  (message-item ctx (nth messages i) current-user-id
+                                                retry-id !messages (boolean show-sender-info?)))]
+                   (if (nil? rendered) (m/SizedBox.shrink) rendered))
+                 (catch dc/dynamic _ (m/SizedBox.shrink)))))))
+
+         (if is-blocked?
+           (blocked-banner ctx partner-id partner-name !is-blocked?)
+           (composer/chat-composer
+            ctx !editor-state !input-mode !is-recording?
+            (fn [content entities] (on-send-text ctx !messages content entities))
+            (make-send-image ctx !messages)
+            (make-send-voice ctx !messages)
+            :app-bar-height app-bar-height))]))))))
