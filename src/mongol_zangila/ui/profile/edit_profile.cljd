@@ -27,39 +27,40 @@
 
 (defn- profile-input
   "A styled text field optimized for native vertical Mongolian input.
-   Utilizes MongolTextField for correct cursor movement and line wrapping."
+   Fixed pillar width so MongolTextField is not given unbounded horizontal constraints."
   [^m/TextEditingController ctrl label hint max-lines]
   (theme/themed
    (fn [ctx]
-     (m/Container
-   ;; Constrain width so it forms a neat vertical pillar section
-   .padding (m/EdgeInsets.only .top 24.0 .bottom 24.0 .right 24.0)
-   .child
-   (m/Row
-    .crossAxisAlignment m/CrossAxisAlignment.start
-    .children
-    [;; Vertical Label on the Left
-     (mgl/MongolText label
-                     .style (m/TextStyle .fontFamily "OyunQaganTig"
-                                         .fontSize 15.0
-                                         .fontWeight m/FontWeight.bold
-                                         .color (theme/text-2 ctx)))
-     (m/SizedBox .width 16.0)
-
-     ;; Native Vertical Input Field
-     (mgl/MongolTextField
-      .controller ctrl
-      .maxLines max-lines
-      .minLines (if (> max-lines 1) 3 1)
-      .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 16.0 .color (theme/text ctx))
-      .decoration (m/InputDecoration
-                   .hintText hint
-                   .hintStyle (m/TextStyle .color (theme/border ctx))
-                   .filled true
-                   .fillColor (theme/bg ctx)
-                   .border (m/OutlineInputBorder
-                            .borderRadius (m/BorderRadius.circular 12.0)
-                            .borderSide m/BorderSide.none)))])))))
+     (m/SizedBox
+      .width 140.0
+      .child
+      (m/Padding
+       .padding (m/EdgeInsets.only .top 24.0 .bottom 24.0 .right 16.0)
+       .child
+       (m/Row
+        .crossAxisAlignment m/CrossAxisAlignment.start
+        .children
+        [(mgl/MongolText label
+                         .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                             .fontSize 15.0
+                                             .fontWeight m/FontWeight.bold
+                                             .color (theme/text-2 ctx)))
+         (m/SizedBox .width 12.0)
+         (m/Expanded
+          .child
+          (mgl/MongolTextField
+           .controller ctrl
+           .maxLines max-lines
+           .minLines (if (> max-lines 1) 3 1)
+           .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 16.0 .color (theme/text ctx))
+           .decoration (m/InputDecoration
+                        .hintText hint
+                        .hintStyle (m/TextStyle .color (theme/border ctx))
+                        .filled true
+                        .fillColor (theme/bg ctx)
+                        .border (m/OutlineInputBorder
+                                 .borderRadius (m/BorderRadius.circular 12.0)
+                                 .borderSide m/BorderSide.none))))]))))))
 
 ;; =============================================================================
 ;; 2. The Main Edit Profile Screen Widget

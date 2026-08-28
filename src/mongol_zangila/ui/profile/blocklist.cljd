@@ -16,7 +16,8 @@
    [mongol-zangila.ui.theme :as theme]
    [mongol-zangila.utils.nav :as nav]
    [components.toast :as toast]
-   [mongol-zangila.ui.widgets.avatar :as smart-avatar]))
+   [mongol-zangila.ui.widgets.avatar :as smart-avatar]
+   [mongol-zangila.ui.widgets.empty-state :as empty-state]))
 
 ;; =============================================================================
 ;; 1. Data Fetching & Handlers
@@ -150,7 +151,11 @@
       (m/AppBar
        .backgroundColor (theme/surface ctx)
        .elevation 0.5
-       .centerTitle true
+       .title (m/Text "Блоклосон"
+                      .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                          .fontSize 18.0
+                                          .fontWeight m/FontWeight.bold
+                                          .color (theme/text ctx)))
        .leading (m/IconButton 
                  .icon (m/Icon m/Icons.arrow_back_ios_new_rounded .color (theme/text ctx) .size 20.0)
                  .onPressed #(nav/pop! ctx)))
@@ -163,17 +168,10 @@
          (m/Center .child (m/CircularProgressIndicator .color theme/brand-blue))
          
          (empty? users)
-         (m/Center
-          .child
-          (m/Column
-           .mainAxisSize m/MainAxisSize.min
-           .children
-           [(m/Icon m/Icons.shield_outlined .size 48.0 .color (theme/text-2 ctx))
-            (m/SizedBox .height 16.0)
-            (mgl/MongolText "Блоклосон хэрэглэгч байхгүй байна." ;; "No blocked users."
-                            .style (m/TextStyle .fontFamily "OyunQaganTig" 
-                                                .fontSize 16.0 
-                                                .color (theme/text-2 ctx)))]))
+         (empty-state/empty-view ctx
+                                 :icon-data m/Icons.shield_outlined
+                                 :title "Блоклосон хэрэглэгч алга"
+                                 :subtitle "Та хэрэглэгч блоклох үед энд харагдах болно.")
          
          :else
          (m/ListView.builder

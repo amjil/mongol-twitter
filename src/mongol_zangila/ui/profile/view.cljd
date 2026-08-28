@@ -66,16 +66,24 @@
            .onTap (fn []
                     (nav/pop! b-ctx)
                     (if is-blocked?
-                      (profile-ctrl/unblock-user! ctx user-id name 
+                      (profile-ctrl/unblock-user! ctx user-id name
                         #(swap! !profile-data (fn [p] (assoc (into {} p) "is_blocked_by_me" false)))
                         :on-rollback #(swap! !profile-data (fn [p] (assoc (into {} p) "is_blocked_by_me" true))))
-                      (profile-ctrl/block-user! ctx user-id name 
-                        #(swap! !profile-data (fn [p] (-> (into {} p)
-                                                          (assoc "is_blocked_by_me" true)
-                                                          (assoc "is_followed_by_me" false))))
-                        :on-rollback #(swap! !profile-data (fn [p] (-> (into {} p)
-                                                                       (assoc "is_blocked_by_me" false)
-                                                                       (assoc "is_followed_by_me" was-following?))))))))
+                      (profile-ctrl/block-user! ctx user-id name
+                        #(swap! !profile-data
+                                (fn [p]
+                                  (let [m (into {} p)
+                                        n (or (get m "followers_count") 0)]
+                                    (-> m
+                                        (assoc "is_blocked_by_me" true)
+                                        (assoc "is_followed_by_me" false)
+                                        (assoc "followers_count" (if was-following? (max 0 (dec n)) n))))))
+                        :on-rollback #(swap! !profile-data
+                                             (fn [p]
+                                               (-> (into {} p)
+                                                   (assoc "is_blocked_by_me" false)
+                                                   (assoc "is_followed_by_me" was-following?)
+                                                   (assoc "followers_count" (get profile-data "followers_count" 0)))))))))
           
           (mgl/MongolListTile
            .leading (m/Icon m/Icons.report_problem_rounded .color (theme/text ctx))
@@ -89,26 +97,50 @@
 ;; 2. Sub-component: Horizontal Profile Header Block
 ;; =============================================================================
 
+(defn- header-rule [ctx]
+  (m/Container .width 0.5 .color (theme/border ctx)))
+
+(defn- mongol-btn-style
+  [ctx & {:keys [filled? brand?]}]
+  (let [pad (m/EdgeInsets.symmetric .vertical 16.0 .horizontal 8.0)
+        shape (m/RoundedRectangleBorder .borderRadius (m/BorderRadius.circular 24.0))]
+    (if filled?
+      (m/ElevatedButton.styleFrom
+       .backgroundColor theme/brand-blue
+       .foregroundColor m/Colors.white
+       .elevation 0.0
+       .padding pad
+       .shape shape)
+      (m/OutlinedButton.styleFrom
+       .foregroundColor (if brand? theme/brand-blue (theme/text ctx))
+       .side (m/BorderSide .color (if brand? theme/brand-blue (theme/border ctx)))
+       .padding pad
+       .shape shape))))
+
+(defn- mongol-btn-label [text]
+  (mgl/MongolText text
+                  .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold)))
+
 (defn- stat-tile
   [label count-val on-tap]
   (theme/themed
    (fn [ctx]
      (m/GestureDetector
-   .onTap on-tap
-   .child
-   (m/Column
-    .mainAxisSize m/MainAxisSize.min
-    .crossAxisAlignment m/CrossAxisAlignment.center
-    .children
-    [(mgl/MongolText (str (or count-val 0))
-                     .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 20.0 .fontWeight m/FontWeight.bold .color (theme/text ctx)))
-     (m/SizedBox .height 6.0)
-     (mgl/MongolText label
-                     .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 13.0 .color (theme/text-2 ctx)))])))))
+      .onTap on-tap
+      .child
+      (m/Column
+       .mainAxisSize m/MainAxisSize.min
+       .crossAxisAlignment m/CrossAxisAlignment.center
+       .children
+       [(mgl/MongolText (str (or count-val 0))
+                        .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 20.0 .fontWeight m/FontWeight.bold .color (theme/text ctx)))
+        (m/SizedBox .height 6.0)
+        (mgl/MongolText label
+                        .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 13.0 .color (theme/text-2 ctx)))])))))
 
 (defn- profile-header
-  "Renders the user's identity metadata. 
-   ⚡ Upgraded: Avatar -> Name -> Handle stacked in a Column. Stats stacked in an adjacent Column."
+  "Identity, stats, bio and actions as adjacent vertical pillars.
+   Stacking MongolText in a Column overflows the viewport; a Row does not."
   [ctx profile-data !profile-data is-self?]
   (let [user-id (get profile-data "id")
         name (get profile-data "name" "")
@@ -118,112 +150,140 @@
         following-count (get profile-data "following_count" 0)
         connections-user-id (if is-self? "self" user-id)
         is-following? (get profile-data "is_followed_by_me" false)
-        is-blocked? (get profile-data "is_blocked_by_me" false)]
+        is-blocked? (get profile-data "is_blocked_by_me" false)
+        label-style (fn [size weight color]
+                      (m/TextStyle .fontFamily "OyunQaganTig" .fontSize size .fontWeight weight .color color))]
 
     (m/Container
-     .padding (m/EdgeInsets.only .top 32.0 .bottom 32.0 .left 16.0 .right 32.0)
+     .padding (m/EdgeInsets.only .top 24.0 .bottom 24.0 .left 16.0 .right 24.0)
      .decoration (m/BoxDecoration
                   .color (theme/surface ctx)
                   .border (m/Border .right (m/BorderSide .color (theme/border ctx) .width 1.0)))
      .child
      (m/Row
-      .crossAxisAlignment m/CrossAxisAlignment.start
+      .crossAxisAlignment m/CrossAxisAlignment.stretch
+      .mainAxisSize m/MainAxisSize.min
       .children
-      [
-       ;; A. Identity Pillar (Avatar, Name, Handle)
-       (m/Column
-        .crossAxisAlignment m/CrossAxisAlignment.center
-        .children
-        [(smart-avatar/smart-avatar ctx user-id (get profile-data "avatar_url") :size 64.0)
-         (m/SizedBox .height 16.0)
-         (mgl/MongolText name
-                         .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 22.0 .fontWeight m/FontWeight.bold .color (theme/text ctx)))
-         (m/SizedBox .height 8.0)
-         (mgl/MongolText (str "@" handle)
-                         .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 15.0 .color (theme/text-2 ctx)))])
-       
-       (m/SizedBox .width 24.0)
-       (m/Container .width 0.5 .color (theme/border ctx))
-       (m/SizedBox .width 24.0)
-       
-       ;; B. Stats & Actions Flow
-       (if is-blocked?
-         (m/Row
-          .children
-          [(m/Icon m/Icons.block_rounded .color theme/error-red .size 40.0)
-           (m/SizedBox .width 16.0)
-           (mgl/MongolText "Блоклогдсон" .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold .color (theme/text ctx)))
-           (m/SizedBox .width 24.0)
-           (mgl/MongolOutlinedButton
-            .style (m/OutlinedButton.styleFrom .foregroundColor theme/brand-blue .side (m/BorderSide .color theme/brand-blue) .padding (m/EdgeInsets.symmetric .vertical 16.0 .horizontal 8.0) .shape (m/RoundedRectangleBorder .borderRadius (m/BorderRadius.circular 24.0)))
-            .onPressed #(profile-ctrl/unblock-user! ctx user-id name 
-                                                    (fn [] (swap! !profile-data (fn [p] (assoc (into {} p) "is_blocked_by_me" false))))
-                                                    :on-rollback (fn [] (swap! !profile-data (fn [p] (assoc (into {} p) "is_blocked_by_me" true)))))
-            .child (mgl/MongolText "Блок гаргах" .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold)))])
-         
-         (m/Row
-          .crossAxisAlignment m/CrossAxisAlignment.start
-          .children
-          [
-           ;; Stats Pillar: Followers & Following stacked vertically
-           (m/Column
+      [;; Identity pillar: avatar on top, name + handle as two vertical columns
+       (m/SizedBox
+        .width 96.0
+        .child
+        (m/Column
+         .crossAxisAlignment m/CrossAxisAlignment.center
+         .children
+         [(smart-avatar/smart-avatar ctx user-id (get profile-data "avatar_url") :size 64.0)
+          (m/SizedBox .height 16.0)
+          (m/Expanded
+           .child
+           (m/Row
+            .mainAxisAlignment m/MainAxisAlignment.center
             .crossAxisAlignment m/CrossAxisAlignment.start
             .children
-            [(stat-tile "Дагагчид" followers-count #(nav/push! ctx "/profile/connections" {:user-id connections-user-id :initial-index 0}))
-             (m/SizedBox .height 24.0)
-             (stat-tile "Дагаж буй" following-count #(nav/push! ctx "/profile/connections" {:user-id connections-user-id :initial-index 1}))])
-           
-           ;; Conditional Bio
-           (if (and (not is-blocked?) (not (str/blank? bio)))
+            [(mgl/MongolText name
+                             .maxLines 1
+                             .overflow m/TextOverflow.ellipsis
+                             .style (label-style 20.0 m/FontWeight.bold (theme/text ctx)))
+             (m/SizedBox .width 8.0)
+             (mgl/MongolText (str "@" handle)
+                             .maxLines 1
+                             .overflow m/TextOverflow.ellipsis
+                             .style (label-style 14.0 m/FontWeight.normal (theme/text-2 ctx)))]))]))
+
+       (m/SizedBox .width 20.0)
+       (header-rule ctx)
+       (m/SizedBox .width 20.0)
+
+       (if is-blocked?
+         (m/Row
+          .crossAxisAlignment m/CrossAxisAlignment.center
+          .children
+          [(m/Icon m/Icons.block_rounded .color theme/error-red .size 32.0)
+           (m/SizedBox .width 16.0)
+           (mgl/MongolText "Блоклогдсон"
+                           .maxLines 1
+                           .overflow m/TextOverflow.ellipsis
+                           .style (label-style 16.0 m/FontWeight.bold (theme/text ctx)))
+           (m/SizedBox .width 16.0)
+           (mgl/MongolOutlinedButton
+            .style (mongol-btn-style ctx :brand? true)
+            .onPressed #(profile-ctrl/unblock-user! ctx user-id name
+                                                    (fn [] (swap! !profile-data (fn [p] (assoc (into {} p) "is_blocked_by_me" false))))
+                                                    :on-rollback (fn [] (swap! !profile-data (fn [p] (assoc (into {} p) "is_blocked_by_me" true)))))
+            .child (mongol-btn-label "Блок гаргах"))])
+
+         (m/Row
+          .crossAxisAlignment m/CrossAxisAlignment.stretch
+          .mainAxisSize m/MainAxisSize.min
+          .children
+          [(stat-tile "Дагагчид" followers-count #(nav/push! ctx "/profile/connections" {:user-id connections-user-id :initial-index 0}))
+           (m/SizedBox .width 20.0)
+           (stat-tile "Дагаж буй" following-count #(nav/push! ctx "/profile/connections" {:user-id connections-user-id :initial-index 1}))
+
+           (if (str/blank? bio)
+             (m/SizedBox.shrink)
              (m/Row
+              .crossAxisAlignment m/CrossAxisAlignment.stretch
               .children
-              [(m/SizedBox .width 24.0)
-               (m/Container .width 0.5 .color (theme/border ctx))
-               (m/SizedBox .width 24.0)
-               (mgl/MongolText bio
-                               .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 14.0 .color (theme/text ctx)))])
-             (m/SizedBox.shrink))
-           
-           (m/SizedBox .width 24.0)
-           (m/Container .width 0.5 .color (theme/border ctx))
-           (m/SizedBox .width 24.0)
-           
-           ;; Actions Pillar
+              [(m/SizedBox .width 20.0)
+               (header-rule ctx)
+               (m/SizedBox .width 20.0)
+               (m/SizedBox
+                .width 56.0
+                .child (mgl/MongolText bio
+                                       .maxLines 1
+                                       .overflow m/TextOverflow.ellipsis
+                                       .style (label-style 14.0 m/FontWeight.normal (theme/text ctx))))]))
+
+           (m/SizedBox .width 20.0)
+           (header-rule ctx)
+           (m/SizedBox .width 20.0)
+
            (if is-self?
-             (m/Column
+             (m/Row
+              .crossAxisAlignment m/CrossAxisAlignment.stretch
               .children
               [(mgl/MongolOutlinedButton
-                .style (m/OutlinedButton.styleFrom .foregroundColor (theme/text ctx) .side (m/BorderSide .color (theme/border ctx)) .padding (m/EdgeInsets.symmetric .vertical 16.0 .horizontal 8.0) .shape (m/RoundedRectangleBorder .borderRadius (m/BorderRadius.circular 24.0)))
+                .style (mongol-btn-style ctx)
                 .onPressed #(nav/push! ctx "/profile/edit")
-                .child (mgl/MongolText "Профайл засах" .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold)))
-               (m/SizedBox .height 12.0)
+                .child (mongol-btn-label "Профайл засах"))
+               (m/SizedBox .width 12.0)
                (mgl/MongolOutlinedButton
-                .style (m/OutlinedButton.styleFrom .foregroundColor theme/brand-blue .side (m/BorderSide .color theme/brand-blue) .padding (m/EdgeInsets.symmetric .vertical 16.0 .horizontal 8.0) .shape (m/RoundedRectangleBorder .borderRadius (m/BorderRadius.circular 24.0)))
+                .style (mongol-btn-style ctx :brand? true)
                 .onPressed #(nav/push! ctx "/profile/connections" {:user-id "self"})
-                .child (mgl/MongolText "Холболтууд" .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold)))
-               (m/SizedBox .height 12.0)
+                .child (mongol-btn-label "Холболтууд"))
+               (m/SizedBox .width 12.0)
                (mgl/MongolOutlinedButton
-                .style (m/OutlinedButton.styleFrom .foregroundColor theme/brand-blue .side (m/BorderSide .color theme/brand-blue) .padding (m/EdgeInsets.symmetric .vertical 16.0 .horizontal 8.0) .shape (m/RoundedRectangleBorder .borderRadius (m/BorderRadius.circular 24.0)))
+                .style (mongol-btn-style ctx :brand? true)
                 .onPressed #(nav/push! ctx "/profile/bookmarks")
-                .child (mgl/MongolText "Хадгалсан" .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold)))])
-             
-             (m/Column
+                .child (mongol-btn-label "Хадгалсан"))])
+
+             (m/Row
+              .crossAxisAlignment m/CrossAxisAlignment.stretch
               .children
               [(if is-following?
                  (mgl/MongolOutlinedButton
-                  .style (m/OutlinedButton.styleFrom .foregroundColor (theme/text ctx) .side (m/BorderSide .color (theme/border ctx)) .padding (m/EdgeInsets.symmetric .vertical 24.0 .horizontal 8.0) .shape (m/RoundedRectangleBorder .borderRadius (m/BorderRadius.circular 24.0)))
+                  .style (mongol-btn-style ctx)
                   .onPressed #(profile-ctrl/toggle-follow! ctx user-id !profile-data)
-                  .child (mgl/MongolText "Дагаж буй" .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold)))
+                  .child (mongol-btn-label "Дагаж буй"))
                  (mgl/MongolElevatedButton
-                  .style (m/ElevatedButton.styleFrom .backgroundColor theme/brand-blue .elevation 0.0 .padding (m/EdgeInsets.symmetric .vertical 24.0 .horizontal 8.0) .shape (m/RoundedRectangleBorder .borderRadius (m/BorderRadius.circular 24.0)))
+                  .style (mongol-btn-style ctx :filled? true)
                   .onPressed #(profile-ctrl/toggle-follow! ctx user-id !profile-data)
-                  .child (mgl/MongolText "Дагах" .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold))))
-               
-               (m/SizedBox .height 12.0)
+                  .child (mongol-btn-label "Дагах")))
+               (m/SizedBox .width 12.0)
                (mgl/MongolOutlinedButton
-                .style (m/OutlinedButton.styleFrom .foregroundColor theme/brand-blue .side (m/BorderSide .color theme/brand-blue) .padding (m/EdgeInsets.symmetric .vertical 24.0 .horizontal 8.0) .shape (m/RoundedRectangleBorder .borderRadius (m/BorderRadius.circular 24.0)))
+                .style (mongol-btn-style ctx :brand? true)
                 .onPressed #(chat-ctrl/open-dm-with-user! ctx user-id name)
-                .child (mgl/MongolText "Зурвас илгээх" .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold)))]))]))]))))
+                .child (mongol-btn-label "Зурвас илгээх"))]))]))]))))
+
+(defn- overlay-self-profile
+  "After edit-profile pops, current-user is already updated; keep the open
+   profile viewport in sync without another fetch."
+  [profile-data current-user]
+  (if (or (nil? profile-data) (nil? current-user))
+    profile-data
+    (merge (into {} profile-data)
+           (select-keys (into {} current-user)
+                        ["name" "bio" "avatar_url" "handle"]))))
 
 (defn- cleanup-refresh-watch [k]
   (remove-watch feed-ctrl/!feed-refresh-trigger k))
@@ -239,12 +299,13 @@
 
   (let [!profile-data (atom nil)
         !initial-loading-profile? (atom true)
-        !refresh-loading? (atom false)
+        !refresh-profile? (atom false)
 
         !posts (atom [])
         !page (atom 1)
         !has-more? (atom true)
-        !pagination-loading-posts? (atom false)]
+        !pagination-loading-posts? (atom false)
+        !refresh-posts? (atom false)]
 
     (f/widget
      :context ctx
@@ -257,7 +318,7 @@
                                                    max-ext (.-maxScrollExtent pos)]
                                                (when (and (>= pixels (- max-ext 200.0))
                                                           (not @!pagination-loading-posts?)
-                                                          (not @!refresh-loading?)
+                                                          (not @!refresh-posts?)
                                                           @!has-more?)
                                                  (profile-ctrl/load-user-posts! ctx user-id !posts !page !has-more? !pagination-loading-posts? false)))))
                              ctrl)
@@ -267,7 +328,7 @@
                               (add-watch feed-ctrl/!feed-refresh-trigger key
                                          (fn [_ _ old-val new-val]
                                            (when (> new-val old-val)
-                                             (profile-ctrl/load-user-posts! ctx user-id !posts !page !has-more? !refresh-loading? true))))
+                                             (profile-ctrl/load-user-posts! ctx user-id !posts !page !has-more? !refresh-posts? true))))
                               key)
                :dispose cleanup-refresh-watch]
 
@@ -277,12 +338,16 @@
              page-loading-posts? !pagination-loading-posts?
              current-user state/current-user]
 
-     (let [is-self? (or (= user-id "self") (= user-id (get current-user "id")))
-           is-blocked? (get profile-data "is_blocked_by_me" false)
+     (let [tab-root? (= user-id "self")
+           is-self? (or tab-root? (= user-id (get current-user "id")))
+           display-profile (if is-self?
+                             (overlay-self-profile profile-data current-user)
+                             profile-data)
+           is-blocked? (get display-profile "is_blocked_by_me" false)
            on-compose #(nav/push-fullscreen! ctx "/feed/compose")
            no-posts? (and (not init-loading-profile?) (empty? posts))
            posts-loading? (and no-posts? page-loading-posts?)
-           screen-width (.-width (.-size (m/MediaQuery.of ctx)))
+           display-name (if init-loading-profile? "" (get display-profile "name" ""))
            
            shared-body 
            (if init-loading-profile?
@@ -291,8 +356,8 @@
              (ptr/horizontal-refresh
               {:on-refresh (fn []
                              (dc/Future.wait
-                              [(profile-ctrl/load-profile! ctx user-id !profile-data !refresh-loading? true)
-                               (profile-ctrl/load-user-posts! ctx user-id !posts !page !has-more? !refresh-loading? true)]))
+                              [(profile-ctrl/load-profile! ctx user-id !profile-data !refresh-profile? true)
+                               (profile-ctrl/load-user-posts! ctx user-id !posts !page !has-more? !refresh-posts? true)]))
                
                :scroll-controller scroll-ctrl
                :background-color (theme/bg ctx)
@@ -304,52 +369,42 @@
                :text-style (m/TextStyle .fontFamily "OyunQaganTig" .color m/Colors.white .fontSize 14.0 .fontWeight m/FontWeight.bold)
                :trigger-mode cri/IndicatorTriggerMode.anywhere
                
-               :item-count (if is-blocked?
-                             1
-                             (if no-posts?
-                               1
-                               (+ 1 (count posts) (if (and @!has-more? page-loading-posts?) 1 0))))
+               :item-count (if (or is-blocked? no-posts?)
+                             2
+                             (+ 1 (count posts) (if (and @!has-more? page-loading-posts?) 1 0)))
                :separator-builder (fn [_ _] (m/SizedBox .width 0.0))
                :box-shadow []
                
                :item-builder
                (fn [_ i]
                  (cond
-                   ;; Case 1: Empty posts or Blocked
-                   (or is-blocked? no-posts?)
-                   (m/SizedBox
-                    .width screen-width
-                    .child
-                    (m/Row
-                     .crossAxisAlignment m/CrossAxisAlignment.stretch
-                     .children
-                     [(profile-header ctx profile-data !profile-data is-self?)
-                      (m/Expanded
-                       .child
-                       (if is-blocked?
-                         (m/Center
-                          .child (empty-state/empty-view ctx :icon-data m/Icons.block_rounded :title "Блоклогдсон" :subtitle "Та энэ хэрэглэгчийг блоклосон байна."))
-                         (if posts-loading?
-                           (m/Center .child (m/CircularProgressIndicator .color theme/brand-blue))
-                           (m/Center
-                            .child (empty-state/empty-profile-posts-view ctx {:is-self? is-self? :on-compose-fn on-compose})))))]))
-                   
-                   ;; Case 2: Render Hero Horizontal Flow Banner
                    (= i 0)
-                   (profile-header ctx profile-data !profile-data is-self?)
-                   
-                   ;; Case 3: Appending Spinner
+                   (profile-header ctx display-profile !profile-data is-self?)
+
+                   (and is-blocked? (= i 1))
+                   (m/SizedBox
+                    .width 280.0
+                    .child (empty-state/empty-view ctx :icon-data m/Icons.block_rounded :title "Блоклогдсон" :subtitle "Та энэ хэрэглэгчийг блоклосон байна."))
+
+                   (and no-posts? (= i 1))
+                   (if posts-loading?
+                     (m/Padding
+                      .padding (m/EdgeInsets.symmetric .horizontal 32.0)
+                      .child (m/Center .child (m/CircularProgressIndicator .color theme/brand-blue)))
+                     (m/SizedBox
+                      .width 280.0
+                      .child (empty-state/empty-profile-posts-view ctx {:is-self? is-self? :on-compose-fn on-compose})))
+
                    (and page-loading-posts? (= i (inc (count posts))))
                    (m/Padding
                     .padding (m/EdgeInsets.symmetric .horizontal 32.0)
                     .child (m/Center .child (m/CircularProgressIndicator .strokeWidth 2.0 .color theme/brand-blue)))
-                   
-                   ;; Case 4: Standard Post Feed
+
                    :else
                    (let [post-data (nth posts (dec i))]
                      (m/Container
                       .margin (m/EdgeInsets.only .left 16.0 .top 16.0 .bottom 16.0)
-                      .child (post-card/post-card 
+                      .child (post-card/post-card
                               ctx post-data
                               :on-mutate (fn [mutator]
                                            (swap! !posts (fn [ps]
@@ -366,7 +421,7 @@
                     nil)
         .child
         
-        (if is-self?
+        (if tab-root?
           (scaffold/app-scaffold
            ctx "/profile/view"
            (m/Scaffold
@@ -376,26 +431,27 @@
              .backgroundColor (theme/surface ctx)
              .elevation 0.5
              .automaticallyImplyLeading false
-             .title (m/Text (if init-loading-profile? "" (get profile-data "name" ""))
+             .title (m/Text display-name
+                            .overflow m/TextOverflow.ellipsis
                             .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 18.0 .fontWeight m/FontWeight.bold .color (theme/text ctx)))
              .actions [
-                       (m/IconButton 
+                       (m/IconButton
                         .icon (m/Icon m/Icons.qr_code_scanner_rounded .color (theme/text ctx))
                         .onPressed #(nav/push! ctx "/scanner/view"))
-                       
-                       (m/IconButton 
+
+                       (m/IconButton
                         .icon (m/Icon m/Icons.qr_code_2_rounded .color (theme/text ctx))
                         .onPressed #(nav/push! ctx "/profile/qr-card"))
-                       
-                       (m/IconButton 
+
+                       (m/IconButton
                         .icon (m/Icon m/Icons.outbox_rounded .color (theme/text ctx))
                         .onPressed #(nav/push! ctx "/feed/outbox"))
-                       
-                       (m/IconButton 
+
+                       (m/IconButton
                         .icon (m/Icon m/Icons.settings_rounded .color (theme/text ctx))
                         .onPressed #(nav/push! ctx "/settings"))])
             .body shared-body))
-          
+
           (m/Scaffold
            .backgroundColor (theme/bg ctx)
            .appBar
@@ -406,12 +462,13 @@
             .leading (m/IconButton
                       .icon (m/Icon m/Icons.arrow_back_rounded .color (theme/text ctx))
                       .onPressed #(nav/pop! ctx))
-            .title (m/Text (if init-loading-profile? "" (get profile-data "name" ""))
+            .title (m/Text display-name
+                           .overflow m/TextOverflow.ellipsis
                            .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 18.0 .fontWeight m/FontWeight.bold .color (theme/text ctx)))
             .actions (vec
                       (keep identity
                             [(when (and (not is-self?) (not init-loading-profile?))
                                (m/IconButton
                                 .icon (m/Icon m/Icons.more_vert_rounded .color (theme/text ctx))
-                                .onPressed #(show-profile-options! ctx profile-data !profile-data)))])))
+                                .onPressed #(show-profile-options! ctx display-profile !profile-data)))])))
            .body shared-body)))))))

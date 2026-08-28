@@ -47,34 +47,37 @@
                        (reset! !loading? false)
                        (toast/error ctx (str "Мэдээлэл татахад алдаа гарлаа: " err)))))))
 
-(defn- toggle-connection-follow! 
-  "Optimistically toggles the follow status of a user directly from the list."
-  [ctx target-user-id !list-atom]
-  
-  (let [original-list @!list-atom]
-    (swap! !list-atom (fn [users]
-                        (mapv (fn [u]
-                                (if (= (get u "id") target-user-id)
-                                  (assoc u "is_followed_by_me" (not (get u "is_followed_by_me")))
-                                  u)) 
-                              users)))
-    
-    (let [target-user (first (filter #(= (get % "id") target-user-id) original-list))
-          was-following? (get target-user "is_followed_by_me" false)
-          action (if was-following? "unfollow" "follow")]
-      
-      (-> (api/post-req (str "/users/" target-user-id "/follow") {"action" action})
-          (.catchError (fn [_err]
-                         (reset! !list-atom original-list)
-                         (toast/error ctx "Сүлжээний алдаа." :fade)))))))
+(defn- toggle-follow-in-list [users target-user-id]
+  (mapv (fn [u]
+          (if (= (get u "id") target-user-id)
+            (assoc u "is_followed_by_me" (not (get u "is_followed_by_me")))
+            u))
+        users))
+
+(defn- toggle-connection-follow!
+  "Optimistically toggles follow on both the followers and following lists."
+  [ctx target-user-id !followers !following]
+  (let [original-followers @!followers
+        original-following @!following
+        target-user (or (first (filter #(= (get % "id") target-user-id) original-followers))
+                        (first (filter #(= (get % "id") target-user-id) original-following)))
+        was-following? (get target-user "is_followed_by_me" false)
+        action (if was-following? "unfollow" "follow")]
+    (swap! !followers #(toggle-follow-in-list % target-user-id))
+    (swap! !following #(toggle-follow-in-list % target-user-id))
+    (-> (api/post-req (str "/users/" target-user-id "/follow") {"action" action})
+        (.catchError (fn [_err]
+                       (reset! !followers original-followers)
+                       (reset! !following original-following)
+                       (toast/error ctx "Сүлжээний алдаа." :fade))))))
 
 ;; =============================================================================
 ;; 2. Sub-components (Vertical List Pillars)
 ;; =============================================================================
 
-(defn- connection-list-tile 
+(defn- connection-list-tile
   "A specialized vertical pillar representing a single user in the social graph."
-  [ctx user !list-atom current-user-id]
+  [ctx user !followers !following current-user-id]
   
   (let [user-id (get user "id")
         name (get user "name" "Unknown")
@@ -122,7 +125,7 @@
         (if is-me?
           (m/SizedBox .height 64.0)
           (m/ElevatedButton
-           .onPressed #(toggle-connection-follow! ctx user-id !list-atom)
+           .onPressed #(toggle-connection-follow! ctx user-id !followers !following)
            .style (m/ElevatedButton.styleFrom
                    .backgroundColor (if is-following? m/Colors.white (theme/text ctx))
                    .foregroundColor (if is-following? (theme/text ctx) m/Colors.white)
@@ -136,11 +139,11 @@
                                                       .fontSize 13.0 
                                                       .fontWeight m/FontWeight.bold))))])))))
 
-(defn- connection-list-view 
+(defn- connection-list-view
   "A horizontally scrollable list wrapper equipped with a contextual empty state."
-  [ctx users !list-atom current-user-id empty-icon empty-title empty-subtitle]
+  [ctx users !followers !following current-user-id empty-icon empty-title empty-subtitle]
   (if (empty? users)
-    (empty-state/empty-view ctx 
+    (empty-state/empty-view ctx
                             :icon-data empty-icon
                             :title empty-title
                             :subtitle empty-subtitle)
@@ -149,7 +152,7 @@
      .physics (m/BouncingScrollPhysics.)
      .itemCount (count users)
      .itemBuilder (fn [_ i]
-                    (connection-list-tile ctx (nth users i) !list-atom current-user-id)))))
+                    (connection-list-tile ctx (nth users i) !followers !following current-user-id)))))
 
 ;; =============================================================================
 ;; 3. The Main Connections Screen Widget
@@ -232,13 +235,13 @@
               .children
               [
                ;; Tab 1: Followers List
-               (connection-list-view ctx followers !followers current-user-id
+               (connection-list-view ctx followers !followers !following current-user-id
                                      m/Icons.people_outline_rounded
                                      "Дагагч алга" ;; "No followers"
                                      "Одоогоор энэ хэрэглэгчийг дагасан хүн байхгүй байна.")
                
                ;; Tab 2: Following List
-               (connection-list-view ctx following !following current-user-id
+               (connection-list-view ctx following !followers !following current-user-id
                                      m/Icons.person_add_alt_1_rounded
                                      "Дагасан хүн алга" ;; "Not following anyone"
                                      "Одоогоор өөр хэрэглэгч дагаагүй байна.")]))]))))))))

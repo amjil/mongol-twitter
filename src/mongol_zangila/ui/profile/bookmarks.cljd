@@ -124,4 +124,5 @@
                            :on-bookmark-change
                            (fn [bookmarked?]
                              (when-not bookmarked?
-                               (swap! !posts #(vec (remove (fn [p] (= (get p "id") post-id)) %))))))))))))))))))
+                               (swap! !posts #(vec (remove (fn [p] (= (get p "id") post-id)) %)))))
+                           :on-delete #(feed-ctrl/delete-post! ctx post-id !posts))))))))))))))

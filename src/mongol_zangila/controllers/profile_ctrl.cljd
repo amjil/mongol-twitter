@@ -17,6 +17,17 @@
    [mongol-zangila.utils.nav :as nav]
    [components.toast :as toast]))
 
+(defn- business-rejection?
+  "True when the API layer rejected the request with a 4xx (see api/handle-response HTTP_ prefix).
+   Network / 5xx failures should go to the outbox instead of rolling the UI back."
+  [err]
+  (let [msg (str err)]
+    (or (str/includes? msg "HTTP_400")
+        (str/includes? msg "HTTP_403")
+        (str/includes? msg "HTTP_404")
+        (str/includes? msg "HTTP_409")
+        (str/includes? msg "HTTP_422"))))
+
 ;; =============================================================================
 ;; 1. Profile Data Hydration
 ;; =============================================================================
@@ -38,9 +49,16 @@
                    "/users/me")]
     (-> (api/get-req endpoint)
         (.then (fn [res]
-                 (reset! !profile-data (into {} (or (get res "data") res)))
-                 (reset! !loading? false)
-                 (.complete completer true)))
+                 (let [data (into {} (or (get res "data") res))
+                       self-id (get @state/current-user "id")]
+                   (reset! !profile-data data)
+                   (when (or (= target-id "self") (= (get data "id") self-id))
+                     (when-let [cu @state/current-user]
+                       (reset! state/current-user
+                               (merge (into {} cu)
+                                      (select-keys data ["name" "bio" "avatar_url" "handle"])))))
+                   (reset! !loading? false)
+                   (.complete completer true))))
         (.catchError (fn [err]
                        (reset! !loading? false)
                        (toast/error ctx (str "Профайл дуудахад алдаа гарлаа: " err))
@@ -59,14 +77,16 @@
     (toast/warn ctx "Нэр хоосон байж болохгүй.")
     (do
       (reset! !loading? true)
-      (let [payload (cond-> {"name" (str/trim name)}
-                      (not (str/blank? bio)) (assoc "bio" (str/trim bio))
+      (let [payload (cond-> {"name" (str/trim name)
+                             "bio" (str/trim (or bio ""))}
                       (not (str/blank? avatar-url)) (assoc "avatar_url" avatar-url))]
         
         (-> (api/post-req "/users/profile/update" payload)
             (.then (fn [res]
-                     (let [updated-user (get res "data")]
-                       (reset! state/current-user updated-user)
+                     (let [updated-user (get res "data")
+                           previous (into {} (or @state/current-user {}))]
+                       (when updated-user
+                         (reset! state/current-user (merge previous (into {} updated-user))))
                        (reset! !loading? false)
                        (toast/success ctx "Профайл шинэчлэгдлээ.")
                        (nav/pop! ctx))))
@@ -80,7 +100,15 @@
   (let [original-data @!profile-data
         was-following? (get original-data "is_followed_by_me" false)
         action (if was-following? "unfollow" "follow")]
-    (swap! !profile-data (fn [p] (assoc (into {} p) "is_followed_by_me" (not was-following?))))
+    (swap! !profile-data
+           (fn [p]
+             (let [m (into {} p)
+                   n (or (get m "followers_count") 0)]
+               (-> m
+                   (assoc "is_followed_by_me" (not was-following?))
+                   (assoc "followers_count" (if was-following?
+                                              (max 0 (dec n))
+                                              (inc n)))))))
     (-> (api/post-req (str "/users/" target-user-id "/follow") {"action" action})
         (.catchError (fn [_err]
                        (reset! !profile-data original-data)
@@ -160,15 +188,11 @@
       (write-buffer/enqueue! "block-user" outbox-payload idk)
       (-> (api/post-req endpoint {})
           (.catchError (fn [err]
-                         ;; ⚡ FIXED: distinguish business errors (400/403 etc. with a Response) from packet loss
-                         (if (and (.-response err) (not= (.-statusCode (.-response err)) 503))
-                           (do 
-                             ;; Deterministic business failure: clear local intercept cache and run the rollback callback
+                         (if (business-rejection? err)
+                           (do
                              (db/remove-blocked-user! target-user-id)
                              (when on-rollback (on-rollback))
                              (toast/error ctx "Хүсэлт амжилтгүй. Таны үйлдлийг цуцаллаа."))
-                           
-                           ;; Pure network crash or timeout: hand off to the offline queue, do not roll back UI, wait for background retry
                            (write-buffer/enqueue! "block-user" outbox-payload idk))))))))
 
 (defn unblock-user!
@@ -191,13 +215,11 @@
       (write-buffer/enqueue! "unblock-user" outbox-payload idk)
       (-> (api/post-req endpoint {})
           (.catchError (fn [err]
-                         (if (and (.-response err) (not= (.-statusCode (.-response err)) 503))
-                           (do 
-                             ;; Deterministic business failure: put the blocklist entry back and notify UI to roll back
+                         (if (business-rejection? err)
+                           (do
                              (db/add-blocked-user! target-user-id)
                              (when on-rollback (on-rollback))
                              (toast/error ctx "Үйлдэл амжилтгүй боллоо."))
-                           
                            (write-buffer/enqueue! "unblock-user" outbox-payload idk))))))))
 
 ;; =============================================================================
