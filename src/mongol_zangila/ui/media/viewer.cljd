@@ -3,99 +3,123 @@
    Supports swipe pagination, pinch-to-zoom, and pan gestures for high-resolution images."
   (:require
    ["package:flutter/material.dart" :as m]
+   ["package:flutter/services.dart" :as services]
    [cljd.flutter :as f]
-   
-   ;; UI & Utilities
+
    [mongol-zangila.utils.nav :as nav]
+   [mongol-zangila.infrastructure.media :as media]
    [mongol-zangila.ui.widgets.cached-image :as cached-image]))
 
-;; =============================================================================
-;; 1. The Main Viewer Screen Widget
-;; =============================================================================
+(defn- safe-index [urls idx]
+  (let [n (count urls)]
+    (if (pos? n)
+      (max 0 (min (or idx 0) (dec n)))
+      0)))
 
-(defn media-viewer-screen 
+(defn- reset-zoom!
+  [xform-ctrl !zoomed?]
+  (set! (.-value xform-ctrl) (m/Matrix4.identity))
+  (reset! !zoomed? false))
+
+(defn media-viewer-screen
   "Renders an immersive, dark-mode image gallery.
    Accepts a vector of image URLs and an optional starting index."
   [media-urls & {:keys [initial-index]
                  :or {initial-index 0}}]
-  
-  (let [!current-index (atom initial-index)
-        total-count (count media-urls)]
-    
+
+  (let [urls (mapv media/absolute-media-url (or media-urls []))
+        total-count (count urls)
+        start-idx (safe-index urls initial-index)
+        !current-index (atom start-idx)
+        !zoomed? (atom false)]
+
     (f/widget
      :context ctx
-     
-     ;; ⚡ Initialize the PageController with the exact tapped image index
-     :managed [page-ctrl (m/PageController .initialPage initial-index)]
-     :watch [current-index !current-index]
-     
-     (m/Scaffold
-      ;; An absolute black background maximizes contrast and battery life (on OLEDs)
-      .backgroundColor m/Colors.black
-      
-      .body
-      (m/Stack
-       .children
-       [
-        ;; --- A. The Pager & Interactive Engine ---
-        (m/PageView.builder
-         .controller page-ctrl
-         .physics (m/BouncingScrollPhysics.)
-         .onPageChanged #(reset! !current-index %)
-         .itemCount total-count
-         .itemBuilder
-         (fn [_ i]
-           (let [url (nth media-urls i)]
-             ;; ⚡ InteractiveViewer instantly provides 60fps pinch-to-zoom and panning
-             (m/InteractiveViewer
-              .minScale 1.0
-              .maxScale 4.0
-              .child
-              (m/Center
-               .child
-               (cached-image/cached-img url
-                                        :width double/infinity
-                                        :height double/infinity
-                                        ;; contain ensures the entire image fits on screen initially
-                                        :fit m/BoxFit.contain
-                                        :border-radius 0.0))))))
-        
-        ;; --- B. The Floating HUD (Heads-Up Display) Overlay ---
-        ;; We use a SafeArea to ensure controls are not blocked by the hardware notch or status bar
-        (m/SafeArea
-         .child
-         (m/Padding
-          .padding (m/EdgeInsets.symmetric .horizontal 16.0 .vertical 16.0)
+
+     :managed [page-ctrl (m/PageController .initialPage start-idx)
+               :dispose .dispose
+
+               xform-ctrl (let [tc (m/TransformationController.)]
+                            (.addListener tc
+                                          (fn []
+                                            (reset! !zoomed?
+                                                    (> (.getMaxScaleOnAxis (.-value tc)) 1.05))))
+                            tc)
+               :dispose .dispose]
+
+     :watch [current-index !current-index
+             zoomed? !zoomed?]
+
+     (m/AnnotatedRegion
+      .value services/SystemUiOverlayStyle.light
+      .child
+      (m/Scaffold
+       .backgroundColor m/Colors.black
+
+       .body
+       (m/Stack
+        .children
+        [(if (zero? total-count)
+           (m/Center
+            .child
+            (m/Icon m/Icons.broken_image_rounded
+                    .color (.withOpacity m/Colors.white 0.5)
+                    .size 48.0))
+
+           (m/PageView.builder
+            .controller page-ctrl
+            .physics (if zoomed?
+                       (m/NeverScrollableScrollPhysics.)
+                       (m/BouncingScrollPhysics.))
+            .onPageChanged (fn [i]
+                             (reset-zoom! xform-ctrl !zoomed?)
+                             (reset! !current-index i))
+            .itemCount total-count
+            .itemBuilder
+            (fn [_ i]
+              (let [url (nth urls i)]
+                (m/InteractiveViewer
+                 .transformationController (when (= i current-index) xform-ctrl)
+                 .minScale 1.0
+                 .maxScale 4.0
+                 .child
+                 (m/Center
+                  .child
+                  (cached-image/cached-img url
+                                           :width double/infinity
+                                           :height double/infinity
+                                           :fit m/BoxFit.contain
+                                           :border-radius 0.0)))))))
+
+         (m/SafeArea
           .child
-          (m/Row
-           .mainAxisAlignment m/MainAxisAlignment.spaceBetween
-           .crossAxisAlignment m/CrossAxisAlignment.start
-           .children
-           [
-            ;; 1. Dismiss Button
-            (m/Container
-             .decoration (m/BoxDecoration 
-                          .color (.withOpacity m/Colors.black 0.6)
-                          .shape m/BoxShape.circle)
-             .child
-             (m/IconButton
-              .icon (m/Icon m/Icons.close_rounded .color m/Colors.white .size 24.0)
-              .onPressed #(nav/pop! ctx)))
-            
-            ;; 2. Pagination Indicator (Only rendered if it's a multi-image gallery)
-            (if (> total-count 1)
-              (m/Container
-               .padding (m/EdgeInsets.symmetric .horizontal 14.0 .vertical 8.0)
-               .decoration (m/BoxDecoration
-                            .color (.withOpacity m/Colors.black 0.6)
-                            .borderRadius (m/BorderRadius.circular 20.0))
-               .child
-               (m/Text (str (inc current-index) " / " total-count)
-                       .style (m/TextStyle .fontFamily "OyunQaganTig"
-                                           .color m/Colors.white 
-                                           .fontSize 14.0
-                                           .fontWeight m/FontWeight.bold
-                                           .letterSpacing 1.0)))
-              
-              ;; Empty placeholder to maintain flex spacing
-              (m/SizedBox.shrink))])))])))))
+          (m/Padding
+           .padding (m/EdgeInsets.symmetric .horizontal 16.0 .vertical 16.0)
+           .child
+           (m/Row
+            .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+            .crossAxisAlignment m/CrossAxisAlignment.start
+            .children
+            [(m/Container
+              .decoration (m/BoxDecoration
+                           .color (.withOpacity m/Colors.black 0.6)
+                           .shape m/BoxShape.circle)
+              .child
+              (m/IconButton
+               .icon (m/Icon m/Icons.close_rounded .color m/Colors.white .size 24.0)
+               .onPressed #(nav/pop! ctx)))
+
+             (if (> total-count 1)
+               (m/Container
+                .padding (m/EdgeInsets.symmetric .horizontal 14.0 .vertical 8.0)
+                .decoration (m/BoxDecoration
+                             .color (.withOpacity m/Colors.black 0.6)
+                             .borderRadius (m/BorderRadius.circular 20.0))
+                .child
+                (m/Text (str (inc current-index) " / " total-count)
+                        .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                            .color m/Colors.white
+                                            .fontSize 14.0
+                                            .fontWeight m/FontWeight.bold
+                                            .letterSpacing 1.0)))
+               (m/SizedBox.shrink))])))]))))))

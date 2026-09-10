@@ -5,7 +5,8 @@
   (:require
    ["dart:core" :as dc]
    ["package:flutter_secure_storage/flutter_secure_storage.dart" :as fss]
-   ["package:shared_preferences/shared_preferences.dart" :as prefs]))
+   ["package:shared_preferences/shared_preferences.dart" :as prefs]
+   [mongol-zangila.infrastructure.db :as db]))
 
 ;; =============================================================================
 ;; 1. Secure Credential Storage (Tokens & Keys)
@@ -57,14 +58,45 @@
                (let [val (.get p key)]
                  (if (nil? val) default-value val))))))
 
+(defn- as-bool [v default]
+  (cond
+    (true? v) true
+    (false? v) false
+    :else default))
+
+(defonce !offline-mode?
+  ^{:doc "When true, posts and media stay on-device (local-first)."}
+  (atom true))
+
+(defonce !standard-ime?
+  ^{:doc "When true, vowels (c, v, o, u) stay on the standard key positions."}
+  (atom true))
+
+(defn load-prefs!
+  "Hydrates offline-mode and IME mapping from SharedPreferences."
+  []
+  (-> (get-setting "offline_mode" true)
+      (.then (fn [v]
+               (reset! !offline-mode? (as-bool v true))
+               (get-setting "standard_ime" true)))
+      (.then (fn [v]
+               (reset! !standard-ime? (as-bool v true))))))
+
+(defn set-offline-mode!
+  [enabled?]
+  (reset! !offline-mode? (boolean enabled?))
+  (save-setting! "offline_mode" (boolean enabled?)))
+
+(defn set-standard-ime!
+  [enabled?]
+  (reset! !standard-ime? (boolean enabled?))
+  (save-setting! "standard_ime" (boolean enabled?)))
+
 ;; =============================================================================
 ;; 3. Offline Database Management
 ;; =============================================================================
 
 (defn truncate-offline-db!
-  "Clears all cached data from the local SQLite database.
-   Invoked when the user manually clears the cache or upon critical schema changes."
+  "Clears cached chat messages from Drift. Drafts, outbox, and blocklist stay."
   []
-  ;; TODO: Hook this up to your actual SQLite/drift deletion logic
-  ;; e.g., (sqlite/execute! "DELETE FROM posts; DELETE FROM messages;")
-  (print "Offline database truncated successfully."))
+  (db/clear-message-cache!))

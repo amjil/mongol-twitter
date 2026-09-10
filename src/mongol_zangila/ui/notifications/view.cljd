@@ -1,46 +1,27 @@
 (ns mongol-zangila.ui.notifications.view
   "Notifications viewport.
    Renders incoming social metrics (likes, follows, mentions, reposts, quotes) as vertical pillars
-   and cleanly triggers instant global unread flushes upon viewport entry.
-   ⚡ Upgraded with Infinite Scroll Pagination, Timestamps, and Content Previews."
+   and cleanly triggers instant global unread flushes upon viewport entry."
   (:require
    ["package:flutter/material.dart" :as m]
    ["package:mongol/mongol.dart" :as mgl]
-   ["dart:core" :as dc]
-   
-   ;; Centralized Dart Interop Interceptor
+   ["package:custom_refresh_indicator/custom_refresh_indicator.dart" :as cri]
    ["package:mongol_zangila/post_frame_trigger.dart" :as pft]
-   
+
    [cljd.flutter :as f]
    [clojure.string :as str]
-   
-   ;; System Controllers & UI Components
+
    [mongol-zangila.controllers.notification-ctrl :as note-ctrl]
    [mongol-zangila.ui.theme :as theme]
    [mongol-zangila.utils.nav :as nav]
-   [mongol-zangila.ui.layout.scaffold :as scaffold] ;; ⚡ Import the new global layout
-   [mongol-zangila.ui.widgets.avatar :as smart-avatar]))
+   [mongol-zangila.utils.time-format :as time-format]
+   [mongol-zangila.ui.layout.scaffold :as scaffold]
+   [mongol-zangila.ui.widgets.avatar :as smart-avatar]
+   [mongol-zangila.ui.widgets.empty-state :as empty-state]
+   [pull-to-refresh.refresh :as ptr]))
 
 ;; =============================================================================
-;; 1. Helper Functions
-;; =============================================================================
-
-(defn- format-note-time 
-  "Parses an ISO 8601 string into a readable MM-dd HH:mm format."
-  [iso-string]
-  (if (str/blank? iso-string) 
-    ""
-    (try
-      (let [dt (dc/DateTime.parse iso-string)
-            M (.padLeft (.toString (.month dt)) 2 "0")
-            d (.padLeft (.toString (.day dt)) 2 "0")
-            h (.padLeft (.toString (.hour dt)) 2 "0")
-            m-min (.padLeft (.toString (.minute dt)) 2 "0")]
-        (str M "-" d " " h ":" m-min))
-      (catch dc/Exception _ ""))))
-
-;; =============================================================================
-;; 2. Sub-components
+;; 1. Sub-components
 ;; =============================================================================
 
 (defn- on-notification-tap
@@ -58,170 +39,217 @@
 
       :else nil)))
 
+(defn- note-unread?
+  [note-data]
+  (not (or (get note-data "is_read")
+           (get note-data "read")
+           (get note-data "seen"))))
+
 (defn- notification-pillar
-  "Renders an individual notification metadata card wrapped as an LTR horizontal entry."
+  "Fixed-width vertical pillar. Text lives in Expanded so MongolText can wrap and ellipsize."
   [ctx note-data]
   (let [actor (get note-data "actor" {})
         actor-name (get actor "name" "Хэрэглэгч")
         note-type (get note-data "type" "system")
-        timestamp (get note-data "created_at" "") ;; ⚡ Extract created_at
-        
-        ;; ⚡ Extract comment, mention body, or original-post snippet from the backend
+        timestamp (get note-data "created_at" "")
         preview-text (get note-data "content" "")
-        has-preview? (and (#{"mention" "quote" "repost" "like"} note-type) 
+        has-preview? (and (#{"mention" "quote" "repost" "like"} note-type)
                           (not (str/blank? preview-text)))
-        
+        unread? (note-unread? note-data)
         message (case note-type
-                  "like" "таны нийтлэлд лайк дарлаа." ;; "liked your post"
-                  "follow" "таныг дагаж эхэллээ."    ;; "started following you"
-                  "mention" "таныг нийтлэлдээ дурдлаа." ;; "mentioned you"
-                  "repost" "таны нийтлэлийг дахин нийтэллээ." ;; "reposted your post"
-                  "quote" "таны нийтлэлийг иш татлаа." ;; "quoted your post"
-                  "Таныд мэдэгдэл ирлээ.")]
+                  "like" "таны нийтлэлд лайк дарлаа."
+                  "follow" "таныг дагаж эхэллээ."
+                  "mention" "таныг нийтлэлдээ дурдлаа."
+                  "repost" "таны нийтлэлийг дахин нийтэллээ."
+                  "quote" "таны нийтлэлийг иш татлаа."
+                  "Таныд мэдэгдэл ирлээ.")
+        action-text (str actor-name " " message)]
     (m/Container
-     .margin (m/EdgeInsets.only .right 16.0 .top 16.0 .bottom 16.0)
-     .decoration (m/BoxDecoration 
-                  .color (theme/surface ctx)
-                  .borderRadius (m/BorderRadius.circular 16.0)
+     .width 180.0
+     .margin (m/EdgeInsets.only .top 16.0 .bottom 16.0)
+     .clipBehavior m/Clip.antiAlias
+     .decoration (m/BoxDecoration
+                  .color (if unread? (theme/surface ctx) (theme/bg ctx))
+                  .borderRadius (m/BorderRadius.circular theme/radius-md)
                   .border (m/Border.all .color (theme/border ctx) .width 0.5))
      .child
-     (m/InkWell
-      .onTap #(on-notification-tap ctx note-data)
-      .borderRadius (m/BorderRadius.circular 16.0)
+     (m/Material
+      .color m/Colors.transparent
       .child
-      (m/Padding
-       .padding (m/EdgeInsets.all 16.0)
+      (m/InkWell
+       .onTap #(on-notification-tap ctx note-data)
+       .borderRadius (m/BorderRadius.circular theme/radius-md)
        .child
-       (m/Column
-        .mainAxisSize m/MainAxisSize.min
-        .crossAxisAlignment m/CrossAxisAlignment.start
-        .children
-        [(smart-avatar/smart-avatar ctx (get actor "id") (get actor "avatar_url") :size 40.0)
-         (m/SizedBox .height 16.0)
-         
-         ;; 1. Notification action description
-         (mgl/MongolText (str actor-name " " message)
-                         .maxLines 2
-                         .overflow m/TextOverflow.ellipsis
-                         .style (m/TextStyle .fontFamily "OyunQaganTig" 
-                                             .fontSize 15.0 
-                                             .fontWeight m/FontWeight.bold
-                                             .color (theme/text ctx)))
-         
-         ;; 2. If there is a repost body, quoted comment, or mention, render a light preview bubble
-         (if has-preview?
-           (m/Padding
-            .padding (m/EdgeInsets.only .top 12.0)
-            .child
-            (m/Container
-             .padding (m/EdgeInsets.all 10.0)
-             .decoration (m/BoxDecoration
-                          .color (.withOpacity theme/brand-blue 0.04)
-                          .borderRadius (m/BorderRadius.circular 10.0)
-                          .border (m/Border.all .color (theme/border ctx) .width 0.5))
-             .child
-             (mgl/MongolText preview-text
-                             .maxLines 3
+       (m/Padding
+        .padding (m/EdgeInsets.all 16.0)
+        .child
+        (m/Column
+         .crossAxisAlignment m/CrossAxisAlignment.start
+         .children
+         [(smart-avatar/smart-avatar ctx (get actor "id") (get actor "avatar_url") :size 40.0)
+          (m/SizedBox .height 16.0)
+
+          (m/Expanded
+           .child
+           (if has-preview?
+             (m/Column
+              .crossAxisAlignment m/CrossAxisAlignment.start
+              .children
+              [(m/Flexible
+                .flex 2
+                .child
+                (mgl/MongolText action-text
+                                .maxLines 2
+                                .overflow m/TextOverflow.ellipsis
+                                .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                                    .fontSize 15.0
+                                                    .fontWeight (if unread? m/FontWeight.bold m/FontWeight.w500)
+                                                    .color (theme/text ctx))))
+               (m/SizedBox .height 12.0)
+               (m/Expanded
+                .flex 3
+                .child
+                (m/Container
+                 .width double/infinity
+                 .padding (m/EdgeInsets.all 10.0)
+                 .decoration (m/BoxDecoration
+                              .color (theme/brand-soft ctx)
+                              .borderRadius (m/BorderRadius.circular 10.0)
+                              .border (m/Border.all .color (theme/border ctx) .width 0.5))
+                 .child
+                 (mgl/MongolText preview-text
+                                 .maxLines 3
+                                 .overflow m/TextOverflow.ellipsis
+                                 .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                                     .fontSize 13.0
+                                                     .height 1.3
+                                                     .color (theme/text-2 ctx)))))])
+             (mgl/MongolText action-text
+                             .maxLines 2
                              .overflow m/TextOverflow.ellipsis
                              .style (m/TextStyle .fontFamily "OyunQaganTig"
-                                                 .fontSize 13.0
-                                                 .height 1.3
-                                                 .color (theme/text-2 ctx)))))
-           (m/SizedBox.shrink))
-         
-         (m/SizedBox .height 12.0)
-         
-         ;; 3. Timestamp
-         (mgl/MongolText (format-note-time timestamp)
-                         .style (m/TextStyle .fontFamily "OyunQaganTig" 
-                                             .fontSize 12.0 
-                                             .color (theme/text-2 ctx)))]))))))
+                                                 .fontSize 15.0
+                                                 .fontWeight (if unread? m/FontWeight.bold m/FontWeight.w500)
+                                                 .color (theme/text ctx)))))
+
+          (m/SizedBox .height 12.0)
+
+          (mgl/MongolText (time-format/format-relative timestamp)
+                          .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                              .fontSize 12.0
+                                              .fontWeight (if unread? m/FontWeight.bold m/FontWeight.normal)
+                                              .color (if unread? theme/brand-blue (theme/text-2 ctx))))])))))))
 
 ;; =============================================================================
-;; 3. The Main Screen Widget
+;; 2. The Main Screen Widget
 ;; =============================================================================
+
+(defn- apply-load-result!
+  [ok is-refresh? !error? !notifications]
+  (if ok
+    (do (reset! !error? false)
+        (when is-refresh? (note-ctrl/mark-all-read!)))
+    (when (empty? @!notifications)
+      (reset! !error? true))))
 
 (defn notifications-screen
   "The primary viewport for active notification streams."
   []
   (let [!notifications (atom [])
         !loading? (atom true)
-        
-        ;; ⚡ Pagination state
+        !error? (atom false)
         !page (atom 1)
         !has-more? (atom true)
-        !loading-more? (atom false)]
-    
+        !loading-more? (atom false)
+        !refresh-loading? (atom false)]
+
     (f/widget
      :context ctx
-     
-     ;; ⚡ Init ScrollController and listen for near-end scroll
+
      :managed [scroll-ctrl (let [sc (m/ScrollController.)]
-                             (.addListener sc 
+                             (.addListener sc
                                            (fn []
                                              (let [pos (.-position sc)]
-                                               ;; Prefetch the next page when within 200 px of the end
                                                (when (and (>= (.-pixels pos) (- (.-maxScrollExtent pos) 200.0))
                                                           (not @!loading-more?)
+                                                          (not @!refresh-loading?)
                                                           @!has-more?)
-                                                 (note-ctrl/load-notifications! ctx !notifications !page !has-more? !loading-more? false)))))
+                                                 (-> (note-ctrl/load-notifications! ctx !notifications !page !has-more? !loading-more? false)
+                                                     (.then (fn [ok] (apply-load-result! ok false !error? !notifications))))))))
                              sc)
                :dispose .dispose]
-               
+
      :watch [notifications !notifications
              loading? !loading?
-             has-more? !has-more?]
-     
-     (pft/PostFrameTrigger
-      .onLayout (fn []
-                  ;; 1. Fetch notifications over HTTP (controller must accept pagination args)
-                  (-> (note-ctrl/load-notifications! ctx !notifications !page !has-more? !loading? true)
-                      (.then (fn [_]
-                               ;; 2. On success, mark all as read (zero the global atom and sync the backend)
-                               (note-ctrl/mark-all-read!)))))
-      .child
-      
-      ;; Core swap: app-scaffold fully owns the global Bottom Navigation Bar
-      (scaffold/app-scaffold
-       ctx "/notifications/view"
-       (m/Scaffold
-        .backgroundColor (theme/bg ctx)
-        
-        .appBar
-        (m/AppBar
-         .backgroundColor (theme/surface ctx)
-         .elevation 0.5
-         ;; Top-level bottom-nav tab: no back button
-         .automaticallyImplyLeading false
-         .title (m/Text "Мэдэгдэл" ;; "Notifications"
-                        .style (m/TextStyle .fontFamily "OyunQaganTig" 
-                                            .fontSize 18.0 
-                                            .fontWeight m/FontWeight.bold 
-                                            .color (theme/text ctx))))
-        
-        .body
-        (if loading?
-          (m/Center .child (m/CircularProgressIndicator .color theme/brand-blue))
-          (if (empty? notifications)
-            (m/Center .child (mgl/MongolText "Мэдэгдэл хоосон байна." .style (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text-2 ctx))))
-            
-            (m/ListView.builder
-             .controller scroll-ctrl ;; ⚡ Bind the scroll controller
-             .scrollDirection m/Axis.horizontal
-             ;; Force scroll physics even when there is little data
-             .physics (m/AlwaysScrollableScrollPhysics. .parent (m/BouncingScrollPhysics.))
-             .padding (m/EdgeInsets.symmetric .horizontal 16.0)
-             
-             ;; ⚡ Reserve a slot for the loading spinner
-             .itemCount (if has-more? (inc (count notifications)) (count notifications))
-             
-             .itemBuilder 
-             (fn [_ i] 
-               ;; ⚡ Show a spinner when rendering the extra sentinel index
-               (if (= i (count notifications))
-                 (m/Padding 
-                  .padding (m/EdgeInsets.only .right 24.0 .left 24.0)
-                  .child (m/Center .child (m/SizedBox .width 24.0 .height 24.0 
-                                                      .child (m/CircularProgressIndicator .strokeWidth 2.0 .color theme/brand-blue))))
-                 
-                 (notification-pillar ctx (nth notifications i)))))))))))))
+             error? !error?
+             has-more? !has-more?
+             loading-more? !loading-more?]
+
+     (let [reload! (fn [!loading-atom]
+                     (reset! !error? false)
+                     (-> (note-ctrl/load-notifications! ctx !notifications !page !has-more? !loading-atom true)
+                         (.then (fn [ok] (apply-load-result! ok true !error? !notifications)))))]
+
+       (pft/PostFrameTrigger
+        .onLayout #(reload! !loading?)
+        .child
+
+        (scaffold/app-scaffold
+         ctx "/notifications/view"
+         (m/Scaffold
+          .backgroundColor (theme/bg ctx)
+
+          .appBar
+          (m/AppBar
+           .backgroundColor (theme/surface ctx)
+           .elevation 0.5
+           .automaticallyImplyLeading false
+           .title (m/Text "Мэдэгдэл"
+                          .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                              .fontSize 18.0
+                                              .fontWeight m/FontWeight.bold
+                                              .color (theme/text ctx))))
+
+          .body
+          (cond
+            loading?
+            (m/Center .child (m/CircularProgressIndicator .color theme/brand-blue))
+
+            (and error? (empty? notifications))
+            (empty-state/offline-view ctx #(reload! !loading?))
+
+            (empty? notifications)
+            (empty-state/empty-view ctx
+                                    :icon-data m/Icons.notifications_none_rounded
+                                    :title "Мэдэгдэл хоосон байна"
+                                    :subtitle "Шинэ лайк, дагагч энд харагдана.")
+
+            :else
+            (ptr/horizontal-refresh
+             {:on-refresh #(reload! !refresh-loading?)
+              :scroll-controller scroll-ctrl
+              :background-color (theme/bg ctx)
+              :not-armed-text "Татаж шинэчлэх"
+              :armed-text "Суллаж шинэчлэх"
+              :loading-text "Шинэчилж байна"
+              :not-armed-color (theme/border ctx)
+              :armed-color theme/brand-blue
+              :text-style (m/TextStyle .fontFamily "OyunQaganTig" .color m/Colors.white .fontSize 14.0 .fontWeight m/FontWeight.bold)
+              :trigger-mode cri/IndicatorTriggerMode.anywhere
+              :item-count (if (and has-more? loading-more?)
+                            (inc (count notifications))
+                            (count notifications))
+              :separator-builder (fn [_ _] (m/SizedBox .width 8.0))
+              :box-shadow []
+              :item-builder
+              (fn [_ i]
+                (if (and loading-more? (= i (count notifications)))
+                  (m/Padding
+                   .padding (m/EdgeInsets.symmetric .horizontal 24.0)
+                   .child (m/Center .child (m/SizedBox .width 24.0 .height 24.0
+                                                       .child (m/CircularProgressIndicator .strokeWidth 2.0 .color theme/brand-blue))))
+                  (m/Padding
+                   .padding (m/EdgeInsets.only
+                             .left (if (zero? i) 16.0 0.0)
+                             .right (if (= i (dec (count notifications))) 16.0 0.0))
+                   .child (notification-pillar ctx (nth notifications i)))))})))))))))

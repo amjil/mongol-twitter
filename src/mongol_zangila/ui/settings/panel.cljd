@@ -7,11 +7,10 @@
    ["dart:core" :as dc]
    [cljd.flutter :as f]
 
-   ;; System Infrastructure & Controllers
    [mongol-zangila.controllers.auth-ctrl :as auth-ctrl]
    [mongol-zangila.infrastructure.storage :as storage]
+   [mongol-zangila.ui.widgets.cached-image :as cached-image]
 
-   ;; UI & Shared Components
    [mongol-zangila.ui.theme :as theme]
    [mongol-zangila.utils.nav :as nav]
    [components.toast :as toast]))
@@ -20,15 +19,49 @@
 ;; 1. Sub-components (Vertical Pillar Architecture)
 ;; =============================================================================
 
+(defn- confirm-action!
+  [ctx {:keys [title message confirm-label danger? on-confirm]}]
+  (m/showDialog
+   .context ctx
+   .builder
+   (fn [d-ctx]
+     (m/AlertDialog
+      .backgroundColor (theme/surface ctx)
+      .title (m/Text title
+                     .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                         .fontSize 16.0
+                                         .fontWeight m/FontWeight.bold
+                                         .color (theme/text ctx)))
+      .content (m/Text message
+                       .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                           .fontSize 14.0
+                                           .color (theme/text-2 ctx)))
+      .actions
+      [(m/TextButton
+        .onPressed #(nav/pop! d-ctx)
+        .child (m/Text "Цуцлах"
+                       .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                           .color (theme/text-2 ctx))))
+       (m/TextButton
+        .onPressed (fn []
+                     (nav/pop! d-ctx)
+                     (on-confirm))
+        .child (m/Text (or confirm-label "Тийм")
+                       .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                           .fontWeight m/FontWeight.bold
+                                           .color (if danger? theme/error-red theme/brand-blue))))]))))
+
 (defn- settings-section-header
   "A typographic vertical pillar establishing visual hierarchy for settings categories."
   [ctx title]
   (m/Container
-   .width 48.0
-   .padding (m/EdgeInsets.symmetric .vertical 24.0)
+   .width 56.0
+   .padding (m/EdgeInsets.symmetric .vertical 24.0 .horizontal 8.0)
    .alignment m/Alignment.topCenter
    .child
    (mgl/MongolText title
+                   .maxLines 1
+                   .overflow m/TextOverflow.ellipsis
                    .style (m/TextStyle .fontFamily "OyunQaganTig"
                                        .fontSize 14.0
                                        .fontWeight m/FontWeight.bold
@@ -44,14 +77,13 @@
      .borderRadius (m/BorderRadius.circular 12.0)
      .child
      (m/Container
-      .width 140.0
+      .width 160.0
       .padding (m/EdgeInsets.symmetric .vertical 24.0 .horizontal 8.0)
       .child
       (m/Column
        .crossAxisAlignment m/CrossAxisAlignment.center
        .children
-       [;; Leading Icon
-        (m/Container
+       [(m/Container
          .padding (m/EdgeInsets.all 12.0)
          .decoration (m/BoxDecoration
                       .color (theme/surface-2 ctx)
@@ -60,27 +92,32 @@
 
         (m/SizedBox .height 24.0)
 
-        ;; Title & Subtitle (Vertical Flow)
         (m/Expanded
          .child
          (m/Row
-          .mainAxisAlignment m/MainAxisAlignment.center
           .crossAxisAlignment m/CrossAxisAlignment.start
           .children
-          [(mgl/MongolText title
-                           .style (m/TextStyle .fontFamily "OyunQaganTig"
-                                               .fontSize 16.0
-                                               .fontWeight m/FontWeight.w500
-                                               .color color))
-
-           (if subtitle
-             (m/Padding
-              .padding (m/EdgeInsets.only .left 12.0)
-              .child (mgl/MongolText subtitle
+          (vec
+           (keep identity
+                 [(m/Flexible
+                   .child
+                   (mgl/MongolText title
+                                   .maxLines 1
+                                   .overflow m/TextOverflow.ellipsis
+                                   .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                                       .fontSize 16.0
+                                                       .fontWeight m/FontWeight.w500
+                                                       .color color)))
+                  (when subtitle (m/SizedBox .width 8.0))
+                  (when subtitle
+                    (m/Expanded
+                     .child
+                     (mgl/MongolText subtitle
+                                     .maxLines 2
+                                     .overflow m/TextOverflow.ellipsis
                                      .style (m/TextStyle .fontFamily "OyunQaganTig"
                                                          .fontSize 13.0
-                                                         .color (theme/text-2 ctx))))
-             (m/SizedBox.shrink))]))
+                                                         .color (theme/text-2 ctx)))))]))))
 
         (m/SizedBox .height 16.0)
 
@@ -98,6 +135,7 @@
                 .borderRadius (m/BorderRadius.circular theme/radius-md)
                 .border (m/Border.all .color (theme/border ctx) .width 1.0)
                 .boxShadow (theme/card-shadow ctx))
+   .clipBehavior m/Clip.antiAlias
    .child (m/Row .children (vec children))))
 
 (defn- theme-mode-tile
@@ -121,6 +159,23 @@
                (m/Icon m/Icons.check_rounded .color theme/on-brand .size 14.0)
                (m/SizedBox.shrink))))))
 
+(defn- pref-switch
+  [value on-changed]
+  (m/RotatedBox
+   .quarterTurns 1
+   .child
+   (m/Switch
+    .value value
+    .onChanged on-changed
+    .activeTrackColor theme/brand-blue)))
+
+(defn- clear-cache!
+  [ctx]
+  (-> (storage/truncate-offline-db!)
+      (.then (fn [_] (cached-image/clear-disk-cache!)))
+      (.then (fn [_] (toast/success ctx "Кэш цэвэрлэгдлээ." :fade)))
+      (.catchError (fn [_] (toast/error ctx "Кэш цэвэрлэж чадсангүй." :fade)))))
+
 ;; =============================================================================
 ;; 2. The Main Settings Panel Widget
 ;; =============================================================================
@@ -129,132 +184,122 @@
   "The primary viewport for application-wide configurations, rendered as a horizontal gallery."
   []
 
-  (let [!offline-mode? (atom true)
-        !standard-ime-mapping? (atom true)]
+  (f/widget
+   :context ctx
+   :watch [offline-mode? storage/!offline-mode?
+           standard-ime? storage/!standard-ime?
+           theme-mode theme/!mode]
 
-    (f/widget
-     :context ctx
-     :watch [offline-mode? !offline-mode?
-             standard-ime? !standard-ime-mapping?
-             theme-mode theme/!mode]
+   (m/Scaffold
+    .backgroundColor (theme/bg ctx)
 
-     (m/Scaffold
-      .backgroundColor (theme/bg ctx)
+    .appBar
+    (m/AppBar
+     .backgroundColor (theme/surface ctx)
+     .elevation 0.0
+     .scrolledUnderElevation 0.0
+     .leading (m/IconButton
+               .icon (m/Icon m/Icons.arrow_back_rounded .color (theme/text ctx))
+               .onPressed #(nav/pop! ctx))
+     .title (m/Text "Тохиргоо"
+                    .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                        .fontSize 18.0
+                                        .fontWeight m/FontWeight.bold
+                                        .color (theme/text ctx))))
 
-      .appBar
-      (m/AppBar
-       .backgroundColor (theme/surface ctx)
-       .elevation 0.0
-       .scrolledUnderElevation 0.0
-       .leading (m/IconButton
-                 .icon (m/Icon m/Icons.arrow_back_rounded .color (theme/text ctx))
-                 .onPressed #(nav/pop! ctx))
-       .title (m/Text "Тохиргоо"
-                      .style (m/TextStyle .fontFamily "OyunQaganTig"
-                                          .fontSize 18.0
-                                          .fontWeight m/FontWeight.bold
-                                          .color (theme/text ctx))))
+    .body
+    (m/SafeArea
+     .child
+     (m/ListView
+      .scrollDirection m/Axis.horizontal
+      .physics (m/BouncingScrollPhysics.)
+      .padding (m/EdgeInsets.only .right 24.0)
+      .children
+      [
+       (settings-card
+        ctx
+        (settings-section-header ctx "Харагдах байдал")
+        (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
+        (theme-mode-tile ctx :system m/Icons.brightness_auto_rounded
+                         "Автомат"
+                         "Системийн тохиргоог дагах"
+                         theme-mode)
+        (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
+        (theme-mode-tile ctx :light m/Icons.light_mode_outlined
+                         "Цайвар"
+                         "Гэгээлэг дэвсгэр"
+                         theme-mode)
+        (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
+        (theme-mode-tile ctx :dark m/Icons.dark_mode_outlined
+                         "Харанхуй"
+                         "Шөнийн тэнгэр"
+                         theme-mode))
 
-      .body
-      (m/SafeArea
-       .child
-       (m/ListView
-        .scrollDirection m/Axis.horizontal
-        .physics (m/BouncingScrollPhysics.)
-        .padding (m/EdgeInsets.only .right 24.0)
-        .children
-        [
-         ;; --- Appearance ---
-         (settings-card
-          ctx
-          (settings-section-header ctx "Харагдах байдал")
-          (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
-          (theme-mode-tile ctx :system m/Icons.brightness_auto_rounded
-                           "Автомат"
-                           "Системийн тохиргоог дагах"
-                           theme-mode)
-          (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
-          (theme-mode-tile ctx :light m/Icons.light_mode_outlined
-                           "Цайвар"
-                           "Гэгээлэг дэвсгэр"
-                           theme-mode)
-          (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
-          (theme-mode-tile ctx :dark m/Icons.dark_mode_outlined
-                           "Харанхуй"
-                           "Шөнийн тэнгэр"
-                           theme-mode))
+       (settings-card
+        ctx
+        (settings-section-header ctx "Бүртгэл")
+        (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
+        (settings-list-tile ctx m/Icons.person_outline_rounded
+                            "Профайл мэдээлэл"
+                            "Нэр, био болон зураг солих"
+                            #(nav/push! ctx "/profile/edit"))
+        (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
+        (settings-list-tile ctx m/Icons.shield_outlined
+                            "Нууц үг ба Аюулгүй байдал"
+                            nil
+                            #(nav/push! ctx "/profile/change-password")))
 
-         ;; --- Account & Identity ---
-         (settings-card
-          ctx
-          (settings-section-header ctx "Бүртгэл")
-          (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
-          (settings-list-tile ctx m/Icons.person_outline_rounded
-                              "Профайл мэдээлэл"
-                              "Нэр, био болон зураг солих"
-                              #(nav/push! ctx "/profile/edit"))
-          (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
-          (settings-list-tile ctx m/Icons.shield_outlined
-                              "Нууц үг ба Аюулгүй байдал"
-                              nil
-                              #(nav/push! ctx "/profile/change-password")))
+       (settings-card
+        ctx
+        (settings-section-header ctx "Бичвэр болон Гарын тохиргоо")
+        (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
+        (settings-list-tile ctx m/Icons.keyboard_outlined
+                            "Стандарт гарын байрлал"
+                            "Эгшиг үсгүүдийг (c, v, o, u) товчлуурт байрлуулах"
+                            nil
+                            :trailing (pref-switch standard-ime? #(storage/set-standard-ime! %))))
 
-         ;; --- Input & Editor ---
-         (settings-card
-          ctx
-          (settings-section-header ctx "Бичвэр болон Гарын тохиргоо")
-          (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
-          (settings-list-tile ctx m/Icons.keyboard_outlined
-                              "Стандарт гарын байрлал"
-                              "Эгшиг үсгүүдийг (c, v, o, u) товчлуурт байрлуулах"
-                              nil
-                              :trailing (m/Switch
-                                         .value standard-ime?
-                                         .onChanged (fn [val] (reset! !standard-ime-mapping? val))
-                                         .activeColor theme/brand-blue))
-          (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
-          (settings-list-tile ctx m/Icons.font_download_outlined
-                              "Үсгийн фонт хэмжээ"
-                              "Дэлгэц дээрх бичвэрийн хэмжээг тохируулах"
-                              #(toast/info ctx "Фонт тохиргоо")))
+       (settings-card
+        ctx
+        (settings-section-header ctx "Өгөгдөл ба Сүлжээ")
+        (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
+        (settings-list-tile ctx m/Icons.offline_pin_outlined
+                            "Оффлайн горим (Local-first)"
+                            "Нийтлэл болон аудиог төхөөрөмжид хадгалах"
+                            nil
+                            :trailing (pref-switch offline-mode? #(storage/set-offline-mode! %)))
+        (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
+        (settings-list-tile ctx m/Icons.delete_outline_rounded
+                            "Кэш цэвэрлэх"
+                            "Төхөөрөмжид хадгалагдсан түр зуурын файлыг устгах"
+                            (fn []
+                              (confirm-action! ctx
+                                               {:title "Кэш цэвэрлэх үү?"
+                                                :message "Зурвас кэш болон зургийн түр файл устана. Ноорог болон илгээгдээгүй бичлэг үлдэнэ."
+                                                :confirm-label "Цэвэрлэх"
+                                                :on-confirm #(clear-cache! ctx)}))))
 
-         ;; --- Storage & Network ---
-         (settings-card
-          ctx
-          (settings-section-header ctx "Өгөгдөл ба Сүлжээ")
-          (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
-          (settings-list-tile ctx m/Icons.offline_pin_outlined
-                              "Оффлайн горим (Local-first)"
-                              "Нийтлэл болон аудиог төхөөрөмжид хадгалах"
-                              nil
-                              :trailing (m/Switch
-                                         .value offline-mode?
-                                         .onChanged (fn [val] (reset! !offline-mode? val))
-                                         .activeColor theme/brand-blue))
-          (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
-          (settings-list-tile ctx m/Icons.delete_outline_rounded
-                              "Кэш цэвэрлэх"
-                              "Төхөөрөмжид хадгалагдсан түр зуурын файлыг устгах"
-                              #(do (storage/truncate-offline-db!)
-                                   (toast/success ctx "Кэш цэвэрлэгдлээ." :fade))))
+       (settings-card
+        ctx
+        (settings-section-header ctx "Блоклосон хэрэглэгч")
+        (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
+        (settings-list-tile ctx m/Icons.block_outlined
+                            "Блоклосон хэрэглэгч"
+                            nil
+                            #(nav/push! ctx "/profile/blocklist")))
 
-         ;; --- Blocklist ---
-         (settings-card
-          ctx
-          (settings-section-header ctx "Блоклосон хэрэглэгч")
-          (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
-          (settings-list-tile ctx m/Icons.block_outlined
-                              "Блоклосон хэрэглэгч"
-                              nil
-                              #(nav/push! ctx "/profile/blocklist")))
-
-         ;; --- System ---
-         (settings-card
-          ctx
-          (settings-section-header ctx "Систем")
-          (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
-          (settings-list-tile ctx m/Icons.logout_rounded
-                              "Гарах"
-                              nil
-                              #(auth-ctrl/logout! ctx)
-                              :color theme/error-red))]))))))
+       (settings-card
+        ctx
+        (settings-section-header ctx "Систем")
+        (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
+        (settings-list-tile ctx m/Icons.logout_rounded
+                            "Гарах"
+                            nil
+                            (fn []
+                              (confirm-action! ctx
+                                               {:title "Гарах уу?"
+                                                :message "Та системээс гарах гэж байна."
+                                                :confirm-label "Гарах"
+                                                :danger? true
+                                                :on-confirm #(auth-ctrl/logout! ctx)}))
+                            :color theme/error-red))])))))

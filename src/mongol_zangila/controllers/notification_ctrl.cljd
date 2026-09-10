@@ -7,32 +7,35 @@
    [mongol-zangila.infrastructure.api :as api]
    [components.toast :as toast]))
 
-(defn load-notifications! 
-  "Fetches paginated notifications."
+(defn load-notifications!
+  "Fetches paginated notifications.
+   Completes with true on success and false on failure so callers can
+   skip mark-all-read! and show an error state."
   [ctx !notifications !page !has-more? !loading-state? is-refresh?]
   (when is-refresh?
     (reset! !page 1)
     (reset! !has-more? true))
-  
+
   (reset! !loading-state? true)
-  
+
   (-> (api/get-req (str "/notifications?page=" @!page))
       (.then (fn [res]
-               (let [new-notes (get res "data" [])]
+               (let [new-notes (try (vec (get res "data" []))
+                                    (catch dc/dynamic _ []))]
                  (if is-refresh?
                    (reset! !notifications new-notes)
                    (swap! !notifications #(vec (concat % new-notes))))
-                 
-                 ;; Assume the backend returns 20 per page; fewer than 20 means we hit the end
-                 (if (< (count new-notes) 20) 
+
+                 (if (< (count new-notes) 20)
                    (reset! !has-more? false)
                    (swap! !page inc))
-                 
-                 (reset! !loading-state? false))))
+
+                 (reset! !loading-state? false)
+                 true)))
       (.catchError (fn [err]
                      (reset! !loading-state? false)
-                     ;; ⚡ Restore the original error Toast
-                     (toast/error ctx (str "Мэдэгдэл татахад алдаа гарлаа: " err) :fade)))))
+                     (toast/error ctx (str "Мэдэгдэл татахад алдаа гарлаа: " err) :fade)
+                     false))))
 
 (defn mark-all-read!
   "⚡ Optimistically flushes the global unread count to 0 instantly,

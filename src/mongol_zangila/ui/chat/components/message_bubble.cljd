@@ -14,7 +14,7 @@
    [mongol-zangila.ui.widgets.avatar :as smart-avatar]
    [mongol-zangila.ui.widgets.cached-image :as cached-image]
    [mongol-zangila.infrastructure.media :as media]
-   [mongol-zangila.ui.media.viewer :as media-viewer]
+   [mongol-zangila.utils.nav :as nav]
    [mongol-zangila.utils.time-format :as time-format]
    [mongol-zangila.utils.rich-text-parser :as rich-parser]))
 
@@ -139,11 +139,8 @@
               ;; A. Image variant (always use the global viewer)
               (m/GestureDetector
                .onTap (fn []
-                        (m/Navigator.push
-                         ctx
-                         (m/MaterialPageRoute.
-                          .builder (fn [_]
-                                     (media-viewer/media-viewer-screen [media-url]))))
+                        (when-not (str/blank? media-url)
+                          (nav/push! ctx "/media/viewer" {:media-urls [media-url] :initial-index 0}))
                         nil)
                .child (m/ClipRRect
                        .borderRadius (m/BorderRadius.circular 12.0)

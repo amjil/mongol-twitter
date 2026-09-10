@@ -106,3 +106,8 @@
            ;; HTTP 404, corrupted file, or offline without cache
            .errorWidget (fn [_ctx _url _error] 
                           (or error-widget (default-error-widget))))))))))
+
+(defn clear-disk-cache!
+  "Evicts the isolated media LRU. Safe to call when the user clears cache."
+  []
+  (.emptyCache global-media-cache))

@@ -8,6 +8,7 @@
    [mongol-zangila.router :as router]
    [mongol-zangila.infrastructure.api :as api]
    [mongol-zangila.infrastructure.db :as db]
+   [mongol-zangila.infrastructure.storage :as storage]
    [mongol-zangila.ui.theme :as theme]
 
    [virtual-keyboard.input-control :as input-control]
@@ -26,7 +27,8 @@
   
   ;; Await the actual Drift database initialization
   (await (db/initialize-database!))
-  (await (theme/load-mode!)))
+  (await (theme/load-mode!))
+  (await (storage/load-prefs!)))
 
 (defn ^:async main []
   (await (init-app!))

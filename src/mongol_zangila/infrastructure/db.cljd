@@ -226,6 +226,13 @@
        (.where (fn [tbl] (.equals (.-blockedUserId tbl) user-id)))))
     (throw (ex-info "Database not initialized" {}))))
 
+(defn clear-message-cache!
+  "Deletes cached thread messages. Leaves drafts, outbox, and the blocklist."
+  []
+  (if-let [^drift/AppDatabase database @global-db]
+    (.go (.delete database (.-messages database)))
+    (dc/Future.value nil)))
+
 (defn get-blocked-user-ids
   "Fetches a set of all blocked user IDs for synchronous offline filtering.
    Returns a Clojure Set for O(1) lookup speed during Feed/Chat rendering."
