@@ -1,0 +1,49 @@
+(ns mongol-zangila.infrastructure.local-notifications
+  "Wrapper for flutter_local_notifications.
+   Handles foreground banners, offline sync alerts, and OS-level channels."
+  (:require
+   ["package:flutter_local_notifications/flutter_local_notifications.dart" :as fln]
+   ["dart:core" :as dc]))
+
+;; 全局插件单例
+(defonce ^:private plugin (fln/FlutterLocalNotificationsPlugin.))
+
+(defn init!
+  "Initializes the notification channels and OS-level permissions."
+  []
+  (let [;; Android 必须指定一个默认图标。@mipmap/ic_launcher 是通用做法
+        android-init (fln/AndroidInitializationSettings. "@mipmap/ic_launcher")
+
+        ;; iOS 初始化配置，自动向用户请求通知权限
+        ios-init (fln/DarwinInitializationSettings.
+                  .requestAlertPermission true
+                  .requestBadgePermission true
+                  .requestSoundPermission true)
+
+        settings (fln/InitializationSettings. .android android-init .iOS ios-init)]
+
+    (-> (.initialize plugin settings)
+        (.then (fn [_]
+                 (dc/print "🔔 [LocalNotif] Plugin Initialized successfully.")))
+        (.catchError (fn [err]
+                       (dc/print (str "🔴 [LocalNotif] Init failed: " err)))))))
+
+(defn show!
+  "Displays a local notification banner immediately.
+   - id: Unique integer ID (e.g., 1001 for outbox posts).
+   - title: Title of the notification.
+   - body: Content of the notification."
+  [id title body]
+  (let [android-details (fln/AndroidNotificationDetails.
+                         "mz_offline_sync"       ;; Channel ID
+                         "Оффлайн Синхрончлол"    ;; Channel Name (Offline Sync)
+                         .channelDescription "Оффлайн үйлдэл амжилттай болсон тухай мэдэгдэнэ."
+                         .importance fln/Importance.max
+                         .priority fln/Priority.high
+                         .icon "@mipmap/ic_launcher")
+        ios-details (fln/DarwinNotificationDetails.
+                     .presentAlert true
+                     .presentBadge true
+                     .presentSound true)
+        details (fln/NotificationDetails. .android android-details .iOS ios-details)]
+    (.show plugin id title body details)))

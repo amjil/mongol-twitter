@@ -11,6 +11,7 @@
    [mongol-zangila.infrastructure.api :as api]
    [mongol-zangila.infrastructure.write-buffer :as write-buffer]
    [mongol-zangila.infrastructure.db :as db]
+   [mongol-zangila.infrastructure.local-notifications :as local-notif]
 
    ;; System Controllers
    [mongol-zangila.controllers.feed-ctrl :as feed-ctrl]
@@ -178,4 +179,12 @@
  "create-post"
  (fn [_payload _server-data]
    (dc/print "📡 [PublishCtrl] Offline post synced successfully. Broadcasting refresh signal.")
-   (feed-ctrl/trigger-feed-refresh!)))
+
+   ;; 1. Refresh home feed
+   (feed-ctrl/trigger-feed-refresh!)
+
+   ;; 2. Native OS banner for offline sync success
+   (local-notif/show!
+    1001
+    "Нийтлэгдлээ"
+    "Таны оффлайн горимд бичсэн нийтлэл амжилттай нийтлэгдлээ.")))

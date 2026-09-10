@@ -9,6 +9,7 @@
    [mongol-zangila.infrastructure.api :as api]
    [mongol-zangila.infrastructure.db :as db]
    [mongol-zangila.infrastructure.storage :as storage]
+   [mongol-zangila.infrastructure.local-notifications :as local-notif]
    [mongol-zangila.ui.theme :as theme]
 
    [virtual-keyboard.input-control :as input-control]
@@ -28,7 +29,10 @@
   ;; Await the actual Drift database initialization
   (await (db/initialize-database!))
   (await (theme/load-mode!))
-  (await (storage/load-prefs!)))
+  (await (storage/load-prefs!))
+
+  ;; Initialize local notifications plugin (channels + OS permissions)
+  (local-notif/init!))
 
 (defn ^:async main []
   (await (init-app!))
