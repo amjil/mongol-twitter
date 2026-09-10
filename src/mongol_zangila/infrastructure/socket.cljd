@@ -1,6 +1,8 @@
 (ns mongol-zangila.infrastructure.socket
   (:require
    ["dart:core" :as dc]
+   ["dart:async" :as async]
+   ["dart:math" :as math]
    ["package:phoenix_wings/phoenix_wings.dart" :as phx]
    [clojure.string :as str]
    
@@ -21,6 +23,17 @@
 (defonce ^:private !channel-subscriptions (atom {}))
 (defonce ^:private !on-connect-callbacks (atom []))
 (defonce ^:private !inbox-event-callbacks (atom []))
+
+;; Reconnect-storm defenses
+(defonce ^:private !reconnect-attempts (atom 0))
+(defonce ^:private !rejoin-debounce-timer (atom nil))
+(defonce ^:private !reconnect-timer (atom nil))
+(defonce ^:private !last-post-connect-ms (atom 0))
+(defonce ^:private !connect-in-flight? (atom false))
+
+(def ^:private post-connect-min-interval-ms 2000)
+(def ^:private base-reconnect-backoff-ms 1000)
+(def ^:private max-reconnect-backoff-ms 30000)
 
 (declare rejoin-all-channels!)
 
@@ -48,10 +61,51 @@
         ws-base (str/replace base #"^http" "ws")]
     (str/replace ws-base #"/api/v1$" "/socket/websocket")))
 
+(defn- cancel-timer! [!t]
+  (when-let [t @!t]
+    (.cancel ^async/Timer t)
+    (reset! !t nil)))
+
+(defn- run-post-connect!
+  "Fires on-connect callbacks and rejoins preserved channel intents."
+  []
+  (reset! !reconnect-attempts 0)
+  (reset! !last-post-connect-ms (.-millisecondsSinceEpoch (dc/DateTime.now)))
+  (doseq [cb @!on-connect-callbacks] (cb))
+  (rejoin-all-channels!))
+
+(defn- schedule-post-connect!
+  "Absorbs rapid Phoenix onOpen storms (tunnel / elevator flaky nets).
+   Immediate on first connect or when enough time elapsed; otherwise debounce."
+  []
+  (let [now (.-millisecondsSinceEpoch (dc/DateTime.now))
+        elapsed (- now @!last-post-connect-ms)
+        first-or-cooled? (or (zero? @!last-post-connect-ms)
+                             (>= elapsed post-connect-min-interval-ms))]
+    (cancel-timer! !rejoin-debounce-timer)
+    (if first-or-cooled?
+      (run-post-connect!)
+      (let [wait-ms (- post-connect-min-interval-ms elapsed)]
+        (dc/print (str "⏳ [Socket] Debouncing post-connect restore by " wait-ms "ms"))
+        (reset! !rejoin-debounce-timer
+                (async/Timer. (dc/Duration. .milliseconds wait-ms)
+                              (fn [_]
+                                (reset! !rejoin-debounce-timer nil)
+                                (run-post-connect!))))))))
+
+(defn- calculate-reconnect-backoff-ms [attempt-count]
+  (let [capped (min (max attempt-count 0) 5)
+        multiplier (math/pow 2 capped)]
+    (min max-reconnect-backoff-ms
+         (int (* base-reconnect-backoff-ms multiplier)))))
+
 (defn disconnect! 
   "Severs the WebSocket connection and clears ACTIVE channel registries. 
    ⚡ Crucially PRESERVES subscriptions and callbacks so they survive auto-reconnects."
   []
+  (cancel-timer! !rejoin-debounce-timer)
+  (cancel-timer! !reconnect-timer)
+  (reset! !connect-in-flight? false)
   (when-let [socket @!socket]
     (.disconnect socket)
     (reset! !socket nil)
@@ -66,16 +120,19 @@
   (disconnect!)
   (reset! !channel-subscriptions {})
   (reset! !inbox-event-callbacks [])
+  (reset! !reconnect-attempts 0)
+  (reset! !last-post-connect-ms 0)
   (dc/print "🧹 [Socket] Full teardown complete. Registries wiped."))
 
 (defn connected? []
   (boolean @!socket))
 
 (defn connect! 
-  "Opens a WebSocket when none is active. No-op if already connected."
+  "Opens a WebSocket when none is active. No-op if already connected or in-flight."
   []
-  (when-not @!socket
+  (when (and (not @!socket) (not @!connect-in-flight?))
     (when-let [token @state/auth-token]
+      (reset! !connect-in-flight? true)
       (let [ws-url (build-ws-url)
             ;; Phoenix mutates params (adds "vsn"); must be a Dart Map, not PersistentHashMap.
             params (dc/Map.fromEntries
@@ -84,13 +141,15 @@
             socket (phx/PhoenixSocket. ws-url .socketOptions socket-opts)]
         
         (.onOpen socket (fn [] 
+                          (reset! !connect-in-flight? false)
                           (dc/print "🟢 [Socket] Connected to Phoenix Cluster.")
-                          (doseq [cb @!on-connect-callbacks] (cb))
-                          ;; After connect, restore every room from in-memory subscription intents
-                          (rejoin-all-channels!)))
+                          (schedule-post-connect!)))
         
         (.onClose socket (fn [_] 
-                           (dc/print "🔴 [Socket] Connection Closed.")))
+                           (reset! !connect-in-flight? false)
+                           (swap! !reconnect-attempts inc)
+                           (dc/print (str "🔴 [Socket] Connection Closed (attempt "
+                                          @!reconnect-attempts ")"))))
         
         (.onError socket (fn [err] 
                            (dc/print (str "⚠️ [Socket] Error: " err))))
@@ -99,10 +158,22 @@
         (reset! !socket socket)))))
 
 (defn reconnect!
-  "Tears down any existing socket and connects with the current JWT."
+  "Tears down any existing socket and connects with the current JWT.
+   Uses exponential backoff after repeated close storms (same idea as write-buffer)."
   []
-  (disconnect!)
-  (connect!))
+  (cancel-timer! !reconnect-timer)
+  (let [attempt @!reconnect-attempts
+        delay-ms (if (zero? attempt) 0 (calculate-reconnect-backoff-ms attempt))]
+    (disconnect!)
+    (if (zero? delay-ms)
+      (connect!)
+      (do
+        (dc/print (str "⏳ [Socket] Reconnect backoff " delay-ms "ms (attempt " attempt ")"))
+        (reset! !reconnect-timer
+                (async/Timer. (dc/Duration. .milliseconds delay-ms)
+                              (fn [_]
+                                (reset! !reconnect-timer nil)
+                                (connect!))))))))
 
 (defn ensure-connected! []
   (connect!))

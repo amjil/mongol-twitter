@@ -1,0 +1,95 @@
+(ns mongol-zangila.ui.widgets.auth-components
+  "Shared auth form primitives: input pillars, keyboard options, and
+   locally-watched submit buttons (avoids Scaffold-wide rebuilds)."
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
+   [cljd.flutter :as f]
+
+   [mongol-zangila.ui.theme :as theme]
+   [virtual-keyboard.options :as options]))
+
+;; =============================================================================
+;; 1. Shared keyboard options (single source of truth)
+;; =============================================================================
+
+(def shared-keyboard-options
+  "Inject via `:let [info auth-ui/shared-keyboard-options]` + `:bind {:info info}`."
+  (merge options/keyboard-option
+         {:keyboard/mongol-font-family "OyunQaganTig"
+          :keyboard/key-container-color m/Colors.grey.shade500
+          :keyboard/font-size 16}))
+
+;; =============================================================================
+;; 2. Auth input pillar
+;; =============================================================================
+
+(defn auth-input-pillar
+  "Vertical Mongolian text field for auth forms.
+   Options: :obscure? :hint :width (fixed pillar; enables Expanded layout)."
+  [^m/TextEditingController ctrl label & {:keys [obscure? hint width] :or {obscure? false}}]
+  (theme/themed
+   (fn [ctx]
+     (let [label-w (mgl/MongolText label
+                                   .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                                       .fontSize 15.0
+                                                       .fontWeight m/FontWeight.bold
+                                                       .color (theme/text-2 ctx)))
+           field (mgl/MongolTextField
+                  .controller ctrl
+                  .maxLines 1
+                  .obscureText (boolean obscure?)
+                  .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 16.0 .color (theme/text ctx))
+                  .decoration (m/InputDecoration
+                               .hintText hint
+                               .hintStyle (m/TextStyle .color (theme/border ctx))
+                               .filled true
+                               .fillColor (theme/bg ctx)
+                               .border (m/OutlineInputBorder
+                                        .borderRadius (m/BorderRadius.circular 12.0)
+                                        .borderSide m/BorderSide.none)))]
+       (if width
+         (m/SizedBox
+          .width width
+          .child
+          (m/Padding
+           .padding (m/EdgeInsets.only .top 24.0 .bottom 24.0 .right 16.0)
+           .child
+           (m/Row
+            .crossAxisAlignment m/CrossAxisAlignment.start
+            .children
+            [label-w
+             (m/SizedBox .width 12.0)
+             (m/Expanded .child field)])))
+         (m/Container
+          .padding (m/EdgeInsets.only .top 24.0 .bottom 24.0 .right 24.0)
+          .child
+          (m/Row
+           .crossAxisAlignment m/CrossAxisAlignment.start
+           .children
+           [label-w
+            (m/SizedBox .width 16.0)
+            field])))))))
+
+;; =============================================================================
+;; 3. Locally-watched submit button (granular rebuild)
+;; =============================================================================
+
+(defn auth-submit-button
+  "Brand-blue circular IconButton that watches !loading? locally.
+   Parent Scaffold / form tree does not rebuild when loading flips."
+  [!loading? on-pressed & {:keys [icon]}]
+  (let [idle-icon (or icon
+                      (m/Icon m/Icons.arrow_forward_rounded
+                              .color m/Colors.white .size 18.0))]
+    (f/widget
+     :watch [loading? !loading?]
+     (m/Container
+      .decoration (m/BoxDecoration .color theme/brand-blue .shape m/BoxShape.circle)
+      .child
+      (m/IconButton
+       .icon (if loading?
+               (m/SizedBox .width 16.0 .height 16.0
+                           .child (m/CircularProgressIndicator .strokeWidth 2.0 .color m/Colors.white))
+               idle-icon)
+       .onPressed (if loading? nil on-pressed))))))

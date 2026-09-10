@@ -17,10 +17,10 @@
    ;; UI & Utilities
    [mongol-zangila.utils.nav :as nav]
    [mongol-zangila.ui.theme :as theme]
+   [mongol-zangila.ui.widgets.auth-components :as auth-ui]
    
    ;; Custom Keyboard
-   [virtual-keyboard.keyboard :as keyboard]
-   [virtual-keyboard.options :as options]))
+   [virtual-keyboard.keyboard :as keyboard]))
 
 ;; =============================================================================
 ;; 1. Sub-component: OTP Input Pillar
@@ -86,13 +86,10 @@
                                     (swap! !resend-countdown dec))))
                :dispose .cancel]
                
-     :watch [loading? !loading?
-             countdown !resend-countdown]
+     ;; countdown only at this level — loading? watched inside verify button
+     :watch [countdown !resend-countdown]
              
-     ;; Keyboard options injection
-     :let [info (merge options/keyboard-option {:keyboard/mongol-font-family "OyunQaganTig"
-                                                :keyboard/key-container-color m/Colors.grey.shade500
-                                                :keyboard/font-size 16})]
+     :let [info auth-ui/shared-keyboard-options]
      :bind {:info info}
 
      (m/Scaffold
@@ -167,19 +164,11 @@
                  .crossAxisAlignment m/CrossAxisAlignment.center
                  .children
                  [
-                  ;; 3a. Primary Verify Button
-                  (m/Container
-                   .decoration (m/BoxDecoration .color theme/brand-blue .shape m/BoxShape.circle)
-                   .child
-                   (m/IconButton
-                    .icon (if loading?
-                            (m/SizedBox .width 16.0 .height 16.0 
-                                        .child (m/CircularProgressIndicator .strokeWidth 2.0 .color m/Colors.white))
-                            (m/Icon m/Icons.arrow_forward_rounded .color m/Colors.white .size 18.0))
-                    .onPressed (if loading? 
-                                 nil 
-                                 #(auth-ctrl/verify-otp! ctx phone (.-text otp-ctrl) intent !loading?
-                                                         :name name :password password))))
+                  ;; 3a. Primary Verify Button (localized loading watch)
+                  (auth-ui/auth-submit-button
+                   !loading?
+                   #(auth-ctrl/verify-otp! ctx phone (.-text otp-ctrl) intent !loading?
+                                           :name name :password password))
                   
                   (m/SizedBox .height 48.0)
                   
@@ -188,9 +177,8 @@
                     (mgl/MongolText (str "Дахин илгээх (" countdown "с)")
                                     .style (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text-2 ctx) .fontSize 14.0))
                     (mgl/MongolTextButton
-                     ;; ⚡ Pure UI Delegation: Resend logic managed by controller
                      .onPressed #(auth-ctrl/resend-otp! ctx phone intent !resend-countdown)
-                     .child (mgl/MongolText "Код ирээгүй юу?\nДахин илгээх" ;; "Didn't receive code? Resend"
+                     .child (mgl/MongolText "Код ирээгүй юу?\nДахин илгээх"
                                             .style (m/TextStyle .fontFamily "OyunQaganTig" 
                                                                 .color theme/brand-blue 
                                                                 .fontWeight m/FontWeight.bold))))]))]))

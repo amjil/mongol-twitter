@@ -13,13 +13,13 @@
 
    ;; UI & Shared Components
    [mongol-zangila.ui.theme :as theme]
+   [mongol-zangila.ui.widgets.auth-components :as auth-ui]
    [mongol-zangila.utils.nav :as nav]
    [mongol-zangila.infrastructure.media :as media-attach]
    [mongol-zangila.ui.widgets.avatar :as smart-avatar]
    
    ;; ⚡ Custom Keyboard Components
-   [virtual-keyboard.keyboard :as keyboard]
-   [virtual-keyboard.options :as options])) ;; ⚡ Core fix 1: import keyboard options
+   [virtual-keyboard.keyboard :as keyboard]))
 
 ;; =============================================================================
 ;; 1. Sub-component: Form Inputs
@@ -82,13 +82,10 @@
      :managed [name-ctrl (m/TextEditingController. .text (get current-user "name" ""))
                bio-ctrl (m/TextEditingController. .text (get current-user "bio" ""))]
      
-     :watch [avatar-url !avatar-url
-             loading? !loading?]
+     ;; avatar-url only — loading? is watched inside the AppBar save button
+     :watch [avatar-url !avatar-url]
      
-     ;; ⚡ Core fix 2: inject keyboard options to avoid "Null is not a subtype of num"
-     :let [info (merge options/keyboard-option {:keyboard/mongol-font-family "OyunQaganTig"
-                                                :keyboard/key-container-color m/Colors.grey.shade500
-                                                :keyboard/font-size 16})]
+     :let [info auth-ui/shared-keyboard-options]
      :bind {:info info}
 
      (m/Scaffold
@@ -111,22 +108,15 @@
        [(m/Padding
          .padding (m/EdgeInsets.symmetric .horizontal 16.0 .vertical 8.0)
          .child
-         (m/Container
-          .decoration (m/BoxDecoration .color theme/brand-blue .shape m/BoxShape.circle)
-          .child
-          (m/IconButton
-           .icon (if loading?
-                   (m/SizedBox .width 16.0 .height 16.0
-                               .child (m/CircularProgressIndicator .strokeWidth 2.0 .color m/Colors.white))
-                   (m/Icon m/Icons.check_rounded .color m/Colors.white .size 18.0))
-           .onPressed (if loading?
-                        nil
-                        #(profile-ctrl/update-profile!
-                          ctx
-                          (.-text name-ctrl)
-                          (.-text bio-ctrl)
-                          avatar-url
-                          !loading?)))))])
+         (auth-ui/auth-submit-button
+          !loading?
+          #(profile-ctrl/update-profile!
+            ctx
+            (.-text name-ctrl)
+            (.-text bio-ctrl)
+            @!avatar-url
+            !loading?)
+          :icon (m/Icon m/Icons.check_rounded .color m/Colors.white .size 18.0)))])
 
       ;; --- Main Body: IME Layout Wrapper ---
       .body

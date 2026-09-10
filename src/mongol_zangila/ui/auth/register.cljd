@@ -13,52 +13,11 @@
    
    ;; UI & Utilities
    [mongol-zangila.ui.theme :as theme]
+   [mongol-zangila.ui.widgets.auth-components :as auth-ui]
    [mongol-zangila.utils.nav :as nav]
    
    ;; Custom Keyboard
-   [virtual-keyboard.keyboard :as keyboard]
-   [virtual-keyboard.options :as options]))
-
-;; =============================================================================
-;; 1. Sub-component: Auth Input Pillar
-;; =============================================================================
-
-(defn- auth-input-pillar 
-  "A styled vertical text field optimized for authentication forms."
-  [^m/TextEditingController ctrl label obscure?]
-  (theme/themed
-   (fn [ctx]
-     (m/Container
-   .padding (m/EdgeInsets.only .top 24.0 .bottom 24.0 .right 24.0)
-   .child
-   (m/Row
-    .crossAxisAlignment m/CrossAxisAlignment.start
-    .children
-    [;; Vertical Label
-     (mgl/MongolText label
-                     .style (m/TextStyle .fontFamily "OyunQaganTig"
-                                         .fontSize 15.0
-                                         .fontWeight m/FontWeight.bold
-                                         .color (theme/text-2 ctx)))
-     (m/SizedBox .width 16.0)
-     
-     ;; Native Vertical Input Field
-     (mgl/MongolTextField
-      .controller ctrl
-      .maxLines 1
-      .obscureText obscure?
-      .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 16.0 .color (theme/text ctx))
-      .decoration (m/InputDecoration
-                   .hintStyle (m/TextStyle .color (theme/border ctx))
-                   .filled true
-                   .fillColor (theme/bg ctx)
-                   .border (m/OutlineInputBorder
-                            .borderRadius (m/BorderRadius.circular 12.0)
-                            .borderSide m/BorderSide.none)))])))))
-
-;; =============================================================================
-;; 2. The Main Registration Screen Widget
-;; =============================================================================
+   [virtual-keyboard.keyboard :as keyboard]))
 
 (defn register-screen 
   "The primary account creation gateway."
@@ -68,22 +27,16 @@
     (f/widget
      :context ctx
      
-     ;; ⚡ Automatic disposal of text controllers
      :managed [name-ctrl (m/TextEditingController.)
                phone-ctrl (m/TextEditingController.)
                pass-ctrl (m/TextEditingController.)]
-     :watch [loading? !loading?]
 
-     ;; Keyboard options injection for consistent theme and font
-     :let [info (merge options/keyboard-option {:keyboard/mongol-font-family "OyunQaganTig"
-                                                :keyboard/key-container-color m/Colors.grey.shade500
-                                                :keyboard/font-size 16})]
+     :let [info auth-ui/shared-keyboard-options]
      :bind {:info info}
      
      (m/Scaffold
       .backgroundColor (theme/surface ctx)
       
-      ;; --- Top App Bar ---
       .appBar
       (m/AppBar
        .backgroundColor (theme/surface ctx)
@@ -91,7 +44,7 @@
        .leading (m/IconButton 
                  .icon (m/Icon m/Icons.arrow_back_rounded .color (theme/text ctx))
                  .onPressed #(nav/pop! ctx))
-       .title (mgl/MongolText "Бүртгүүлэх" ;; "Register"
+       .title (mgl/MongolText "Бүртгүүлэх"
                               .style (m/TextStyle .fontFamily "OyunQaganTig" 
                                                   .fontSize 18.0 
                                                   .fontWeight m/FontWeight.bold 
@@ -103,7 +56,6 @@
        (m/Column
         .children
         [
-         ;; A. Upper Viewport: Form + Floating Candidates
          (m/Expanded
           .child
           (m/Stack
@@ -117,7 +69,6 @@
               .crossAxisAlignment m/CrossAxisAlignment.start
               .children
               [
-               ;; Pillar 1: Visual Anchor & Title
                (m/Container
                 .width 140.0
                 .padding (m/EdgeInsets.only .top 24.0)
@@ -131,7 +82,7 @@
                    .decoration (m/BoxDecoration .color (theme/bg ctx) .shape m/BoxShape.circle)
                    .child (m/Icon m/Icons.person_add_alt_1_rounded .color theme/brand-blue .size 28.0))
                   (m/SizedBox .height 24.0)
-                  (mgl/MongolText "Бүртгүүлэх" ;; Register
+                  (mgl/MongolText "Бүртгүүлэх"
                                   .style (m/TextStyle .fontFamily "OyunQaganTig" 
                                                       .fontSize 16.0 
                                                       .fontWeight m/FontWeight.bold 
@@ -139,22 +90,18 @@
 
                (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
 
-               ;; Pillar 2: Name Input
-               (auth-input-pillar name-ctrl "Нэр" false)
+               (auth-ui/auth-input-pillar name-ctrl "Нэр")
 
                (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
 
-               ;; Pillar 3: Phone Input
-               (auth-input-pillar phone-ctrl "Утасны дугаар" false)
+               (auth-ui/auth-input-pillar phone-ctrl "Утасны дугаар")
 
                (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
 
-               ;; Pillar 4: Password Input
-               (auth-input-pillar pass-ctrl "Нууц үг" true)
+               (auth-ui/auth-input-pillar pass-ctrl "Нууц үг" :obscure? true)
 
                (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
 
-               ;; Pillar 5: Actions & Terms
                (m/Padding
                 .padding (m/EdgeInsets.only .top 24.0 .right 24.0)
                 .child
@@ -162,35 +109,23 @@
                  .crossAxisAlignment m/CrossAxisAlignment.start
                  .children
                  [
-                  ;; 5a. Submit Button
-                  (m/Container
-                   .decoration (m/BoxDecoration .color theme/brand-blue .shape m/BoxShape.circle)
-                   .child
-                   (m/IconButton
-                    .icon (if loading?
-                            (m/SizedBox .width 16.0 .height 16.0 
-                                        .child (m/CircularProgressIndicator .strokeWidth 2.0 .color m/Colors.white))
-                            (m/Icon m/Icons.arrow_forward_rounded .color m/Colors.white .size 18.0))
-                    .onPressed (if loading? 
-                                 nil 
-                                 #(auth-ctrl/request-otp-registration!
-                                   ctx
-                                   (.-text phone-ctrl)
-                                   (.-text name-ctrl)
-                                   (.-text pass-ctrl)
-                                   !loading?))))
+                  (auth-ui/auth-submit-button
+                   !loading?
+                   #(auth-ctrl/request-otp-registration!
+                     ctx
+                     (.-text phone-ctrl)
+                     (.-text name-ctrl)
+                     (.-text pass-ctrl)
+                     !loading?))
                   
                   (m/SizedBox .width 32.0)
                   
-                  ;; 5b. Terms and Conditions Text (Vertical)
-                  (mgl/MongolText "Бүртгүүлснээр та манай Үйлчилгээний нөхцөлийг\nзөвшөөрсөнд тооцно." ;; Terms
+                  (mgl/MongolText "Бүртгүүлснээр та манай Үйлчилгээний нөхцөлийг\nзөвшөөрсөнд тооцно."
                                   .style (m/TextStyle .fontFamily "OyunQaganTig" 
                                                       .fontSize 13.0 
                                                       .color (theme/text-2 ctx)
                                                       .height 1.5))]))]))
             
-            ;; Floating candidates view for custom IME
             (keyboard/candidates nil)]))
 
-         ;; B. Lower Viewport: Custom FST Keyboard
          (keyboard/keyboard {})]))))))

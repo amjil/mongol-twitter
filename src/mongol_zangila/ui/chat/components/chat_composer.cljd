@@ -65,9 +65,13 @@
                                 (-> (media-attach/stop-voice-record-and-upload! ctx duration on-send-voice!)
                                     (.whenComplete #(reset! !uploading-type nil)))))))
 
-        cancel-voice-record! (fn [_]
-                               (cleanup-timer! nil)
-                               (when @!is-recording? (media-attach/cancel-voice-record!)))
+        ;; Named so :managed :dispose can bind it (inline fn breaks the macro)
+        dispose-recording! (fn [_]
+                             (cleanup-timer! nil)
+                             (reset! !press-active? false)
+                             (when @!is-recording?
+                               (reset! !is-recording? false)
+                               (media-attach/cancel-voice-record!)))
         
         ;; Show a full-screen side-sheet Overlay
         show-input-overlay! (fn []
@@ -181,8 +185,8 @@
              cancel-intent? !cancel-intent?
              uploading-type !uploading-type]
 
-     :managed [_dummy-anchor (atom nil) :dispose cancel-voice-record!]
-
+     ;; ⚡ Dispose fallback: cancel UI timer + hardware mic if user pops mid-record
+     :managed [_dummy-anchor (atom nil) :dispose dispose-recording!]
      (m/Container
       .decoration (m/BoxDecoration .color (theme/surface ctx) .border (m/Border .top (m/BorderSide .color (theme/border ctx) .width 0.5)))
       .padding (m/EdgeInsets.only

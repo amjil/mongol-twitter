@@ -6,7 +6,6 @@
   (:require
    ["package:flutter/material.dart" :as m]
    ["package:mongol/mongol.dart" :as mgl]
-   ["dart:core" :as dc]
    [cljd.flutter :as f]
    
    ;; System Controllers
@@ -14,52 +13,11 @@
    
    ;; UI & Utilities
    [mongol-zangila.ui.theme :as theme]
+   [mongol-zangila.ui.widgets.auth-components :as auth-ui]
    [mongol-zangila.utils.nav :as nav]
    
    ;; Custom Keyboard
-   [virtual-keyboard.keyboard :as keyboard]
-   [virtual-keyboard.options :as options]))
-
-;; =============================================================================
-;; 1. Sub-component: Auth Input Pillar
-;; =============================================================================
-
-(defn- auth-input-pillar 
-  "A styled vertical text field optimized for authentication forms."
-  [^m/TextEditingController ctrl label obscure?]
-  (theme/themed
-   (fn [ctx]
-     (m/Container
-   .padding (m/EdgeInsets.only .top 24.0 .bottom 24.0 .right 24.0)
-   .child
-   (m/Row
-    .crossAxisAlignment m/CrossAxisAlignment.start
-    .children
-    [;; Vertical Label
-     (mgl/MongolText label
-                     .style (m/TextStyle .fontFamily "OyunQaganTig"
-                                         .fontSize 15.0
-                                         .fontWeight m/FontWeight.bold
-                                         .color (theme/text-2 ctx)))
-     (m/SizedBox .width 16.0)
-     
-     ;; Native Vertical Input Field
-     (mgl/MongolTextField
-      .controller ctrl
-      .maxLines 1
-      .obscureText obscure?
-      .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 16.0 .color (theme/text ctx))
-      .decoration (m/InputDecoration
-                   .hintStyle (m/TextStyle .color (theme/border ctx))
-                   .filled true
-                   .fillColor (theme/bg ctx)
-                   .border (m/OutlineInputBorder
-                            .borderRadius (m/BorderRadius.circular 12.0)
-                            .borderSide m/BorderSide.none)))])))))
-
-;; =============================================================================
-;; 2. The Main Login Screen Widget
-;; =============================================================================
+   [virtual-keyboard.keyboard :as keyboard]))
 
 (defn login-screen 
   "The primary authentication gateway."
@@ -70,18 +28,13 @@
      :context ctx
      :managed [phone-ctrl (m/TextEditingController.)
                pass-ctrl (m/TextEditingController.)]
-     :watch [loading? !loading?]
 
-     ;; Keyboard options injection for consistent theme and font
-     :let [info (merge options/keyboard-option {:keyboard/mongol-font-family "OyunQaganTig"
-                                                :keyboard/key-container-color m/Colors.grey.shade500
-                                                :keyboard/font-size 16})]
+     :let [info auth-ui/shared-keyboard-options]
      :bind {:info info}
      
      (m/Scaffold
       .backgroundColor (theme/surface ctx)
       
-      ;; --- Top App Bar ---
       .appBar
       (m/AppBar
        .backgroundColor (theme/surface ctx)
@@ -93,7 +46,6 @@
        (m/Column
         .children
         [
-         ;; A. Upper Viewport: Form + Floating Candidates
          (m/Expanded
           .child
           (m/Stack
@@ -107,7 +59,6 @@
               .crossAxisAlignment m/CrossAxisAlignment.start
               .children
               [
-               ;; Pillar 1: Brand Anchor & Title
                (m/Container
                 .width 140.0
                 .padding (m/EdgeInsets.only .top 24.0)
@@ -129,17 +80,14 @@
 
                (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
 
-               ;; Pillar 2: Phone Input
-               (auth-input-pillar phone-ctrl "Утасны дугаар" false)
+               (auth-ui/auth-input-pillar phone-ctrl "Утасны дугаар")
 
                (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
 
-               ;; Pillar 3: Password Input
-               (auth-input-pillar pass-ctrl "Нууц үг" true)
+               (auth-ui/auth-input-pillar pass-ctrl "Нууц үг" :obscure? true)
 
                (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
 
-               ;; Pillar 4: Actions & Navigation Links
                (m/Padding
                 .padding (m/EdgeInsets.only .top 24.0 .right 24.0)
                 .child
@@ -147,22 +95,12 @@
                  .crossAxisAlignment m/CrossAxisAlignment.start
                  .children
                  [
-                  ;; 4a. Submit Button
-                  (m/Container
-                   .decoration (m/BoxDecoration .color theme/brand-blue .shape m/BoxShape.circle)
-                   .child
-                   (m/IconButton
-                    .icon (if loading?
-                            (m/SizedBox .width 16.0 .height 16.0 
-                                        .child (m/CircularProgressIndicator .strokeWidth 2.0 .color m/Colors.white))
-                            (m/Icon m/Icons.arrow_forward_rounded .color m/Colors.white .size 18.0))
-                    .onPressed (if loading? 
-                                 nil 
-                                 #(auth-ctrl/perform-login! ctx (.-text phone-ctrl) (.-text pass-ctrl) !loading?))))
+                  (auth-ui/auth-submit-button
+                   !loading?
+                   #(auth-ctrl/perform-login! ctx (.-text phone-ctrl) (.-text pass-ctrl) !loading?))
                   
                   (m/SizedBox .width 40.0)
                   
-                  ;; 4b. Secondary Links (Forgot Password / Register)
                   (m/Column
                    .mainAxisSize m/MainAxisSize.min
                    .crossAxisAlignment m/CrossAxisAlignment.center
@@ -184,8 +122,6 @@
                                                                 .color theme/brand-blue 
                                                                 .fontWeight m/FontWeight.bold)))])]))]))
             
-            ;; Floating candidates view for custom IME
             (keyboard/candidates nil)]))
 
-         ;; B. Lower Viewport: Custom FST Keyboard
          (keyboard/keyboard {})]))))))

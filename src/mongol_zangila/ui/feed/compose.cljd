@@ -19,6 +19,7 @@
    
    ;; UI & Utilities
    [mongol-zangila.ui.theme :as theme]
+   [mongol-zangila.ui.widgets.auth-components :as auth-ui]
    [mongol-zangila.utils.nav :as nav]
    [mongol-zangila.infrastructure.media :as media-attach]
    [mongol-zangila.ui.widgets.cached-image :as cached-image]
@@ -206,13 +207,13 @@
     (f/widget
      :context ctx
 
-     :watch [loading? !loading?
-             media-urls !media-urls
+     ;; loading? watched only inside the send button — keeps editor focus stable
+     :watch [media-urls !media-urls
              editor-state !editor-state]
 
      (m/WillPopScope
       .onWillPop (fn []
-                   (-> (save-draft-logic! ctx loading? !saved? !editor-state !media-urls draft-id outbox-id
+                   (-> (save-draft-logic! ctx @!loading? !saved? !editor-state !media-urls draft-id outbox-id
                                           reply-to-id reply-to-name reply-to-author-id quote-id quote-author-name quote-post @!idk)
                        (.then (fn [_] (dc/Future.value true)))))
       .child
@@ -231,7 +232,7 @@
         .leading (m/IconButton
                   .icon (m/Icon m/Icons.close_rounded .color (theme/text ctx))
                   .onPressed (fn []
-                               (-> (save-draft-logic! ctx loading? !saved? !editor-state !media-urls draft-id outbox-id
+                               (-> (save-draft-logic! ctx @!loading? !saved? !editor-state !media-urls draft-id outbox-id
                                                       reply-to-id reply-to-name reply-to-author-id quote-id quote-author-name quote-post @!idk)
                                    (.then (fn [_] (nav/pop! ctx))))
                                nil))
@@ -239,27 +240,20 @@
         [(m/Padding
           .padding (m/EdgeInsets.symmetric .horizontal 16.0 .vertical 8.0)
           .child
-          (m/Container
-           .decoration (m/BoxDecoration .color theme/brand-blue .shape m/BoxShape.circle)
-           .child
-           (m/IconButton
-            .icon (if loading?
-                    (m/SizedBox .width 16.0 .height 16.0
-                                .child (m/CircularProgressIndicator .strokeWidth 2.0 .color m/Colors.white))
-                    (m/Icon m/Icons.send_rounded .color m/Colors.white .size 18.0))
-            .onPressed (if loading?
-                         nil
-                         (fn []
-                           (let [serialized-data (serialize-post @!editor-state)]
-                             (publish-ctrl/submit-post! ctx serialized-data media-urls reply-to-id quote-id !loading?
-                                                        :draft-id draft-id
-                                                        :outbox-id outbox-id
-                                                        :reply-to-name reply-to-name
-                                                        :reply-to-author-id reply-to-author-id
-                                                        :quote-author-name quote-author-name
-                                                        :quote-post quote-post
-                                                        :idempotency-key @!idk
-                                                        :on-success (fn [] (reset! !saved? true)))))))))])
+          (auth-ui/auth-submit-button
+           !loading?
+           (fn []
+             (let [serialized-data (serialize-post @!editor-state)]
+               (publish-ctrl/submit-post! ctx serialized-data @!media-urls reply-to-id quote-id !loading?
+                                          :draft-id draft-id
+                                          :outbox-id outbox-id
+                                          :reply-to-name reply-to-name
+                                          :reply-to-author-id reply-to-author-id
+                                          :quote-author-name quote-author-name
+                                          :quote-post quote-post
+                                          :idempotency-key @!idk
+                                          :on-success (fn [] (reset! !saved? true)))))
+           :icon (m/Icon m/Icons.send_rounded .color m/Colors.white .size 18.0)))])
 
        .body
        (m/SafeArea
