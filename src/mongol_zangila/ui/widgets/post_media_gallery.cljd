@@ -8,7 +8,10 @@
 (defn- media-thumbnail [ctx url urls index border-radius]
   (m/GestureDetector
    .onTap #(nav/push! ctx "/media/viewer" {:media-urls urls :initial-index index})
-   .child (cached-image/cached-img url :border-radius border-radius :fit m/BoxFit.cover)))
+   .child
+   (m/Hero
+    .tag url
+    .child (cached-image/cached-img url :border-radius border-radius :fit m/BoxFit.cover))))
 
 (defn- build-row
   [ctx urls start-idx count-in-row total-count border-radius]

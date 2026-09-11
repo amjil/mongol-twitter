@@ -181,7 +181,9 @@
          
          ;; Expects {:user-id "self" or specific ID}
          (= route-name "/profile/view")
-         (profile-view/profile-screen {:user-id (get args :user-id "self")})
+         (profile-view/profile-screen {:user-id (get args :user-id "self")
+                                       :avatar-hero-tag (get args :avatar-hero-tag)
+                                       :avatar-url (get args :avatar-url)})
          
          ;; Expects {:user-id "self", :initial-tab :followers/:following}
          ;; or {:user-id "...", :initial-index 0/1}

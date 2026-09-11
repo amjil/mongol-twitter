@@ -3,7 +3,6 @@
    Handles offline-first caching, active states, and automatic routing to user profiles."
   (:require
    ["package:flutter/material.dart" :as m]
-   [cljd.flutter :as f]
    [clojure.string :as str]
    
    ;; System & Theme
@@ -37,8 +36,9 @@
 (defn smart-avatar 
   "A globally reusable avatar component.
    By default, tapping it routes the user to the target profile. 
-   This behavior can be overridden via the :on-tap kwargs."
-  [ctx user-id avatar-url & {:keys [size on-tap border-width border-color]
+   This behavior can be overridden via the :on-tap kwargs.
+   Optional :hero-tag wraps the image in m/Hero for shared-element flight."
+  [ctx user-id avatar-url & {:keys [size on-tap border-width border-color hero-tag]
                              :or {size 40.0
                                   border-width 0.0
                                   border-color m/Colors.transparent}}]
@@ -47,11 +47,26 @@
         valid-url? (and avatar-url (not (str/blank? avatar-url)))
         
         ;; Intelligent Default Routing:
-        ;; Uses the typed nav engine to push the profile view safely.
-        default-tap-fn #(nav/push! ctx "/profile/view" {:user-id user-id})
+        ;; Passes hero-tag + avatar-url so the destination can land the flight.
+        default-tap-fn #(nav/push! ctx "/profile/view"
+                                   (cond-> {:user-id user-id}
+                                     hero-tag (assoc :avatar-hero-tag hero-tag)
+                                     valid-url? (assoc :avatar-url avatar-url)))
         
         ;; Allow parent components to override the tap behavior if needed
-        actual-tap-fn (or on-tap default-tap-fn)]
+        actual-tap-fn (or on-tap default-tap-fn)
+
+        avatar-core (m/ClipOval
+                     .child
+                     (if valid-url?
+                       (cached-image/cached-img
+                        avatar-url
+                        :width size
+                        :height size
+                        :fit m/BoxFit.cover
+                        :placeholder-widget (default-placeholder size)
+                        :error-widget (default-placeholder size))
+                       (default-placeholder size)))]
     
     (m/GestureDetector
      .onTap actual-tap-fn
@@ -66,18 +81,6 @@
                    ;; Support for active states or premium borders (e.g., Story rings)
                    .border (m/Border.all .color border-color .width border-width))
       .child
-      (m/ClipOval
-       .child
-       (if valid-url?
-         ;; ⚡ Upgraded to use the local-first cached image component
-         (cached-image/cached-img
-          avatar-url
-          :width size
-          :height size
-          :fit m/BoxFit.cover
-          ;; Override the generic placeholder/error with our custom rounded skeleton
-          :placeholder-widget (default-placeholder size)
-          :error-widget (default-placeholder size))
-         
-         ;; Instant fallback for missing data
-         (default-placeholder size)))))))
+      (if hero-tag
+        (m/Hero .tag hero-tag .child avatar-core)
+        avatar-core)))))

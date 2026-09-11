@@ -85,11 +85,14 @@
                  .child
                  (m/Center
                   .child
-                  (cached-image/cached-img url
-                                           :width double/infinity
-                                           :height double/infinity
-                                           :fit m/BoxFit.contain
-                                           :border-radius 0.0)))))))
+                  (m/Hero
+                   .tag url
+                   .child
+                   (cached-image/cached-img url
+                                            :width double/infinity
+                                            :height double/infinity
+                                            :fit m/BoxFit.contain
+                                            :border-radius 0.0))))))))
 
          (m/SafeArea
           .child

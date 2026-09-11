@@ -1,0 +1,71 @@
+(ns mongol-zangila.ui.widgets.skeleton
+  "Premium skeleton loading placeholders with breathing (shimmer) animations.
+   Designed specifically for vertical LTR Mongolian layouts."
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["dart:core" :as dc]
+   [cljd.flutter :as f]
+   [mongol-zangila.ui.theme :as theme]))
+
+(defn- shimmer-box
+  "A generic pulsing box that simulates loading content."
+  [ctx width height radius anim-value]
+  (m/Container
+   .width width
+   .height height
+   .decoration (m/BoxDecoration
+                .color (.withOpacity (theme/border ctx) (+ 0.2 (* 0.4 anim-value)))
+                .borderRadius (m/BorderRadius.circular radius))))
+
+(defn timeline-skeleton
+  "A horizontally scrolling gallery of pulsing vertical dummy cards."
+  []
+  (f/widget
+   :context ctx
+   :vsync vsync
+   :managed [anim-ctrl (let [c (m/AnimationController.
+                                 .duration (dc/Duration. .milliseconds 1000)
+                                 .vsync vsync)]
+                         (.repeat c .reverse true)
+                         c)]
+   :watch [anim-val anim-ctrl :> .-value]
+
+   (m/ListView.builder
+    .scrollDirection m/Axis.horizontal
+    .physics (m/NeverScrollableScrollPhysics.)
+    .padding (m/EdgeInsets.symmetric .horizontal 16.0)
+    .itemCount 4
+    .itemBuilder
+    (fn [_ _]
+      (m/Container
+       .width 160.0
+       .margin (m/EdgeInsets.only .right 16.0 .top 16.0 .bottom 16.0)
+       .padding (m/EdgeInsets.all 16.0)
+       .decoration (m/BoxDecoration
+                    .color (theme/surface ctx)
+                    .borderRadius (m/BorderRadius.circular theme/radius-md)
+                    .border (m/Border.all .color (theme/border ctx) .width 0.5))
+       .child
+       (m/Row
+        .crossAxisAlignment m/CrossAxisAlignment.start
+        .children
+        [;; 1. Avatar Pillar
+         (m/Column
+          .children
+          [(shimmer-box ctx 40.0 40.0 20.0 anim-val)
+           (m/SizedBox .height 12.0)
+           (shimmer-box ctx 16.0 60.0 8.0 anim-val)])
+
+         (m/SizedBox .width 16.0)
+
+         ;; 2. Content Pillar
+         (m/Expanded
+          .child
+          (m/Row
+           .crossAxisAlignment m/CrossAxisAlignment.start
+           .children
+           [(shimmer-box ctx 16.0 180.0 8.0 anim-val)
+            (m/SizedBox .width 12.0)
+            (shimmer-box ctx 16.0 140.0 8.0 anim-val)
+            (m/SizedBox .width 12.0)
+            (shimmer-box ctx 16.0 90.0 8.0 anim-val)]))]))))))

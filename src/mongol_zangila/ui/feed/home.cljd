@@ -23,6 +23,7 @@
    [mongol-zangila.ui.layout.scaffold :as scaffold] ;; ⚡ Import the new global badge layout
    [mongol-zangila.ui.widgets.empty-state :as empty-state]
    [mongol-zangila.ui.widgets.avatar :as smart-avatar]
+   [mongol-zangila.ui.widgets.skeleton :as skeleton]
    
    ;; Domain Specific Components
    [mongol-zangila.ui.feed.components.post-card :as post-card]
@@ -142,7 +143,7 @@
 
           .body
           (if init-loading?
-            (m/Center .child (m/CircularProgressIndicator .color theme/brand-blue))
+            (skeleton/timeline-skeleton)
 
             (if (empty? visible-posts)
               (m/Center .child (empty-state/empty-feed-view ctx on-compose))

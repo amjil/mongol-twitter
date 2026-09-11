@@ -248,10 +248,9 @@
              .crossAxisAlignment m/CrossAxisAlignment.center
              .mainAxisSize m/MainAxisSize.max
              .children
-             [(m/GestureDetector
-               .onTap #(nav/push! ctx "/profile/view" {:user-id author-id})
-               .child
-               (smart-avatar/smart-avatar ctx author-id (get author "avatar_url") :size 40.0))
+             [(smart-avatar/smart-avatar ctx author-id (get author "avatar_url")
+                                         :size 40.0
+                                         :hero-tag (str "avatar-" post-id "-" author-id))
 
               (if is-reply
                 (m/Container .margin (m/EdgeInsets.only .top 6.0) .width 2.0 .height 16.0 .color (theme/border ctx))

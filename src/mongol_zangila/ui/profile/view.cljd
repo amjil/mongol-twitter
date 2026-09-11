@@ -141,7 +141,7 @@
 (defn- profile-header
   "Identity, stats, bio and actions as adjacent vertical pillars.
    Stacking MongolText in a Column overflows the viewport; a Row does not."
-  [ctx profile-data !profile-data is-self?]
+  [ctx profile-data !profile-data is-self? & {:keys [avatar-hero-tag]}]
   (let [user-id (get profile-data "id")
         name (get profile-data "name" "")
         handle (get profile-data "handle" "")
@@ -171,7 +171,10 @@
         (m/Column
          .crossAxisAlignment m/CrossAxisAlignment.center
          .children
-         [(smart-avatar/smart-avatar ctx user-id (get profile-data "avatar_url") :size 64.0)
+         [(smart-avatar/smart-avatar ctx user-id (get profile-data "avatar_url")
+                                     :size 64.0
+                                     :hero-tag avatar-hero-tag
+                                     :on-tap (fn []))
           (m/SizedBox .height 16.0)
           (m/Expanded
            .child
@@ -295,7 +298,7 @@
 (defn profile-screen
   "The primary viewport for inspecting a user's profile and their timeline history.
    Architected as a horizontal scrolling gallery."
-  [{:keys [user-id]}]
+  [{:keys [user-id avatar-hero-tag avatar-url]}]
 
   (let [!profile-data (atom nil)
         !initial-loading-profile? (atom true)
@@ -351,7 +354,28 @@
            
            shared-body 
            (if init-loading-profile?
-             (m/Center .child (m/CircularProgressIndicator .color theme/brand-blue))
+             ;; Keep a Hero landing pad in the identity pillar so the flight can complete.
+             (m/Row
+              .crossAxisAlignment m/CrossAxisAlignment.stretch
+              .children
+              [(m/Container
+                .padding (m/EdgeInsets.only .top 24.0 .bottom 24.0 .left 16.0 .right 24.0)
+                .decoration (m/BoxDecoration
+                             .color (theme/surface ctx)
+                             .border (m/Border .right (m/BorderSide .color (theme/border ctx) .width 1.0)))
+                .child
+                (m/SizedBox
+                 .width 96.0
+                 .child
+                 (m/Align
+                  .alignment m/Alignment.topCenter
+                  .child
+                  (smart-avatar/smart-avatar ctx user-id avatar-url
+                                             :size 64.0
+                                             :hero-tag avatar-hero-tag
+                                             :on-tap (fn [])))))
+               (m/Expanded
+                .child (m/Center .child (m/CircularProgressIndicator .color theme/brand-blue)))])
              
              (ptr/horizontal-refresh
               {:on-refresh (fn []
@@ -379,7 +403,8 @@
                (fn [_ i]
                  (cond
                    (= i 0)
-                   (profile-header ctx display-profile !profile-data is-self?)
+                   (profile-header ctx display-profile !profile-data is-self?
+                                   :avatar-hero-tag avatar-hero-tag)
 
                    (and is-blocked? (= i 1))
                    (m/SizedBox
