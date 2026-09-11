@@ -7,6 +7,7 @@
    ["package:flutter/material.dart" :as m]
    ["package:flutter/services.dart" :as services]
    ["package:mongol/mongol.dart" :as mgl]
+   ["dart:core" :as dc]
    [clojure.string :as str]
 
    ;; System Infrastructure & Controllers
@@ -49,7 +50,7 @@
 ;; 2. Sub-components (Action Bar & Modals)
 ;; =============================================================================
 
-(defn- action-button 
+(defn- action-button
   [icon-data count-val is-active? active-color on-tap]
   (theme/themed
    (fn [ctx]
@@ -63,16 +64,26 @@
        (m/Column
         .mainAxisSize m/MainAxisSize.min
         .children
-        [(m/Icon icon-data
-                 .size 20.0
-                 .color (if is-active? active-color (theme/text-2 ctx)))
+        [;; ⚡ Micro-motion: elastic heartbeat rebound on active toggle
+         (m/AnimatedSwitcher
+          .duration (dc/Duration. .milliseconds 300)
+          .transitionBuilder (fn [child anim]
+                               (m/ScaleTransition
+                                .scale (m/CurvedAnimation. .parent anim .curve m/Curves.elasticOut)
+                                .child child))
+          .child (m/Icon icon-data
+                         .key (m/ValueKey. is-active?)
+                         .size 20.0
+                         .color (if is-active? active-color (theme/text-2 ctx))))
          (if (> count-val 0)
            (m/Padding
             .padding (m/EdgeInsets.only .top 6.0)
-            .child (m/Text (str count-val)
-                           .style (m/TextStyle .fontFamily "OyunQaganTig"
-                                               .fontSize 13.0
-                                               .color (if is-active? active-color (theme/text-2 ctx)))))
+            .child (m/AnimatedDefaultTextStyle
+                    .duration (dc/Duration. .milliseconds 200)
+                    .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                        .fontSize 13.0
+                                        .color (if is-active? active-color (theme/text-2 ctx)))
+                    .child (m/Text (str count-val))))
            (m/SizedBox.shrink))
          (m/SizedBox .height 12.0)]))))))
 
@@ -208,9 +219,19 @@
             bookmarked? (get post-data "is_bookmarked_by_me" false)]
         
         (m/Container
-         .decoration (m/BoxDecoration 
+         .decoration (m/BoxDecoration
                       .color (theme/surface ctx)
-                      .border (m/Border .right (m/BorderSide .color (theme/border ctx) .width 1.0)))
+                      .borderRadius (m/BorderRadius.circular theme/radius-md)
+                      ;; ⚡ Multi-layer shadow: edge sharpness + ambient bloom
+                      .boxShadow [(m/BoxShadow
+                                   .color (.withOpacity m/Colors.black (if (theme/dark? ctx) 0.2 0.03))
+                                   .blurRadius 20.0
+                                   .offset (m/Offset 0.0 8.0))
+                                  (m/BoxShadow
+                                   .color (.withOpacity m/Colors.black (if (theme/dark? ctx) 0.3 0.01))
+                                   .blurRadius 4.0
+                                   .offset (m/Offset 0.0 2.0))]
+                      .border (m/Border.all .color (theme/border ctx) .width 0.5))
          .padding (m/EdgeInsets.only .top 16.0 .bottom 16.0 .left 12.0 .right 8.0)
          .child
          (m/Row

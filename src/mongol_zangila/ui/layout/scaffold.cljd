@@ -1,10 +1,11 @@
 (ns mongol-zangila.ui.layout.scaffold
   "Main Application Scaffold wrapping the horizontal BottomNavigationBar.
-   Provides persistent navigation across Feed, Search, Chat, and Profile domains,
-   and reacts to global unread notification and message counts."
+   ⚡ Upgraded: Features iOS-grade frosted glass (Glassmorphism) and
+   fluid expanding active-state animations."
   (:require
    ["package:flutter/material.dart" :as m]
    ["dart:core" :as dc]
+   ["dart:ui" :as ui]
    [cljd.flutter :as f]
    [mongol-zangila.state :as state]
    [mongol-zangila.ui.theme :as theme]
@@ -16,9 +17,11 @@
         color (if is-active? (:brand t) (:text-2 t))
         icon (m/Icon icon-data .color color .size 26.0)]
     (m/AnimatedContainer
-     .duration (dc/Duration. .milliseconds 200)
-     .curve m/Curves.easeOutCubic
-     .padding (m/EdgeInsets.symmetric .horizontal 14.0 .vertical 8.0)
+     .duration (dc/Duration. .milliseconds 300)
+     .curve m/Curves.easeOutBack
+     .padding (m/EdgeInsets.symmetric
+               .horizontal (if is-active? 20.0 14.0)
+               .vertical 8.0)
      .decoration (m/BoxDecoration
                   .color (if is-active? (:brand-soft t) m/Colors.transparent)
                   .borderRadius (m/BorderRadius.circular theme/radius-pill))
@@ -34,69 +37,69 @@
 (defn app-scaffold
   "The root container for top-level navigation screens."
   [ctx current-route body-widget]
-
   (f/widget
    :watch [unread-msgs state/unread-messages-count
            unread-notifs state/unread-notifications-count]
 
    (m/Scaffold
     .backgroundColor (theme/bg ctx)
+    .extendBody true
     .body body-widget
+
     .bottomNavigationBar
-    (m/Container
-     .decoration (m/BoxDecoration
-                  .color (theme/nav-bar ctx)
-                  .border (m/Border .top (theme/hairline ctx))
-                  .boxShadow (if (theme/dark? ctx)
-                               []
-                               [(m/BoxShadow
-                                 .color (m/Color 0x0A0F1419)
-                                 .blurRadius 16.0
-                                 .offset (m/Offset 0.0 -4.0))]))
+    (m/ClipRect
      .child
-     (m/SafeArea
+     (m/BackdropFilter
+      .filter (ui/ImageFilter.blur .sigmaX 20.0 .sigmaY 20.0)
       .child
-      (m/Padding
-       .padding (m/EdgeInsets.symmetric .vertical 6.0 .horizontal 12.0)
+      (m/Container
+       .decoration (m/BoxDecoration
+                    .color (.withOpacity (theme/nav-bar ctx) 0.8)
+                    .border (m/Border .top (theme/hairline ctx)))
        .child
-       (m/Row
-        .mainAxisAlignment m/MainAxisAlignment.spaceBetween
-        .children
-        [(m/GestureDetector
-          .onTap #(when-not (= current-route "/feed/home") (nav/push-replacement! ctx "/feed/home"))
-          .child (m/Container .color m/Colors.transparent
-                              .child (nav-icon ctx m/Icons.home_rounded (= current-route "/feed/home"))))
+       (m/SafeArea
+        .child
+        (m/Padding
+         .padding (m/EdgeInsets.symmetric .vertical 8.0 .horizontal 16.0)
+         .child
+         (m/Row
+          .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+          .children
+          [(m/GestureDetector
+            .onTap #(when-not (= current-route "/feed/home") (nav/push-replacement! ctx "/feed/home"))
+            .behavior m/HitTestBehavior.opaque
+            .child (nav-icon ctx m/Icons.home_rounded (= current-route "/feed/home")))
 
-         (m/GestureDetector
-          .onTap #(when-not (= current-route "/search") (nav/push-replacement! ctx "/search"))
-          .child (m/Container .color m/Colors.transparent
-                              .child (nav-icon ctx m/Icons.search_rounded (= current-route "/search"))))
+           (m/GestureDetector
+            .onTap #(when-not (= current-route "/search") (nav/push-replacement! ctx "/search"))
+            .behavior m/HitTestBehavior.opaque
+            .child (nav-icon ctx m/Icons.search_rounded (= current-route "/search")))
 
-         (m/GestureDetector
-          .onTap #(when-not (= current-route "/chat/inbox") (nav/push-replacement! ctx "/chat/inbox"))
-          .child (m/Container .color m/Colors.transparent
-                              .child (nav-icon ctx
-                                              (if (= current-route "/chat/inbox")
-                                                m/Icons.chat_bubble_rounded
-                                                m/Icons.chat_bubble_outline_rounded)
-                                              (= current-route "/chat/inbox")
-                                              :badge-count unread-msgs)))
+           (m/GestureDetector
+            .onTap #(when-not (= current-route "/chat/inbox") (nav/push-replacement! ctx "/chat/inbox"))
+            .behavior m/HitTestBehavior.opaque
+            .child (nav-icon ctx
+                             (if (= current-route "/chat/inbox")
+                               m/Icons.chat_bubble_rounded
+                               m/Icons.chat_bubble_outline_rounded)
+                             (= current-route "/chat/inbox")
+                             :badge-count unread-msgs))
 
-         (m/GestureDetector
-          .onTap #(when-not (= current-route "/notifications/view") (nav/push-replacement! ctx "/notifications/view"))
-          .child (m/Container .color m/Colors.transparent
-                              .child (nav-icon ctx
-                                              (if (= current-route "/notifications/view")
-                                                m/Icons.notifications_rounded
-                                                m/Icons.notifications_none_rounded)
-                                              (= current-route "/notifications/view")
-                                              :badge-count unread-notifs)))
+           (m/GestureDetector
+            .onTap #(when-not (= current-route "/notifications/view") (nav/push-replacement! ctx "/notifications/view"))
+            .behavior m/HitTestBehavior.opaque
+            .child (nav-icon ctx
+                             (if (= current-route "/notifications/view")
+                               m/Icons.notifications_rounded
+                               m/Icons.notifications_none_rounded)
+                             (= current-route "/notifications/view")
+                             :badge-count unread-notifs))
 
-         (m/GestureDetector
-          .onTap #(when-not (= current-route "/profile/view") (nav/push-replacement! ctx "/profile/view"))
-          .child (m/Container .color m/Colors.transparent
-                              .child (nav-icon ctx
-                                              (if (= current-route "/profile/view")
-                                                m/Icons.person_rounded
-                                                m/Icons.person_outline_rounded)
-                                              (= current-route "/profile/view"))))])))))))
+           (m/GestureDetector
+            .onTap #(when-not (= current-route "/profile/view") (nav/push-replacement! ctx "/profile/view"))
+            .behavior m/HitTestBehavior.opaque
+            .child (nav-icon ctx
+                             (if (= current-route "/profile/view")
+                               m/Icons.person_rounded
+                               m/Icons.person_outline_rounded)
+                             (= current-route "/profile/view")))])))))))))

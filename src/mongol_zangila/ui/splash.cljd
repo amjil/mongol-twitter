@@ -1,10 +1,10 @@
 (ns mongol-zangila.ui.splash
   "Application bootstrap and routing director.
-   Presents the initial brand identity while delegating system ignition 
-   and session validation to the auth-ctrl domain controller."
+   ⚡ Upgraded: Features elastic entry animation and premium glowing branding."
   (:require
    ["package:flutter/material.dart" :as m]
    ["package:mongol/mongol.dart" :as mgl]
+   ["dart:core" :as dc]
 
    ;; Centralized Dart Interop Interceptor
    ["package:mongol_zangila/post_frame_trigger.dart" :as pft]
@@ -43,24 +43,37 @@
       .child
       (m/Center
        .child
-       (m/Row
-        .mainAxisAlignment m/MainAxisAlignment.center
-        .crossAxisAlignment m/CrossAxisAlignment.center
-        .children
-        [(m/Container
-          .padding (m/EdgeInsets.all 20.0)
-          .decoration (m/BoxDecoration
-                       .color (.withOpacity m/Colors.white 0.15)
-                       .shape m/BoxShape.circle)
-          .child (m/Icon m/Icons.water_drop_rounded .color m/Colors.white .size 36.0))
-         (m/SizedBox .width 28.0)
-         (mgl/MongolText "Монгол Зангилаа"
-                         .style (m/TextStyle .fontFamily "OyunQaganTig"
-                                             .fontSize 36.0
-                                             .fontWeight m/FontWeight.bold
-                                             .color m/Colors.white
-                                             .letterSpacing 2.0))
-         (m/SizedBox .width 48.0)
-         (m/CircularProgressIndicator
-          .valueColor (m/AlwaysStoppedAnimation. m/Colors.white)
-          .strokeWidth 3.0)])))))))
+       ;; ⚡ Elastic scale-in entrance
+       (m/TweenAnimationBuilder
+        .tween (m/Tween .begin 0.8 .end 1.0)
+        .duration (dc/Duration. .milliseconds 1500)
+        .curve m/Curves.easeOutElastic
+        .builder
+        (fn [_ ^dc/double scale child]
+          (m/Transform.scale .scale scale .child child))
+        .child
+        (m/Row
+         .mainAxisAlignment m/MainAxisAlignment.center
+         .crossAxisAlignment m/CrossAxisAlignment.center
+         .children
+         [(m/Container
+           .padding (m/EdgeInsets.all 24.0)
+           .decoration (m/BoxDecoration
+                        .color (.withOpacity m/Colors.white 0.15)
+                        .shape m/BoxShape.circle
+                        .boxShadow [(m/BoxShadow
+                                     .color (.withOpacity m/Colors.white 0.1)
+                                     .blurRadius 24.0
+                                     .spreadRadius 8.0)])
+           .child (m/Icon m/Icons.water_drop_rounded .color m/Colors.white .size 40.0))
+          (m/SizedBox .width 28.0)
+          (mgl/MongolText "Монгол Зангилаа"
+                          .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                              .fontSize 36.0
+                                              .fontWeight m/FontWeight.bold
+                                              .color m/Colors.white
+                                              .letterSpacing 2.0))
+          (m/SizedBox .width 48.0)
+          (m/CircularProgressIndicator
+           .valueColor (m/AlwaysStoppedAnimation. m/Colors.white)
+           .strokeWidth 3.0)])))))))))
