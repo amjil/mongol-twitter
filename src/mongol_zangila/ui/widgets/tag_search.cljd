@@ -17,7 +17,7 @@
    
    ;; Custom Editor & IME Components
    [rich-editor.components.text-field :as custom-tf]
-   [virtual-keyboard.keyboard :as keyboard]
+   [mongol-zangila.ui.widgets.ime-wrapper :as ime]
    [virtual-keyboard.options :as options]
    [shared-ime.overlay-view :as overlay]))
 
@@ -251,14 +251,15 @@
            .children
            [(m/Expanded
              .child
-             (m/Stack
-              .children
-              [main-content
-               (keyboard/candidates nil)]))
+             (ime/dismiss-zone
+              (m/Stack
+               .children
+               [main-content
+                (ime/animated-candidates nil)])))
             (m/SafeArea
              .top false
              .child
-             (keyboard/keyboard
+             (ime/animated-keyboard
               {:custom-fns {:on-return #(when-let [cb (:on-return (:external-keyboard-delegate @!search-state))] (cb))
                             :on-backspace #(when-let [cb (:on-backspace (:external-keyboard-delegate @!search-state))] (cb))}}))])
           (overlay/ime-global-wrapper main-content "tag-modal-ime"))))))))

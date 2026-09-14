@@ -22,7 +22,7 @@
    [mongol-zangila.ui.widgets.empty-state :as empty-state]
    [mongol-zangila.ui.search.components.search-input :as search-input]
    [components.toast :as toast]
-   [virtual-keyboard.keyboard :as keyboard]
+   [mongol-zangila.ui.widgets.ime-wrapper :as ime]
    [virtual-keyboard.options :as options]))
 
 ;; =============================================================================
@@ -483,78 +483,79 @@
          .children
          [(m/Expanded
            .child
-           (m/Stack
-            .children
-            [(m/Row
-              .crossAxisAlignment m/CrossAxisAlignment.stretch
-              .children
-              [;; Left rail: search (pick) or group name (name step)
-               (m/Container
-                .width (if pick-step? 88.0 120.0)
-                .padding (m/EdgeInsets.only .top 8.0 .bottom 16.0 .left 8.0 .right 8.0)
-                .decoration (m/BoxDecoration
-                             .color (theme/surface ctx)
-                             .border (m/Border .right (m/BorderSide .color (theme/border ctx) .width 1.0)))
-                .child
-                (if pick-step?
-                  (m/Column
-                   .children
-                   (vec
-                    (keep identity
-                          [(m/Expanded
-                            .child
-                            (search-input/search-field
-                             search-ctrl
-                             (fn [val]
-                               (when-let [t @!search-timer]
-                                 (.cancel ^async/Timer t)
-                                 (reset! !search-timer nil))
-                               (reset! !query val)
-                               (if (str/blank? (str/trim (str val)))
-                                 (do
-                                   (reset! !remote [])
-                                   (reset! !loading-remote? false))
-                                 (search-ctrl/search-users! ctx val !remote !loading-remote?)))
-                             :autofocus false
-                             :on-changed #(apply-query! ctx %)
-                             :on-clear #(apply-query! ctx "")))
-                           (when (pos? sel-count)
-                             (m/Padding
-                              .padding (m/EdgeInsets.only .top 8.0)
-                              .child
-                              (mgl/MongolText (str sel-count)
-                                              .style (m/TextStyle .fontFamily "OyunQaganTig"
-                                                                  .fontSize 13.0
-                                                                  .fontWeight m/FontWeight.bold
-                                                                  .color theme/brand-blue))))])))
-                  (mgl/MongolTextField
-                   .controller group-name-ctrl
-                   .autofocus true
-                   .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 18.0
-                                       .fontWeight m/FontWeight.bold .color (theme/text ctx))
-                   .decoration (m/InputDecoration
-                                .hintText "Группийн нэр..."
-                                .hintStyle (m/TextStyle .color (theme/text-2 ctx) .fontWeight m/FontWeight.normal)
-                                .border m/InputBorder.none
-                                .focusedBorder m/InputBorder.none
-                                .enabledBorder m/InputBorder.none))))
+           (ime/dismiss-zone
+            (m/Stack
+             .children
+             [(m/Row
+               .crossAxisAlignment m/CrossAxisAlignment.stretch
+               .children
+               [;; Left rail: search (pick) or group name (name step)
+                (m/Container
+                 .width (if pick-step? 88.0 120.0)
+                 .padding (m/EdgeInsets.only .top 8.0 .bottom 16.0 .left 8.0 .right 8.0)
+                 .decoration (m/BoxDecoration
+                              .color (theme/surface ctx)
+                              .border (m/Border .right (m/BorderSide .color (theme/border ctx) .width 1.0)))
+                 .child
+                 (if pick-step?
+                   (m/Column
+                    .children
+                    (vec
+                     (keep identity
+                           [(m/Expanded
+                             .child
+                             (search-input/search-field
+                              search-ctrl
+                              (fn [val]
+                                (when-let [t @!search-timer]
+                                  (.cancel ^async/Timer t)
+                                  (reset! !search-timer nil))
+                                (reset! !query val)
+                                (if (str/blank? (str/trim (str val)))
+                                  (do
+                                    (reset! !remote [])
+                                    (reset! !loading-remote? false))
+                                  (search-ctrl/search-users! ctx val !remote !loading-remote?)))
+                              :autofocus false
+                              :on-changed #(apply-query! ctx %)
+                              :on-clear #(apply-query! ctx "")))
+                            (when (pos? sel-count)
+                              (m/Padding
+                               .padding (m/EdgeInsets.only .top 8.0)
+                               .child
+                               (mgl/MongolText (str sel-count)
+                                               .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                                                   .fontSize 13.0
+                                                                   .fontWeight m/FontWeight.bold
+                                                                   .color theme/brand-blue))))])))
+                   (mgl/MongolTextField
+                    .controller group-name-ctrl
+                    .autofocus true
+                    .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 18.0
+                                        .fontWeight m/FontWeight.bold .color (theme/text ctx))
+                    .decoration (m/InputDecoration
+                                 .hintText "Группийн нэр..."
+                                 .hintStyle (m/TextStyle .color (theme/text-2 ctx) .fontWeight m/FontWeight.normal)
+                                 .border m/InputBorder.none
+                                 .focusedBorder m/InputBorder.none
+                                 .enabledBorder m/InputBorder.none))))
 
-               (m/Expanded
-                .child
-                (people-gallery
-                 ctx
-                 {:pick-step? pick-step?
-                  :loading? loading?
-                  :contacts contacts
-                  :query query
-                  :loading-remote? loading-remote?
-                  :people people
-                  :naming-people naming-people
-                  :selected-ids selected-ids
-                  :selected-users selected-users
-                  :on-toggle on-toggle!
-                  :on-card-tap on-card-tap!}))])
-             (keyboard/candidates (m/TextStyle .fontFamily "OyunQaganTig"
-                                               .fontSize 16.0
-                                               .color (theme/text ctx)))]))
-          (keyboard/keyboard {:widget-key (m/ValueKey. "new-chat-kb")})])))))))
+                (m/Expanded
+                 .child
+                 (people-gallery
+                  ctx
+                  {:pick-step? pick-step?
+                   :loading? loading?
+                   :contacts contacts
+                   :query query
+                   :loading-remote? loading-remote?
+                   :people people
+                   :naming-people naming-people
+                   :selected-ids selected-ids
+                   :selected-users selected-users
+                   :on-toggle on-toggle!
+                   :on-card-tap on-card-tap!}))])
+              (ime/animated-candidates (m/TextStyle .fontFamily "OyunQaganTig"
+                                                    .fontSize 16.0
+                                                    .color (theme/text ctx)))])))
+          (ime/animated-keyboard {:widget-key (m/ValueKey. "new-chat-kb")})])))))))

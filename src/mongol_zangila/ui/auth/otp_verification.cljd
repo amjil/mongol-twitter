@@ -19,8 +19,8 @@
    [mongol-zangila.ui.theme :as theme]
    [mongol-zangila.ui.widgets.auth-components :as auth-ui]
    
-   ;; Custom Keyboard
-   [virtual-keyboard.keyboard :as keyboard]))
+   ;; Custom Keyboard (IME wrapper)
+   [mongol-zangila.ui.widgets.ime-wrapper :as ime]))
 
 ;; =============================================================================
 ;; 1. Sub-component: OTP Input Pillar
@@ -118,73 +118,74 @@
          ;; A. Main Viewport
          (m/Expanded
           .child
-          (m/Stack
-           .children
-           [(m/SingleChildScrollView
-             .scrollDirection m/Axis.horizontal
-             .padding (m/EdgeInsets.only .left 24.0 .right 48.0 .top 64.0)
-             .physics (m/BouncingScrollPhysics.)
-             .child
-             (m/Row
-              .crossAxisAlignment m/CrossAxisAlignment.start
-              .children
-              [
-               ;; Pillar 1: Visual Anchor & Instructions
-               (m/Container
-                .width 140.0
-                .padding (m/EdgeInsets.only .top 24.0)
-                .alignment m/Alignment.topCenter
-                .child
-                (m/Column
-                 .children
-                 [(m/Container
-                   .padding (m/EdgeInsets.all 16.0)
-                   .decoration (m/BoxDecoration .color (theme/bg ctx) .shape m/BoxShape.circle)
-                   .child (m/Icon m/Icons.message_rounded .color theme/brand-blue .size 28.0))
-                  (m/SizedBox .height 24.0)
-                  (mgl/MongolText "Код баталгаажуулах" 
-                                  .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold .fontSize 16.0))
-                  (m/SizedBox .height 16.0)
-                  (mgl/MongolText (str phone "\nдугаарт илгээсэн\nкодыг оруулна уу.") 
-                                  .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 13.0 .color (theme/text-2 ctx)))]))
+          (ime/dismiss-zone
+           (m/Stack
+            .children
+            [(m/SingleChildScrollView
+              .scrollDirection m/Axis.horizontal
+              .padding (m/EdgeInsets.only .left 24.0 .right 48.0 .top 64.0)
+              .physics (m/BouncingScrollPhysics.)
+              .child
+              (m/Row
+               .crossAxisAlignment m/CrossAxisAlignment.start
+               .children
+               [
+                ;; Pillar 1: Visual Anchor & Instructions
+                (m/Container
+                 .width 140.0
+                 .padding (m/EdgeInsets.only .top 24.0)
+                 .alignment m/Alignment.topCenter
+                 .child
+                 (m/Column
+                  .children
+                  [(m/Container
+                    .padding (m/EdgeInsets.all 16.0)
+                    .decoration (m/BoxDecoration .color (theme/bg ctx) .shape m/BoxShape.circle)
+                    .child (m/Icon m/Icons.message_rounded .color theme/brand-blue .size 28.0))
+                   (m/SizedBox .height 24.0)
+                   (mgl/MongolText "Код баталгаажуулах" 
+                                   .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold .fontSize 16.0))
+                   (m/SizedBox .height 16.0)
+                   (mgl/MongolText (str phone "\nдугаарт илгээсэн\nкодыг оруулна уу.") 
+                                   .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 13.0 .color (theme/text-2 ctx)))]))
 
-               (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
+                (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
 
-               ;; Pillar 2: OTP Input Field
-               (otp-input-pillar otp-ctrl "Баталгаажуулах код")
+                ;; Pillar 2: OTP Input Field
+                (otp-input-pillar otp-ctrl "Баталгаажуулах код")
 
-               (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
+                (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
 
-               ;; Pillar 3: Actions (Verify + Resend)
-               (m/Padding
-                .padding (m/EdgeInsets.only .top 24.0 .right 24.0)
-                .child
-                (m/Column
-                 .mainAxisSize m/MainAxisSize.min
-                 .crossAxisAlignment m/CrossAxisAlignment.center
-                 .children
-                 [
-                  ;; 3a. Primary Verify Button (localized loading watch)
-                  (auth-ui/auth-submit-button
-                   !loading?
-                   #(auth-ctrl/verify-otp! ctx phone (.-text otp-ctrl) intent !loading?
-                                           :name name :password password))
-                  
-                  (m/SizedBox .height 48.0)
-                  
-                  ;; 3b. Resend Cooldown UI
-                  (if (> countdown 0)
-                    (mgl/MongolText (str "Дахин илгээх (" countdown "с)")
-                                    .style (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text-2 ctx) .fontSize 14.0))
-                    (mgl/MongolTextButton
-                     .onPressed #(auth-ctrl/resend-otp! ctx phone intent !resend-countdown)
-                     .child (mgl/MongolText "Код ирээгүй юу?\nДахин илгээх"
-                                            .style (m/TextStyle .fontFamily "OyunQaganTig" 
-                                                                .color theme/brand-blue 
-                                                                .fontWeight m/FontWeight.bold))))]))]))
-            
-            ;; Floating candidates view (Needed if using custom keyboard)
-            (keyboard/candidates nil)]))
+                ;; Pillar 3: Actions (Verify + Resend)
+                (m/Padding
+                 .padding (m/EdgeInsets.only .top 24.0 .right 24.0)
+                 .child
+                 (m/Column
+                  .mainAxisSize m/MainAxisSize.min
+                  .crossAxisAlignment m/CrossAxisAlignment.center
+                  .children
+                  [
+                   ;; 3a. Primary Verify Button (localized loading watch)
+                   (auth-ui/auth-submit-button
+                    !loading?
+                    #(auth-ctrl/verify-otp! ctx phone (.-text otp-ctrl) intent !loading?
+                                            :name name :password password))
+                   
+                   (m/SizedBox .height 48.0)
+                   
+                   ;; 3b. Resend Cooldown UI
+                   (if (> countdown 0)
+                     (mgl/MongolText (str "Дахин илгээх (" countdown "с)")
+                                     .style (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text-2 ctx) .fontSize 14.0))
+                     (mgl/MongolTextButton
+                      .onPressed #(auth-ctrl/resend-otp! ctx phone intent !resend-countdown)
+                      .child (mgl/MongolText "Код ирээгүй юу?\nДахин илгээх"
+                                             .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                                                 .color theme/brand-blue 
+                                                                 .fontWeight m/FontWeight.bold))))]))]))
+             
+             ;; Floating candidates view (Needed if using custom keyboard)
+             (ime/animated-candidates nil)])))
 
          ;; B. Keyboard
-         (keyboard/keyboard {})]))))))
+         (ime/animated-keyboard {})]))))))

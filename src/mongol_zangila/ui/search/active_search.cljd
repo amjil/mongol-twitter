@@ -17,7 +17,7 @@
    [mongol-zangila.ui.widgets.empty-state :as empty-state]
    [mongol-zangila.ui.widgets.avatar :as smart-avatar]
    [mongol-zangila.ui.search.components.search-input :as search-input]
-   [virtual-keyboard.keyboard :as keyboard]
+   [mongol-zangila.ui.widgets.ime-wrapper :as ime]
    [virtual-keyboard.options :as options]))
 
 ;; =============================================================================
@@ -269,63 +269,64 @@
        .children
        [(m/Expanded
          .child
-         (m/Stack
-          .children
-          [(m/Row
-            .crossAxisAlignment m/CrossAxisAlignment.stretch
-            .children
-            [(m/Container
-              .width search-input/rail-width
-              .padding (m/EdgeInsets.only .top 8.0 .bottom 16.0 .left 8.0 .right 8.0)
-              .decoration (m/BoxDecoration
-                           .color (theme/surface ctx)
-                           .border (m/Border .right (m/BorderSide .color (theme/border ctx) .width 1.0)))
-              .child
-              (m/Column
-               .children
-               [(m/Expanded
-                 .child
-                 (search-input/search-field
-                  search-ctrl
-                  (fn [val]
-                    (submit-query! ctx val !query !kind !timer !results !loading?))
-                  :on-changed #(apply-query! ctx % !query !kind !timer !results !loading?)
-                  :on-clear #(apply-query! ctx "" !query !kind !timer !results !loading?)))
-                (m/SizedBox .height 8.0)
-                (kind-tab ctx :user kind switch-kind!)
-                (kind-tab ctx :topic kind switch-kind!)]))
+         (ime/dismiss-zone
+          (m/Stack
+           .children
+           [(m/Row
+             .crossAxisAlignment m/CrossAxisAlignment.stretch
+             .children
+             [(m/Container
+               .width search-input/rail-width
+               .padding (m/EdgeInsets.only .top 8.0 .bottom 16.0 .left 8.0 .right 8.0)
+               .decoration (m/BoxDecoration
+                            .color (theme/surface ctx)
+                            .border (m/Border .right (m/BorderSide .color (theme/border ctx) .width 1.0)))
+               .child
+               (m/Column
+                .children
+                [(m/Expanded
+                  .child
+                  (search-input/search-field
+                   search-ctrl
+                   (fn [val]
+                     (submit-query! ctx val !query !kind !timer !results !loading?))
+                   :on-changed #(apply-query! ctx % !query !kind !timer !results !loading?)
+                   :on-clear #(apply-query! ctx "" !query !kind !timer !results !loading?)))
+                 (m/SizedBox .height 8.0)
+                 (kind-tab ctx :user kind switch-kind!)
+                 (kind-tab ctx :topic kind switch-kind!)]))
 
-             (m/Expanded
-              .child
-              (cond
-                blank?
-                (m/Center
-                 .child (mgl/MongolText "Хайх үгээ оруулна уу..."
-                                        .style (m/TextStyle .fontFamily "OyunQaganTig"
-                                                            .color (theme/text-2 ctx))))
+              (m/Expanded
+               .child
+               (cond
+                 blank?
+                 (m/Center
+                  .child (mgl/MongolText "Хайх үгээ оруулна уу..."
+                                         .style (m/TextStyle .fontFamily "OyunQaganTig"
+                                                             .color (theme/text-2 ctx))))
 
-                (and loading? (empty? results))
-                (m/Center .child (m/CircularProgressIndicator .color theme/brand-blue))
+                 (and loading? (empty? results))
+                 (m/Center .child (m/CircularProgressIndicator .color theme/brand-blue))
 
-                (empty? results)
-                (empty-state/empty-search-view ctx query)
+                 (empty? results)
+                 (empty-state/empty-search-view ctx query)
 
-                :else
-                (m/ListView.builder
-                 .scrollDirection m/Axis.horizontal
-                 .physics (m/BouncingScrollPhysics.)
-                 .padding (m/EdgeInsets.only .right 32.0)
-                 .itemCount (count results)
-                 .itemBuilder (fn [_ i]
-                                (let [item (nth results i)]
-                                  (if (= kind :topic)
-                                    (topic-result-tile ctx item)
-                                    (user-result-tile ctx item (get current-user "id"))))))))])
+                 :else
+                 (m/ListView.builder
+                  .scrollDirection m/Axis.horizontal
+                  .physics (m/BouncingScrollPhysics.)
+                  .padding (m/EdgeInsets.only .right 32.0)
+                  .itemCount (count results)
+                  .itemBuilder (fn [_ i]
+                                 (let [item (nth results i)]
+                                   (if (= kind :topic)
+                                     (topic-result-tile ctx item)
+                                     (user-result-tile ctx item (get current-user "id"))))))))])
 
-           (keyboard/candidates (m/TextStyle .fontFamily "OyunQaganTig"
-                                             .fontSize 16.0
-                                             .color (theme/text ctx)))]))
+            (ime/animated-candidates (m/TextStyle .fontFamily "OyunQaganTig"
+                                                  .fontSize 16.0
+                                                  .color (theme/text ctx)))])))
 
         (m/SafeArea
          .top false
-         .child (keyboard/keyboard {:widget-key (m/ValueKey. "search-kb")}))])))))
+         .child (ime/animated-keyboard {:widget-key (m/ValueKey. "search-kb")}))])))))

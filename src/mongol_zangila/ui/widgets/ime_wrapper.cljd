@@ -1,0 +1,35 @@
+(ns mongol-zangila.ui.widgets.ime-wrapper
+  "Fluid animation wrappers for the custom Mongolian FST keyboard.
+   Injects physical easing into abrupt height changes."
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["dart:core" :as dc]
+   [virtual-keyboard.keyboard :as keyboard]))
+
+(defn animated-keyboard
+  "Wraps the virtual keyboard to smoothly slide up/down using layout interpolation."
+  [options]
+  (m/AnimatedSize
+   .duration (dc/Duration. .milliseconds 350)
+   .curve m/Curves.easeOutQuart ;; ⚡ 高级阻尼曲线，开头快，结尾极其平缓
+   .alignment m/Alignment.bottomCenter
+   .child (keyboard/keyboard options)))
+
+(defn animated-candidates
+  "Wraps the floating candidate bar to gracefully fade and expand."
+  [options]
+  (m/AnimatedSize
+   .duration (dc/Duration. .milliseconds 250)
+   .curve m/Curves.easeOutCubic
+   .alignment m/Alignment.bottomCenter
+   .child (keyboard/candidates options)))
+
+(defn dismiss-zone
+  "Wraps the main viewport. Tapping anywhere outside an input field dismisses the keyboard."
+  [child]
+  (m/GestureDetector
+   .onTap (fn []
+            (when-let [focus (.-primaryFocus m/FocusManager.instance)]
+              (.unfocus focus)))
+   .behavior m/HitTestBehavior.translucent
+   .child child))

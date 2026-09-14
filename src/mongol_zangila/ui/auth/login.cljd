@@ -16,8 +16,8 @@
    [mongol-zangila.ui.widgets.auth-components :as auth-ui]
    [mongol-zangila.utils.nav :as nav]
    
-   ;; Custom Keyboard
-   [virtual-keyboard.keyboard :as keyboard]))
+   ;; Custom Keyboard (IME wrapper)
+   [mongol-zangila.ui.widgets.ime-wrapper :as ime]))
 
 (defn login-screen 
   "The primary authentication gateway."
@@ -48,80 +48,81 @@
         [
          (m/Expanded
           .child
-          (m/Stack
-           .children
-           [(m/SingleChildScrollView
-             .scrollDirection m/Axis.horizontal
-             .padding (m/EdgeInsets.only .left 24.0 .right 48.0 .top 64.0)
-             .physics (m/BouncingScrollPhysics.)
-             .child
-             (m/Row
-              .crossAxisAlignment m/CrossAxisAlignment.start
-              .children
-              [
-               (m/Container
-                .width 140.0
-                .padding (m/EdgeInsets.only .top 24.0)
-                .alignment m/Alignment.topCenter
-                .child
-                (m/Column
-                 .mainAxisSize m/MainAxisSize.min
-                 .children
-                 [(m/Container
-                   .padding (m/EdgeInsets.all 16.0)
-                   .decoration (m/BoxDecoration .color (theme/bg ctx) .shape m/BoxShape.circle)
-                   .child (m/Icon m/Icons.water_drop_rounded .color theme/brand-blue .size 32.0))
-                  (m/SizedBox .height 24.0)
-                  (mgl/MongolText "Монгол Зангилаа"
-                                  .style (m/TextStyle .fontFamily "OyunQaganTig" 
-                                                      .fontSize 20.0 
-                                                      .fontWeight m/FontWeight.bold 
-                                                      .color (theme/text ctx)))]))
+          (ime/dismiss-zone
+           (m/Stack
+            .children
+            [(m/SingleChildScrollView
+              .scrollDirection m/Axis.horizontal
+              .padding (m/EdgeInsets.only .left 24.0 .right 48.0 .top 64.0)
+              .physics (m/BouncingScrollPhysics.)
+              .child
+              (m/Row
+               .crossAxisAlignment m/CrossAxisAlignment.start
+               .children
+               [
+                (m/Container
+                 .width 140.0
+                 .padding (m/EdgeInsets.only .top 24.0)
+                 .alignment m/Alignment.topCenter
+                 .child
+                 (m/Column
+                  .mainAxisSize m/MainAxisSize.min
+                  .children
+                  [(m/Container
+                    .padding (m/EdgeInsets.all 16.0)
+                    .decoration (m/BoxDecoration .color (theme/bg ctx) .shape m/BoxShape.circle)
+                    .child (m/Icon m/Icons.water_drop_rounded .color theme/brand-blue .size 32.0))
+                   (m/SizedBox .height 24.0)
+                   (mgl/MongolText "Монгол Зангилаа"
+                                   .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                                       .fontSize 20.0 
+                                                       .fontWeight m/FontWeight.bold 
+                                                       .color (theme/text ctx)))]))
 
-               (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
+                (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
 
-               (auth-ui/auth-input-pillar phone-ctrl "Утасны дугаар")
+                (auth-ui/auth-input-pillar phone-ctrl "Утасны дугаар")
 
-               (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
+                (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
 
-               (auth-ui/auth-input-pillar pass-ctrl "Нууц үг" :obscure? true)
+                (auth-ui/auth-input-pillar pass-ctrl "Нууц үг" :obscure? true)
 
-               (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
+                (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
 
-               (m/Padding
-                .padding (m/EdgeInsets.only .top 24.0 .right 24.0)
-                .child
-                (m/Row
-                 .crossAxisAlignment m/CrossAxisAlignment.start
-                 .children
-                 [
-                  (auth-ui/auth-submit-button
-                   !loading?
-                   #(auth-ctrl/perform-login! ctx (.-text phone-ctrl) (.-text pass-ctrl) !loading?))
-                  
-                  (m/SizedBox .width 40.0)
-                  
-                  (m/Column
-                   .mainAxisSize m/MainAxisSize.min
-                   .crossAxisAlignment m/CrossAxisAlignment.center
-                   .children
-                   [(mgl/MongolTextButton
-                     .onPressed #(nav/push! ctx "/auth/forgot-password")
-                     .child (mgl/MongolText "Нууц үгээ мартсан уу?" 
-                                            .style (m/TextStyle .fontFamily "OyunQaganTig" 
-                                                                .color (theme/text-2 ctx))))
-                    
-                    (m/SizedBox .height 24.0)
-                    (m/Container .width 24.0 .height 1.0 .color (theme/border ctx))
-                    (m/SizedBox .height 24.0)
-                    
-                    (mgl/MongolTextButton
-                     .onPressed #(nav/push! ctx "/register")
-                     .child (mgl/MongolText "Бүртгэлгүй юу?\nБүртгүүлэх" 
-                                            .style (m/TextStyle .fontFamily "OyunQaganTig" 
-                                                                .color theme/brand-blue 
-                                                                .fontWeight m/FontWeight.bold)))])]))]))
-            
-            (keyboard/candidates nil)]))
+                (m/Padding
+                 .padding (m/EdgeInsets.only .top 24.0 .right 24.0)
+                 .child
+                 (m/Row
+                  .crossAxisAlignment m/CrossAxisAlignment.start
+                  .children
+                  [
+                   (auth-ui/auth-submit-button
+                    !loading?
+                    #(auth-ctrl/perform-login! ctx (.-text phone-ctrl) (.-text pass-ctrl) !loading?))
+                   
+                   (m/SizedBox .width 40.0)
+                   
+                   (m/Column
+                    .mainAxisSize m/MainAxisSize.min
+                    .crossAxisAlignment m/CrossAxisAlignment.center
+                    .children
+                    [(mgl/MongolTextButton
+                      .onPressed #(nav/push! ctx "/auth/forgot-password")
+                      .child (mgl/MongolText "Нууц үгээ мартсан уу?" 
+                                             .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                                                 .color (theme/text-2 ctx))))
+                     
+                     (m/SizedBox .height 24.0)
+                     (m/Container .width 24.0 .height 1.0 .color (theme/border ctx))
+                     (m/SizedBox .height 24.0)
+                     
+                     (mgl/MongolTextButton
+                      .onPressed #(nav/push! ctx "/register")
+                      .child (mgl/MongolText "Бүртгэлгүй юу?\nБүртгүүлэх" 
+                                             .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                                                 .color theme/brand-blue 
+                                                                 .fontWeight m/FontWeight.bold)))])]))]))
+             
+             (ime/animated-candidates nil)])))
 
-         (keyboard/keyboard {})]))))))
+         (ime/animated-keyboard {})]))))))

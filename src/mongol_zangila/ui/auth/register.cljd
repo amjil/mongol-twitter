@@ -16,8 +16,8 @@
    [mongol-zangila.ui.widgets.auth-components :as auth-ui]
    [mongol-zangila.utils.nav :as nav]
    
-   ;; Custom Keyboard
-   [virtual-keyboard.keyboard :as keyboard]))
+   ;; Custom Keyboard (IME wrapper)
+   [mongol-zangila.ui.widgets.ime-wrapper :as ime]))
 
 (defn register-screen 
   "The primary account creation gateway."
@@ -58,35 +58,36 @@
         [
          (m/Expanded
           .child
-          (m/Stack
-           .children
-           [(m/SingleChildScrollView
-             .scrollDirection m/Axis.horizontal
-             .padding (m/EdgeInsets.only .left 24.0 .right 48.0 .top 64.0)
-             .physics (m/BouncingScrollPhysics.)
-             .child
-             (m/Row
-              .crossAxisAlignment m/CrossAxisAlignment.start
-              .children
-              [
-               (m/Container
-                .width 140.0
-                .padding (m/EdgeInsets.only .top 24.0)
-                .alignment m/Alignment.topCenter
-                .child
-                (m/Column
-                 .mainAxisSize m/MainAxisSize.min
-                 .children
-                 [(m/Container
-                   .padding (m/EdgeInsets.all 16.0)
-                   .decoration (m/BoxDecoration .color (theme/bg ctx) .shape m/BoxShape.circle)
-                   .child (m/Icon m/Icons.person_add_alt_1_rounded .color theme/brand-blue .size 28.0))
-                  (m/SizedBox .height 24.0)
-                  (mgl/MongolText "Бүртгүүлэх"
-                                  .style (m/TextStyle .fontFamily "OyunQaganTig" 
-                                                      .fontSize 16.0 
-                                                      .fontWeight m/FontWeight.bold 
-                                                      .color (theme/text ctx)))]))
+          (ime/dismiss-zone
+           (m/Stack
+            .children
+            [(m/SingleChildScrollView
+              .scrollDirection m/Axis.horizontal
+              .padding (m/EdgeInsets.only .left 24.0 .right 48.0 .top 64.0)
+              .physics (m/BouncingScrollPhysics.)
+              .child
+              (m/Row
+               .crossAxisAlignment m/CrossAxisAlignment.start
+               .children
+               [
+                (m/Container
+                 .width 140.0
+                 .padding (m/EdgeInsets.only .top 24.0)
+                 .alignment m/Alignment.topCenter
+                 .child
+                 (m/Column
+                  .mainAxisSize m/MainAxisSize.min
+                  .children
+                  [(m/Container
+                    .padding (m/EdgeInsets.all 16.0)
+                    .decoration (m/BoxDecoration .color (theme/bg ctx) .shape m/BoxShape.circle)
+                    .child (m/Icon m/Icons.person_add_alt_1_rounded .color theme/brand-blue .size 28.0))
+                   (m/SizedBox .height 24.0)
+                   (mgl/MongolText "Бүртгүүлэх"
+                                   .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                                       .fontSize 16.0 
+                                                       .fontWeight m/FontWeight.bold 
+                                                       .color (theme/text ctx)))]))
 
                (m/VerticalDivider .width 1.0 .thickness 1.0 .color (theme/border ctx))
 
@@ -125,7 +126,7 @@
                                                       .fontSize 13.0 
                                                       .color (theme/text-2 ctx)
                                                       .height 1.5))]))]))
-            
-            (keyboard/candidates nil)]))
+             
+             (ime/animated-candidates nil)])))
 
-         (keyboard/keyboard {})]))))))
+         (ime/animated-keyboard {})]))))))
