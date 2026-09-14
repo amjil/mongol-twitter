@@ -58,14 +58,15 @@
 
          (m/SizedBox .width 16.0)
 
-         ;; 2. Content Pillar
+         ;; 2. Content Pillar — keep total width ≤ Expanded slot
+         ;; (card 160 − border 1 − pad 32 − avatar 40 − gap 16 ≈ 71)
          (m/Expanded
           .child
           (m/Row
            .crossAxisAlignment m/CrossAxisAlignment.start
            .children
            [(shimmer-box ctx 16.0 180.0 8.0 anim-val)
-            (m/SizedBox .width 12.0)
+            (m/SizedBox .width 8.0)
             (shimmer-box ctx 16.0 140.0 8.0 anim-val)
-            (m/SizedBox .width 12.0)
+            (m/SizedBox .width 8.0)
             (shimmer-box ctx 16.0 90.0 8.0 anim-val)]))]))))))

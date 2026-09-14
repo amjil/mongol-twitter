@@ -316,7 +316,8 @@
                 .padding (m/EdgeInsets.only .left 16.0)
                 .child (m/Align
                         .alignment m/Alignment.topCenter
-                        .child (post-media-gallery/multi-media-gallery ctx media-urls)))
+                        .child (post-media-gallery/multi-media-gallery ctx media-urls
+                                                                       :hero-scope post-id)))
                (m/SizedBox.shrink))])
 
            (m/SizedBox .width 12.0)

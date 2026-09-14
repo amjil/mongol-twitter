@@ -35,8 +35,10 @@
        icon))))
 
 (defn app-scaffold
-  "The root container for top-level navigation screens."
-  [ctx current-route body-widget]
+  "The root container for top-level navigation screens.
+   Optional :floating-action-button is hosted here (same Scaffold as the tab bar)
+   so Flutter lifts it above the bottom nav instead of painting it underneath."
+  [ctx current-route body-widget & {:keys [floating-action-button]}]
   (f/widget
    :watch [unread-msgs state/unread-messages-count
            unread-notifs state/unread-notifications-count]
@@ -45,6 +47,7 @@
     .backgroundColor (theme/bg ctx)
     .extendBody true
     .body body-widget
+    .floatingActionButton floating-action-button
 
     .bottomNavigationBar
     (m/ClipRect

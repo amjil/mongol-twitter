@@ -117,7 +117,8 @@
         .child
         
         ;; ⚡ Core swap: app-scaffold fully owns the global Bottom Navigation Bar
-        (scaffold/app-scaffold 
+        ;; FAB must live on that same Scaffold so it sits above the tab bar.
+        (scaffold/app-scaffold
          ctx "/feed/home"
          (m/Scaffold
           .backgroundColor (theme/bg ctx)
@@ -188,11 +189,10 @@
                                                                      (mutator %)
                                                                      %)
                                                                   ps))))
-                               :on-delete #(feed-ctrl/delete-post! ctx (get post-data "id") !posts))))))})))
-
-          .floatingActionButton
-          (m/FloatingActionButton
-           .backgroundColor theme/brand-blue
-           .elevation 4.0
-           .onPressed on-compose
-           .child (m/Icon m/Icons.edit_rounded .color m/Colors.white)))))))))
+                               :on-delete #(feed-ctrl/delete-post! ctx (get post-data "id") !posts))))))}))))
+         :floating-action-button
+         (m/FloatingActionButton
+          .backgroundColor theme/brand-blue
+          .elevation 4.0
+          .onPressed on-compose
+          .child (m/Icon m/Icons.edit_rounded .color m/Colors.white))))))))

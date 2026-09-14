@@ -89,7 +89,7 @@
         (dc/print (str "⏳ [Socket] Debouncing post-connect restore by " wait-ms "ms"))
         (reset! !rejoin-debounce-timer
                 (async/Timer. (dc/Duration. .milliseconds wait-ms)
-                              (fn [_]
+                              (fn []
                                 (reset! !rejoin-debounce-timer nil)
                                 (run-post-connect!))))))))
 
@@ -171,7 +171,7 @@
         (dc/print (str "⏳ [Socket] Reconnect backoff " delay-ms "ms (attempt " attempt ")"))
         (reset! !reconnect-timer
                 (async/Timer. (dc/Duration. .milliseconds delay-ms)
-                              (fn [_]
+                              (fn []
                                 (reset! !reconnect-timer nil)
                                 (connect!))))))))
 

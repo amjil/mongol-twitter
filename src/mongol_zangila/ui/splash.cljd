@@ -47,7 +47,7 @@
        (m/TweenAnimationBuilder
         .tween (m/Tween .begin 0.8 .end 1.0)
         .duration (dc/Duration. .milliseconds 1500)
-        .curve m/Curves.easeOutElastic
+        .curve m/Curves.elasticOut
         .builder
         (fn [_ ^dc/double scale child]
           (m/Transform.scale .scale scale .child child))

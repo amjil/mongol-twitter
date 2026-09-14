@@ -5,16 +5,25 @@
    [mongol-zangila.ui.widgets.cached-image :as cached-image]
    [mongol-zangila.utils.nav :as nav]))
 
-(defn- media-thumbnail [ctx url urls index border-radius]
+(defn media-hero-tag
+  "Unique Hero tag per gallery occurrence. URL alone collides when the same
+   seed/attachment appears in multiple posts on one route."
+  [hero-scope index]
+  (str (or hero-scope "media") "#" index))
+
+(defn- media-thumbnail [ctx url urls index border-radius hero-scope]
   (m/GestureDetector
-   .onTap #(nav/push! ctx "/media/viewer" {:media-urls urls :initial-index index})
+   .onTap #(nav/push! ctx "/media/viewer"
+                      {:media-urls urls
+                       :initial-index index
+                       :hero-scope hero-scope})
    .child
    (m/Hero
-    .tag url
+    .tag (media-hero-tag hero-scope index)
     .child (cached-image/cached-img url :border-radius border-radius :fit m/BoxFit.cover))))
 
 (defn- build-row
-  [ctx urls start-idx count-in-row total-count border-radius]
+  [ctx urls start-idx count-in-row total-count border-radius hero-scope]
   (m/Row
    .children
    (vec (interpose (m/SizedBox .width 4.0)
@@ -27,21 +36,24 @@
                           (m/Stack
                            .fit m/StackFit.expand
                            .children
-                           [(media-thumbnail ctx (nth urls idx) urls idx border-radius)
+                           [(media-thumbnail ctx (nth urls idx) urls idx border-radius hero-scope)
                             (m/Positioned.fill
                              .child
                              (m/GestureDetector
-                              .onTap #(nav/push! ctx "/media/viewer" {:media-urls urls :initial-index 8})
+                              .onTap #(nav/push! ctx "/media/viewer"
+                                                 {:media-urls urls
+                                                  :initial-index 8
+                                                  :hero-scope hero-scope})
                               .child
                               (m/Container
                                .decoration (m/BoxDecoration .color (m/Color 0x66000000))
                                .alignment m/Alignment.center
                                .child (m/Text (str "+" (- total-count 9))
                                               .style (m/TextStyle .fontSize 24.0 .color m/Colors.white .fontWeight m/FontWeight.bold)))))])
-                          (media-thumbnail ctx (nth urls idx) urls idx border-radius)))))))))
+                          (media-thumbnail ctx (nth urls idx) urls idx border-radius hero-scope)))))))))
 
 (defn- build-grid
-  [ctx urls layout border-radius]
+  [ctx urls layout border-radius hero-scope]
   (let [total-count (count urls)
         indices (vec (reductions + 0 layout))]
     (m/Column
@@ -49,10 +61,10 @@
      (vec (interpose (m/SizedBox .height 4.0)
                      (for [i (range (count layout))]
                        (m/Expanded
-                        .child (build-row ctx urls (nth indices i) (nth layout i) total-count border-radius))))))))
+                        .child (build-row ctx urls (nth indices i) (nth layout i) total-count border-radius hero-scope))))))))
 
 (defn multi-media-gallery
-  [ctx urls]
+  [ctx urls & {:keys [hero-scope]}]
   (let [cnt (count urls)
         layout (cond
                  (= cnt 1) [1]
@@ -76,4 +88,4 @@
        (m/Container
         .width w
         .height h
-       .child (build-grid ctx (take 9 urls) layout thumb-radius)))])))
+        .child (build-grid ctx (take 9 urls) layout thumb-radius hero-scope)))])))

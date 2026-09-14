@@ -22,7 +22,7 @@
 
         settings (fln/InitializationSettings. .android android-init .iOS ios-init)]
 
-    (-> (.initialize plugin settings)
+    (-> (.initialize plugin .settings settings)
         (.then (fn [_]
                  (dc/print "🔔 [LocalNotif] Plugin Initialized successfully.")))
         (.catchError (fn [err]
@@ -46,4 +46,8 @@
                      .presentBadge true
                      .presentSound true)
         details (fln/NotificationDetails. .android android-details .iOS ios-details)]
-    (.show plugin id title body details)))
+    (.show plugin
+           .id id
+           .title title
+           .body body
+           .notificationDetails details)))

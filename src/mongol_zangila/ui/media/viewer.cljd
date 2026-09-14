@@ -8,7 +8,8 @@
 
    [mongol-zangila.utils.nav :as nav]
    [mongol-zangila.infrastructure.media :as media]
-   [mongol-zangila.ui.widgets.cached-image :as cached-image]))
+   [mongol-zangila.ui.widgets.cached-image :as cached-image]
+   [mongol-zangila.ui.widgets.post-media-gallery :as post-media-gallery]))
 
 (defn- safe-index [urls idx]
   (let [n (count urls)]
@@ -23,8 +24,9 @@
 
 (defn media-viewer-screen
   "Renders an immersive, dark-mode image gallery.
-   Accepts a vector of image URLs and an optional starting index."
-  [media-urls & {:keys [initial-index]
+   Accepts a vector of image URLs and an optional starting index.
+   :hero-scope must match the thumbnail gallery (usually post id)."
+  [media-urls & {:keys [initial-index hero-scope]
                  :or {initial-index 0}}]
 
   (let [urls (mapv media/absolute-media-url (or media-urls []))
@@ -86,7 +88,7 @@
                  (m/Center
                   .child
                   (m/Hero
-                   .tag url
+                   .tag (post-media-gallery/media-hero-tag hero-scope i)
                    .child
                    (cached-image/cached-img url
                                             :width double/infinity
