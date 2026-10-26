@@ -6,6 +6,7 @@
    ["package:mongol/mongol.dart" :as mgl]
    [cljd.flutter :as f]
 
+   [mongol-zangila.infrastructure.storage :as storage]
    [mongol-zangila.ui.theme :as theme]
    [virtual-keyboard.options :as options]))
 
@@ -13,12 +14,25 @@
 ;; 1. Shared keyboard options (single source of truth)
 ;; =============================================================================
 
-(def shared-keyboard-options
-  "Inject via `:let [info auth-ui/shared-keyboard-options]` + `:bind {:info info}`."
+(defn keyboard-options
+  "Merges app styling with the user's standard-IME preference.
+   :keyboard/standard-layout? is reserved for mongol-virtual-keyboard (layout switch TBD)."
+  [standard-ime?]
   (merge options/keyboard-option
          {:keyboard/mongol-font-family "OyunQaganTig"
           :keyboard/key-container-color m/Colors.grey.shade500
-          :keyboard/font-size 16}))
+          :keyboard/font-size 16
+          :keyboard/standard-layout? (boolean standard-ime?)}))
+
+(def shared-keyboard-options
+  "Static default for legacy call sites; prefer `(keyboard-options @storage/!standard-ime?)` with :watch."
+  (keyboard-options true))
+
+(defn keyboard-options-themed
+  "Like keyboard-options but uses theme surface-2 for key caps (search/chat screens)."
+  [ctx standard-ime?]
+  (merge (keyboard-options standard-ime?)
+         {:keyboard/key-container-color (theme/surface-2 ctx)}))
 
 ;; =============================================================================
 ;; 2. Auth input pillar

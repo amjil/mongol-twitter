@@ -18,7 +18,8 @@
    ;; Custom Editor & IME Components
    [rich-editor.components.text-field :as custom-tf]
    [mongol-zangila.ui.widgets.ime-wrapper :as ime]
-   [virtual-keyboard.options :as options]
+   [mongol-zangila.infrastructure.storage :as storage]
+   [mongol-zangila.ui.widgets.auth-components :as auth-ui]
    [shared-ime.overlay-view :as overlay]))
 
 ;; =============================================================================
@@ -95,11 +96,10 @@
      :watch [results !raw-results
              loading? !loading?
              search-type !search-type
-             query !query]
+             query !query
+             standard-ime? storage/!standard-ime?]
 
-     :let [info (merge options/keyboard-option {:keyboard/mongol-font-family "OyunQaganTig"
-                                                :keyboard/key-container-color m/Colors.grey.shade500
-                                                :keyboard/font-size 16})
+     :let [info (auth-ui/keyboard-options standard-ime?)
            is-blank? (str/blank? (-> query str/trim (str/replace-first #"^[@#]" "")))
 
            main-content

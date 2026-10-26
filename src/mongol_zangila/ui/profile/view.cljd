@@ -18,6 +18,7 @@
 
    ;; System Controllers & State
    [mongol-zangila.state :as state]
+   [mongol-zangila.infrastructure.api :as api]
    [mongol-zangila.controllers.profile-ctrl :as profile-ctrl]
    [mongol-zangila.controllers.feed-ctrl :as feed-ctrl]
    [mongol-zangila.controllers.chat-ctrl :as chat-ctrl]
@@ -91,6 +92,8 @@
                                   .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold .fontSize 16.0))
            .onTap (fn []
                     (nav/pop! b-ctx)
+                    (-> (api/post-req (str "/users/" user-id "/report") {"reason" "inappropriate"})
+                        (.catchError (fn [_] nil)))
                     (toast/info ctx "Гомдол илгээгдлээ.")))]))))))
 
 ;; =============================================================================

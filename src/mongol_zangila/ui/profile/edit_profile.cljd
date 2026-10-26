@@ -13,6 +13,7 @@
 
    ;; UI & Shared Components
    [mongol-zangila.ui.theme :as theme]
+   [mongol-zangila.infrastructure.storage :as storage]
    [mongol-zangila.ui.widgets.auth-components :as auth-ui]
    [mongol-zangila.utils.nav :as nav]
    [mongol-zangila.infrastructure.media :as media-attach]
@@ -83,9 +84,10 @@
                bio-ctrl (m/TextEditingController. .text (get current-user "bio" ""))]
      
      ;; avatar-url only — loading? is watched inside the AppBar save button
-     :watch [avatar-url !avatar-url]
+     :watch [avatar-url !avatar-url
+             standard-ime? storage/!standard-ime?]
      
-     :let [info auth-ui/shared-keyboard-options]
+     :let [info (auth-ui/keyboard-options standard-ime?)]
      :bind {:info info}
 
      (m/Scaffold

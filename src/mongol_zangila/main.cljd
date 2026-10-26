@@ -6,9 +6,12 @@
    [cljd.flutter :as f]
 
    [mongol-zangila.router :as router]
+   [mongol-zangila.state :as state]
    [mongol-zangila.infrastructure.api :as api]
    [mongol-zangila.infrastructure.db :as db]
    [mongol-zangila.infrastructure.storage :as storage]
+   [mongol-zangila.infrastructure.socket :as socket]
+   [mongol-zangila.infrastructure.write-buffer :as write-buffer]
    [mongol-zangila.infrastructure.local-notifications :as local-notif]
    [mongol-zangila.ui.theme :as theme]
 
@@ -50,6 +53,12 @@
 
   (f/run
    (f/widget
+    :managed [_lifecycle (m/AppLifecycleListener.
+                          .onResume (fn []
+                                      (when @state/auth-token
+                                        (socket/ensure-connected!)
+                                        (write-buffer/flush-outbox!))))
+              :dispose .dispose]
     :watch [mode theme/!mode]
     (m/MaterialApp
      .title "Монгол Зангилаа"

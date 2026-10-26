@@ -11,6 +11,7 @@
    [clojure.string :as str]
 
    ;; System Infrastructure & Controllers
+   [mongol-zangila.infrastructure.api :as api]
    [mongol-zangila.infrastructure.config :as config]
    [mongol-zangila.infrastructure.media :as media]
    [mongol-zangila.controllers.feed-ctrl :as feed-ctrl]
@@ -55,7 +56,9 @@
   (theme/themed
    (fn [ctx]
      (m/InkWell
-      .onTap on-tap
+      .onTap (fn []
+               (services/HapticFeedback.lightImpact)
+               (when on-tap (on-tap)))
       .borderRadius (m/BorderRadius.circular 16.0)
       .child
       (m/Padding
@@ -89,7 +92,8 @@
 
 (defn- show-post-options! 
   [ctx post-data on-mutate on-delete]
-  (let [author (get post-data "author" {})
+  (let [post-id (get post-data "id")
+        author (get post-data "author" {})
         author-id (get author "id")
         author-name (get author "name" "Unknown")
         is-self? (= author-id (get @state/current-user "id"))]
@@ -106,7 +110,15 @@
          .children
          (vec
           (keep identity
-           [(when-not is-self?
+           [(mgl/MongolListTile
+             .leading (m/Icon m/Icons.link_rounded .color theme/brand-blue)
+             .title (mgl/MongolText "Линк хуулах"
+                                    .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold .fontSize 16.0 .color (theme/text ctx)))
+             .onTap (fn []
+                      (nav/pop! b-ctx)
+                      (share-post-link! ctx post-id)))
+
+            (when-not is-self?
               (mgl/MongolListTile
                .leading (m/Icon m/Icons.block_rounded .color theme/error-red)
                .title (mgl/MongolText (str "@" (get author "handle") " хэрэглэгчийг блоклох")
@@ -124,6 +136,8 @@
                                       .style (m/TextStyle .fontFamily "OyunQaganTig" .fontWeight m/FontWeight.bold .fontSize 16.0))
                .onTap (fn []
                         (nav/pop! b-ctx)
+                        (-> (api/post-req (str "/tweets/" post-id "/report") {"reason" "inappropriate"})
+                            (.catchError (fn [_] nil)))
                         (toast/info ctx "Гомдол илгээгдлээ."))))
             
             (when is-self?

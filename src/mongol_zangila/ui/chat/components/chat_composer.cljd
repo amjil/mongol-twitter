@@ -19,7 +19,8 @@
    [mongol-zangila.ui.widgets.tag-search :as tag-search]
    [rich-editor.components.simple-editor :as simple-editor]
    
-   [virtual-keyboard.options :as options]))
+   [mongol-zangila.infrastructure.storage :as storage]
+   [mongol-zangila.ui.widgets.auth-components :as auth-ui]))
 
 (defn- format-duration [total-seconds]
   (let [m (quot total-seconds 60)
@@ -84,9 +85,9 @@
                                  (let [top-inset (.-top (.-padding (m/MediaQuery.of d-ctx)))
                                        panel-top (+ top-inset app-bar-height)]
                                    (f/widget
-                                    :bind {:info (merge options/keyboard-option 
-                                                        {:keyboard/mongol-font-family "OyunQaganTig" 
-                                                         :keyboard/font-size 16})}
+                                    :watch [standard-ime? storage/!standard-ime?]
+                                    :let [info (auth-ui/keyboard-options standard-ime?)]
+                                    :bind {:info info}
                                     (m/Scaffold
                                      .backgroundColor m/Colors.transparent
                                      .resizeToAvoidBottomInset false

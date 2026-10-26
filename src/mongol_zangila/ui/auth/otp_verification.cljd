@@ -17,6 +17,7 @@
    ;; UI & Utilities
    [mongol-zangila.utils.nav :as nav]
    [mongol-zangila.ui.theme :as theme]
+   [mongol-zangila.infrastructure.storage :as storage]
    [mongol-zangila.ui.widgets.auth-components :as auth-ui]
    
    ;; Custom Keyboard (IME wrapper)
@@ -87,9 +88,10 @@
                :dispose .cancel]
                
      ;; countdown only at this level — loading? watched inside verify button
-     :watch [countdown !resend-countdown]
+     :watch [countdown !resend-countdown
+             standard-ime? storage/!standard-ime?]
              
-     :let [info auth-ui/shared-keyboard-options]
+     :let [info (auth-ui/keyboard-options standard-ime?)]
      :bind {:info info}
 
      (m/Scaffold

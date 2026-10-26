@@ -17,8 +17,9 @@
    [mongol-zangila.ui.widgets.empty-state :as empty-state]
    [mongol-zangila.ui.widgets.avatar :as smart-avatar]
    [mongol-zangila.ui.search.components.search-input :as search-input]
-   [mongol-zangila.ui.widgets.ime-wrapper :as ime]
-   [virtual-keyboard.options :as options]))
+   [mongol-zangila.infrastructure.storage :as storage]
+   [mongol-zangila.ui.widgets.auth-components :as auth-ui]
+   [mongol-zangila.ui.widgets.ime-wrapper :as ime]))
 
 ;; =============================================================================
 ;; 1. Search scheduling
@@ -230,12 +231,10 @@
              kind !kind
              results !results
              loading? !loading?
-             current-user state/current-user]
+             current-user state/current-user
+             standard-ime? storage/!standard-ime?]
 
-     :let [keyboard-info (merge options/keyboard-option
-                                {:keyboard/mongol-font-family "OyunQaganTig"
-                                 :keyboard/key-container-color (theme/surface-2 ctx)
-                                 :keyboard/font-size 16})
+     :let [keyboard-info (auth-ui/keyboard-options-themed ctx standard-ime?)
            blank? (str/blank? (str/trim (str query)))
            switch-kind!
            (fn [k]

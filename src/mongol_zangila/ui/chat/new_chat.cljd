@@ -22,8 +22,9 @@
    [mongol-zangila.ui.widgets.empty-state :as empty-state]
    [mongol-zangila.ui.search.components.search-input :as search-input]
    [components.toast :as toast]
-   [mongol-zangila.ui.widgets.ime-wrapper :as ime]
-   [virtual-keyboard.options :as options]))
+   [mongol-zangila.infrastructure.storage :as storage]
+   [mongol-zangila.ui.widgets.auth-components :as auth-ui]
+   [mongol-zangila.ui.widgets.ime-wrapper :as ime]))
 
 ;; =============================================================================
 ;; 1. Contact merging
@@ -405,12 +406,10 @@
              selected-ids !selected-ids
              selected-users !selected-users
              step !step
-             creating? !creating?]
+             creating? !creating?
+             standard-ime? storage/!standard-ime?]
 
-     :let [           keyboard-info (merge options/keyboard-option
-                                {:keyboard/mongol-font-family "OyunQaganTig"
-                                 :keyboard/key-container-color (theme/surface-2 ctx)
-                                 :keyboard/font-size 16})
+     :let [keyboard-info (auth-ui/keyboard-options-themed ctx standard-ime?)
            pick-step? (= step :pick)
            sel-count (count selected-ids)
            people (visible-people contacts remote query blocked-ids self-id)

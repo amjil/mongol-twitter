@@ -12,6 +12,7 @@
    [mongol-zangila.state :as state]
    [mongol-zangila.infrastructure.api :as api]
    [mongol-zangila.infrastructure.db :as db]
+   [mongol-zangila.infrastructure.storage :as storage]
    [mongol-zangila.infrastructure.socket :as socket]
    [mongol-zangila.infrastructure.write-buffer :as write-buffer]
    [mongol-zangila.ui.chat.inbox-helpers :as inbox-helpers]
@@ -38,10 +39,16 @@
   [m]
   (into {} m))
 
+(defn- cache-messages-if-enabled!
+  "Writes to Drift only when the user has local-first (offline) mode enabled."
+  [topic messages]
+  (when @storage/!offline-mode?
+    (db/save-messages! topic messages)))
+
 (defn resolve-outbox-sync!
   "Called globally by the background outbox daemon upon a successful network sync."
   [topic temp-id server-msg]
-  (db/save-messages! topic [server-msg])
+  (cache-messages-if-enabled! topic [server-msg])
   (when-let [!messages (get @!active-chat-atoms topic)]
     (swap! !messages (fn [msgs]
                        (mapv #(if (= (get % "id") temp-id) (clj-map server-msg) %) msgs)))))
@@ -182,21 +189,27 @@
   (-> (api/get-req api-path)
       (.then (fn [res]
                (let [server-data (get res "data" [])]
-                 (db/save-messages! topic server-data)
-                 (-> (db/get-cached-messages topic)
-                     (.then (fn [cached]
-                              (reset! !messages (merge-messages-newest-first server-data cached))
-                              (reset! !loading? false)))))))
+                 (cache-messages-if-enabled! topic server-data)
+                 (if @storage/!offline-mode?
+                   (-> (db/get-cached-messages topic)
+                       (.then (fn [cached]
+                                (reset! !messages (merge-messages-newest-first server-data cached))
+                                (reset! !loading? false))))
+                   (do (reset! !messages (mapv clj-map server-data))
+                       (reset! !loading? false))))))
       (.catchError
        (fn [err]
-         (-> (db/get-cached-messages topic)
-             (.then (fn [cached]
-                      (if (seq cached)
-                        (do (reset! !messages (mapv clj-map cached))
-                            (reset! !loading? false)
-                            (toast/info ctx "Оффлайн кэшээс уншлаа."))
-                        (do (reset! !loading? false)
-                            (toast/error ctx (str "Зурвас татахад алдаа: " err)))))))))))
+         (if @storage/!offline-mode?
+           (-> (db/get-cached-messages topic)
+               (.then (fn [cached]
+                        (if (seq cached)
+                          (do (reset! !messages (mapv clj-map cached))
+                              (reset! !loading? false)
+                              (toast/info ctx "Оффлайн кэшээс уншлаа."))
+                          (do (reset! !loading? false)
+                              (toast/error ctx (str "Зурвас татахад алдаа: " err)))))))
+           (do (reset! !loading? false)
+               (toast/error ctx (str "Зурвас татахад алдаа: " err))))))))
 
 ;; =============================================================================
 ;; 4. Thread Initialization & WebSocket Binding
@@ -215,7 +228,7 @@
    topic
    {"new_message"
     (fn [new-message]
-      (db/save-messages! topic [new-message])
+      (cache-messages-if-enabled! topic [new-message])
       (swap! !messages 
              (fn [msgs]
                (let [existing-idx (first (keep-indexed #(when (= (get %2 "id") (get new-message "id")) %1) msgs))]
@@ -281,7 +294,7 @@
       (-> (api/post-req api-path api-payload)
           (.then (fn [res]
                    (let [server-msg (get res "data")]
-                     (db/save-messages! topic [server-msg])
+                     (cache-messages-if-enabled! topic [server-msg])
                      (swap! !messages (fn [msgs] (mapv #(if (= (get % "id") temp-id) (clj-map server-msg) %) msgs))))))
           (.catchError (fn [_]
                          (toast/error ctx "Зурвас илгээгдсэнгүй." :fade)
@@ -313,7 +326,7 @@
       (-> (api/post-req api-path api-payload)
           (.then (fn [res]
                    (let [server-msg (get res "data")]
-                     (db/save-messages! topic [server-msg])
+                     (cache-messages-if-enabled! topic [server-msg])
                      (swap! !messages (fn [msgs] (mapv #(if (= (get % "id") temp-id) (clj-map server-msg) %) msgs))))))
           (.catchError (fn [_]
                          (toast/error ctx "Зурвас илгээгдсэнгүй." :fade)
@@ -346,7 +359,7 @@
         (-> (api/post-req api-path api-payload)
             (.then (fn [res]
                      (let [server-msg (get res "data")]
-                       (db/save-messages! topic [server-msg])
+                       (cache-messages-if-enabled! topic [server-msg])
                        (swap! !messages (fn [msgs] (mapv #(if (= (get % "id") temp-id) (clj-map server-msg) %) msgs))))))
             (.catchError (fn [_]
                            (toast/error ctx "Зураг илгээгдсэнгүй." :fade)
@@ -379,7 +392,7 @@
         (-> (api/post-req api-path api-payload)
             (.then (fn [res]
                      (let [server-msg (get res "data")]
-                       (db/save-messages! topic [server-msg])
+                       (cache-messages-if-enabled! topic [server-msg])
                        (swap! !messages (fn [msgs] (mapv #(if (= (get % "id") temp-id) (clj-map server-msg) %) msgs))))))
             (.catchError (fn [_]
                            (toast/error ctx "Дуут зурвас илгээгдсэнгүй." :fade)
@@ -437,7 +450,7 @@
       (-> (api/post-req api-path api-payload)
           (.then (fn [res]
                    (let [server-msg (get res "data")]
-                     (db/save-messages! topic [server-msg])
+                     (cache-messages-if-enabled! topic [server-msg])
                      (swap! !messages (fn [msgs] (mapv #(if (= (get % "id") temp-id) (clj-map server-msg) %) msgs))))))
           (.catchError (fn [_]
                          (toast/error ctx "Дахин илгээхэд алдаа гарлаа." :fade)
@@ -482,7 +495,7 @@
                       (if (empty? older-msgs)
                         (reset! !has-more? false)
                         (do
-                          (db/save-messages! topic older-msgs)
+                          (cache-messages-if-enabled! topic older-msgs)
                           (swap! !messages
                                  (fn [msgs]
                                    (let [existing (set (map #(get % "id") msgs))
@@ -502,11 +515,15 @@
           (.then (fn [res] (apply-page! (get res "data" []))))
           (.catchError (fn [err]
                          (dc/print (str "Failed to load older messages: " err))
-                         (-> (db/fetch-thread-messages topic limit current-offset)
-                             (.then apply-page!)))))
+                         (if @storage/!offline-mode?
+                           (-> (db/fetch-thread-messages topic limit current-offset)
+                               (.then apply-page!))
+                           (dc/Future.value nil)))))
 
       :else
-      (-> (db/fetch-thread-messages topic limit current-offset)
-          (.then apply-page!)
-          (.catchError (fn [err]
-                         (dc/print (str "Failed to load older messages: " err))))))))
+      (if @storage/!offline-mode?
+        (-> (db/fetch-thread-messages topic limit current-offset)
+            (.then apply-page!)
+            (.catchError (fn [err]
+                           (dc/print (str "Failed to load older messages: " err)))))
+        (dc/Future.value nil)))))
