@@ -12,6 +12,7 @@
    [mongol-zangila.ui.theme :as theme]
    [mongol-zangila.utils.nav :as nav]
    [mongol-zangila.ui.widgets.empty-state :as empty-state]
+   [mongol-zangila.ui.widgets.skeleton :as skeleton]
    [mongol-zangila.ui.feed.components.post-card :as post-card]
    [pull-to-refresh.refresh :as ptr]))
 
@@ -94,7 +95,7 @@
           .child
           (cond
             init-loading?
-            (m/Center .child (m/CircularProgressIndicator .color theme/brand-blue))
+            (skeleton/timeline-skeleton)
 
             (empty? posts)
             (empty-state/empty-view ctx

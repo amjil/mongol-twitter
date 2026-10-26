@@ -16,6 +16,7 @@
    [mongol-zangila.ui.theme :as theme]
    [mongol-zangila.utils.nav :as nav]
    [mongol-zangila.ui.widgets.empty-state :as empty-state]
+   [mongol-zangila.ui.widgets.skeleton :as skeleton]
    [mongol-zangila.ui.layout.scaffold :as scaffold]
    
    [mongol-zangila.ui.chat.inbox-helpers :as inbox-helpers]
@@ -97,7 +98,7 @@
 
         .body
         (if init-loading?
-          (m/Center .child (m/CircularProgressIndicator .color theme/brand-blue))
+          (skeleton/timeline-skeleton)
 
           (let [visible-chats (->> (inbox-helpers/get-sorted-threads-list chats)
                                    (remove #(blocked-thread? % blocked-ids))

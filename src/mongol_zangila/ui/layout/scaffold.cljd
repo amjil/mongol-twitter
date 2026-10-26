@@ -85,7 +85,9 @@
 
    (m/Scaffold
     .backgroundColor (theme/bg ctx)
-    .extendBody true
+    ;; extendBody left false (default): body must not sit under the frosted
+    ;; bottom nav — horizontal timeline cards fill column height; like/save
+    ;; controls at the card foot would land in an untappable glass overlay.
     .body body-widget
     .floatingActionButton floating-action-button
 

@@ -18,6 +18,7 @@
    [mongol-zangila.ui.theme :as theme]
    [mongol-zangila.utils.nav :as nav]
    [mongol-zangila.ui.widgets.empty-state :as empty-state]
+   [mongol-zangila.ui.widgets.skeleton :as skeleton]
    
    ;; Domain Components
    [mongol-zangila.ui.feed.components.post-card :as post-card]))
@@ -88,7 +89,7 @@
        ;; --- Main Body: The Bookmarks Feed ---
        .body
        (if init-loading?
-         (m/Center .child (m/CircularProgressIndicator .color theme/brand-blue))
+         (skeleton/timeline-skeleton)
          
          (if (empty? posts)
            (empty-state/empty-view ctx 
