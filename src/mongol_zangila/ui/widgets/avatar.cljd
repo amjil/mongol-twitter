@@ -49,9 +49,9 @@
         ;; Intelligent Default Routing:
         ;; Passes hero-tag + avatar-url so the destination can land the flight.
         default-tap-fn #(nav/push! ctx "/profile/view"
-                                   (cond-> {:user-id user-id}
-                                     hero-tag (assoc :avatar-hero-tag hero-tag)
-                                     valid-url? (assoc :avatar-url avatar-url)))
+                                   (nav/profile-view-args user-id
+                                                          :hero-tag hero-tag
+                                                          :avatar-url (when valid-url? avatar-url)))
         
         ;; Allow parent components to override the tap behavior if needed
         actual-tap-fn (or on-tap default-tap-fn)

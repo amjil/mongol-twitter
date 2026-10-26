@@ -1,5 +1,5 @@
 (ns mongol-zangila.ui.widgets.skeleton
-  "Premium skeleton loading placeholders with breathing (shimmer) animations.
+  "Premium skeleton loading placeholders with breathing (pulse) animations.
    Designed specifically for vertical LTR Mongolian layouts."
   (:require
    ["package:flutter/material.dart" :as m]
@@ -8,13 +8,13 @@
    [mongol-zangila.ui.theme :as theme]))
 
 (defn- shimmer-box
-  "A generic pulsing box that simulates loading content."
-  [ctx width height radius anim-value]
+  "A generic placeholder box; the pulse comes from the enclosing FadeTransition."
+  [ctx width height radius]
   (m/Container
    .width width
    .height height
    .decoration (m/BoxDecoration
-                .color (.withOpacity (theme/border ctx) (+ 0.2 (* 0.4 anim-value)))
+                .color (.withValues ^m/Color (theme/border ctx) .alpha 0.6)
                 .borderRadius (m/BorderRadius.circular radius))))
 
 (defn timeline-skeleton
@@ -23,12 +23,14 @@
   (f/widget
    :context ctx
    :vsync vsync
+   ;; Bounds 0.33..1.0 × box alpha 0.6 give an effective alpha of 0.2..0.6.
    :managed [anim-ctrl (let [c (m/AnimationController.
                                  .duration (dc/Duration. .milliseconds 1000)
+                                 .lowerBound 0.33
+                                 .upperBound 1.0
                                  .vsync vsync)]
                          (.repeat c .reverse true)
                          c)]
-   :watch [anim-val anim-ctrl :> .-value]
 
    (m/ListView.builder
     .scrollDirection m/Axis.horizontal
@@ -46,27 +48,30 @@
                     .borderRadius (m/BorderRadius.circular theme/radius-md)
                     .border (m/Border.all .color (theme/border ctx) .width 0.5))
        .child
-       (m/Row
-        .crossAxisAlignment m/CrossAxisAlignment.start
-        .children
-        [;; 1. Avatar Pillar
-         (m/Column
-          .children
-          [(shimmer-box ctx 40.0 40.0 20.0 anim-val)
-           (m/SizedBox .height 12.0)
-           (shimmer-box ctx 16.0 60.0 8.0 anim-val)])
-
-         (m/SizedBox .width 16.0)
-
-         ;; 2. Content Pillar — keep total width ≤ Expanded slot
-         ;; (card 160 − border 1 − pad 32 − avatar 40 − gap 16 ≈ 71)
-         (m/Expanded
-          .child
-          (m/Row
-           .crossAxisAlignment m/CrossAxisAlignment.start
+       (m/FadeTransition
+        .opacity anim-ctrl
+        .child
+        (m/Row
+         .crossAxisAlignment m/CrossAxisAlignment.start
+         .children
+         [;; 1. Avatar Pillar
+          (m/Column
            .children
-           [(shimmer-box ctx 16.0 180.0 8.0 anim-val)
-            (m/SizedBox .width 8.0)
-            (shimmer-box ctx 16.0 140.0 8.0 anim-val)
-            (m/SizedBox .width 8.0)
-            (shimmer-box ctx 16.0 90.0 8.0 anim-val)]))]))))))
+           [(shimmer-box ctx 40.0 40.0 20.0)
+            (m/SizedBox .height 12.0)
+            (shimmer-box ctx 16.0 60.0 8.0)])
+
+          (m/SizedBox .width 16.0)
+
+          ;; 2. Content Pillar — keep total width ≤ Expanded slot
+          ;; (card 160 − border 1 − pad 32 − avatar 40 − gap 16 ≈ 71)
+          (m/Expanded
+           .child
+           (m/Row
+            .crossAxisAlignment m/CrossAxisAlignment.start
+            .children
+            [(shimmer-box ctx 16.0 180.0 8.0)
+             (m/SizedBox .width 8.0)
+             (shimmer-box ctx 16.0 140.0 8.0)
+             (m/SizedBox .width 8.0)
+             (shimmer-box ctx 16.0 90.0 8.0)]))])))))))

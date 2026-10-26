@@ -10,19 +10,16 @@
   "Wraps the virtual keyboard to smoothly slide up/down using layout interpolation."
   [options]
   (m/AnimatedSize
-   .duration (dc/Duration. .milliseconds 350)
-   .curve m/Curves.easeOutQuart ;; ⚡ 高级阻尼曲线，开头快，结尾极其平缓
+   .duration (dc/Duration. .milliseconds 320)
+   .curve m/Curves.easeOutQuart
    .alignment m/Alignment.bottomCenter
    .child (keyboard/keyboard options)))
 
-(defn animated-candidates
-  "Wraps the floating candidate bar to gracefully fade and expand."
-  [options]
-  (m/AnimatedSize
-   .duration (dc/Duration. .milliseconds 250)
-   .curve m/Curves.easeOutCubic
-   .alignment m/Alignment.bottomCenter
-   .child (keyboard/candidates options)))
+(defn candidates-overlay
+  "Passthrough for Stack children — keyboard/candidates uses m/Positioned and must
+   stay a direct Stack child (wrapping it in AnimatedSize causes ParentData errors)."
+  [style-or-nil]
+  (keyboard/candidates style-or-nil))
 
 (defn dismiss-zone
   "Wraps the main viewport. Tapping anywhere outside an input field dismisses the keyboard."

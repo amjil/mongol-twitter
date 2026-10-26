@@ -123,6 +123,6 @@
                                                                  .color theme/brand-blue 
                                                                  .fontWeight m/FontWeight.bold)))])]))]))
              
-             (ime/animated-candidates nil)])))
+             (ime/candidates-overlay nil)])))
 
          (ime/animated-keyboard {})]))))))

@@ -216,7 +216,13 @@
             reposted? (get post-data "is_reposted_by_me" false)
             repost-count (get post-data "repost_count" 0)
             reply-count (get post-data "reply_count" 0)
-            bookmarked? (get post-data "is_bookmarked_by_me" false)]
+            bookmarked? (get post-data "is_bookmarked_by_me" false)
+            author-avatar (get author "avatar_url")
+            avatar-hero-tag (str "avatar-" post-id "-" author-id)
+            open-author-profile! #(nav/push! ctx "/profile/view"
+                                             (nav/profile-view-args author-id
+                                                                    :hero-tag avatar-hero-tag
+                                                                    :avatar-url author-avatar))]
         
         (m/Container
          .decoration (m/BoxDecoration
@@ -248,9 +254,9 @@
              .crossAxisAlignment m/CrossAxisAlignment.center
              .mainAxisSize m/MainAxisSize.max
              .children
-             [(smart-avatar/smart-avatar ctx author-id (get author "avatar_url")
+             [(smart-avatar/smart-avatar ctx author-id author-avatar
                                          :size 40.0
-                                         :hero-tag (str "avatar-" post-id "-" author-id))
+                                         :hero-tag avatar-hero-tag)
 
               (if is-reply
                 (m/Container .margin (m/EdgeInsets.only .top 6.0) .width 2.0 .height 16.0 .color (theme/border ctx))
@@ -262,7 +268,7 @@
                 .alignment m/Alignment.topCenter
                 .child
                 (m/GestureDetector
-                 .onTap #(nav/push! ctx "/profile/view" {:user-id author-id})
+                 .onTap open-author-profile!
                  .child
                  (mgl/MongolText (get author "name" "Unknown")
                                  .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 16.0 .fontWeight m/FontWeight.bold .color (theme/text ctx))

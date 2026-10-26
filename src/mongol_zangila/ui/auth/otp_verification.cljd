@@ -185,7 +185,7 @@
                                                                  .fontWeight m/FontWeight.bold))))]))]))
              
              ;; Floating candidates view (Needed if using custom keyboard)
-             (ime/animated-candidates nil)])))
+             (ime/candidates-overlay nil)])))
 
          ;; B. Keyboard
          (ime/animated-keyboard {})]))))))

@@ -180,7 +180,7 @@
              
              ;; B. Overlay Layer: The Candidates Predictor Bar
              ;; ⚡ Core fix 3: drop the extra outer m/Positioned to avoid Competing ParentDataWidgets crash
-             (ime/animated-candidates nil)])))
+             (ime/candidates-overlay nil)])))
          
          ;; 2. Lower Viewport: The Custom FST Keyboard
          (ime/animated-keyboard {})]))))))

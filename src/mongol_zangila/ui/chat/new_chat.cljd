@@ -555,7 +555,7 @@
                    :selected-users selected-users
                    :on-toggle on-toggle!
                    :on-card-tap on-card-tap!}))])
-              (ime/animated-candidates (m/TextStyle .fontFamily "OyunQaganTig"
+              (ime/candidates-overlay (m/TextStyle .fontFamily "OyunQaganTig"
                                                     .fontSize 16.0
                                                     .color (theme/text ctx)))])))
           (ime/animated-keyboard {:widget-key (m/ValueKey. "new-chat-kb")})])))))))

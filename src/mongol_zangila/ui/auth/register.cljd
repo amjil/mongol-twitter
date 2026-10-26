@@ -127,6 +127,6 @@
                                                       .color (theme/text-2 ctx)
                                                       .height 1.5))]))]))
              
-             (ime/animated-candidates nil)])))
+             (ime/candidates-overlay nil)])))
 
          (ime/animated-keyboard {})]))))))

@@ -255,7 +255,7 @@
               (m/Stack
                .children
                [main-content
-                (ime/animated-candidates nil)])))
+                (ime/candidates-overlay nil)])))
             (m/SafeArea
              .top false
              .child

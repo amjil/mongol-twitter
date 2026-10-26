@@ -323,7 +323,7 @@
                                      (topic-result-tile ctx item)
                                      (user-result-tile ctx item (get current-user "id"))))))))])
 
-            (ime/animated-candidates (m/TextStyle .fontFamily "OyunQaganTig"
+            (ime/candidates-overlay (m/TextStyle .fontFamily "OyunQaganTig"
                                                   .fontSize 16.0
                                                   .color (theme/text ctx)))])))
 

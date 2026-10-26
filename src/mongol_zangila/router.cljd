@@ -69,35 +69,22 @@
   [args]
   (dissoc args :fullscreen?))
 
-(defn ^m/Route on-generate-route
-  "Central switchboard for all app navigation.
-   ⚡ Upgraded: Injects a global, fluid Scale+Fade transition for a premium feel."
-  [^m/RouteSettings settings-obj]
+(defn- route-arg
+  "Reads a route argument by keyword or string key."
+  [args k]
+  (or (get args k) (get args (name k))))
 
-  (let [route-name (.-name settings-obj)
-        raw-args (or (.-arguments settings-obj) {})
-        fullscreen? (boolean (get raw-args :fullscreen?))
-        args (strip-nav-meta raw-args)]
+(defn- hero-flight-route?
+  "Routes that pair with a source Hero need MaterialPageRoute — global ScaleTransition breaks the flight."
+  [route-name args]
+  (or (and (= route-name "/profile/view")
+           (some? (route-arg args :avatar-hero-tag)))
+      (and (= route-name "/media/viewer")
+           (some? (route-arg args :hero-scope)))))
 
-    (m/PageRouteBuilder
-     .settings settings-obj
-     .fullscreenDialog fullscreen?
-     ;; ⚡ Core motion engine: replace hard slides with eased micro-scale fade-in
-     .transitionsBuilder
-     (fn [_ctx ^#/(m/Animation dc/double) animation ^#/(m/Animation dc/double) _secondary-animation child]
-       (let [curve (m/CurvedAnimation. .parent animation .curve m/Curves.easeOutQuart)
-             ;; Tween must be Tween<double> — bare Tween animates Object? and breaks Fade/ScaleTransition
-             scale-anim (.animate (#/(m/Tween dc/double) .begin 0.96 .end 1.0) curve)]
-         (m/FadeTransition
-          .opacity curve
-          .child
-          (m/ScaleTransition
-           .scale scale-anim
-           .child child))))
-
-     .pageBuilder
-     (fn [ctx _ _]
-       (cond
+(defn- build-route-page
+  [route-name args ctx]
+  (cond
          ;; --------------------------------------------------------------------
          ;; 1. Initialization & Auth
          ;; --------------------------------------------------------------------
@@ -181,9 +168,9 @@
          (= route-name "/settings")          (settings-panel/settings-panel-screen)
 
          (= route-name "/profile/view")
-         (profile-view/profile-screen {:user-id (get args :user-id "self")
-                                       :avatar-hero-tag (get args :avatar-hero-tag)
-                                       :avatar-url (get args :avatar-url)})
+         (profile-view/profile-screen {:user-id (or (route-arg args :user-id) "self")
+                                       :avatar-hero-tag (route-arg args :avatar-hero-tag)
+                                       :avatar-url (route-arg args :avatar-url)})
 
          (= route-name "/profile/connections")
          (connections/connections-screen (get args :user-id "self")
@@ -202,4 +189,36 @@
          ;; --------------------------------------------------------------------
          ;; 404 Fallback
          ;; --------------------------------------------------------------------
-         :else (route-not-found route-name))))))
+         :else (route-not-found route-name)))
+
+(defn ^m/Route on-generate-route
+  "Central switchboard for all app navigation.
+   Hero-paired routes use MaterialPageRoute; others use Scale+Fade."
+  [^m/RouteSettings settings-obj]
+
+  (let [route-name (.-name settings-obj)
+        raw-args (or (.-arguments settings-obj) {})
+        fullscreen? (boolean (route-arg raw-args :fullscreen?))
+        args (strip-nav-meta raw-args)
+        page-builder #(build-route-page route-name args %)]
+
+    (if (hero-flight-route? route-name args)
+      (m/MaterialPageRoute.
+       .settings settings-obj
+       .fullscreenDialog fullscreen?
+       .builder page-builder)
+
+      (m/PageRouteBuilder
+       .settings settings-obj
+       .fullscreenDialog fullscreen?
+       .transitionsBuilder
+       (fn [_ctx ^#/(m/Animation dc/double) animation ^#/(m/Animation dc/double) _secondary-animation child]
+         (let [curve (m/CurvedAnimation. .parent animation .curve m/Curves.easeOutQuart)
+               scale-anim (.animate (#/(m/Tween dc/double) .begin 0.96 .end 1.0) curve)]
+           (m/FadeTransition
+            .opacity curve
+            .child
+            (m/ScaleTransition
+             .scale scale-anim
+             .child child))))
+       .pageBuilder (fn [ctx _ _] (page-builder ctx))))))

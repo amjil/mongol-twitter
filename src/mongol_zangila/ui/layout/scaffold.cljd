@@ -34,6 +34,46 @@
         .child icon)
        icon))))
 
+(def ^:private tabs
+  [{:route "/feed/home"          :label "Home"
+    :icon m/Icons.home_rounded}
+   {:route "/search"             :label "Search"
+    :icon m/Icons.search_rounded}
+   {:route "/chat/inbox"         :label "Messages"
+    :icon m/Icons.chat_bubble_outline_rounded
+    :active-icon m/Icons.chat_bubble_rounded
+    :badge :msgs}
+   {:route "/notifications/view" :label "Notifications"
+    :icon m/Icons.notifications_none_rounded
+    :active-icon m/Icons.notifications_rounded
+    :badge :notifs}
+   {:route "/profile/view"       :label "Profile"
+    :icon m/Icons.person_outline_rounded
+    :active-icon m/Icons.person_rounded}])
+
+(defn- nav-tab
+  [ctx current-route badges {:keys [route label icon active-icon badge]}]
+  (let [active? (= current-route route)]
+    (m/Expanded
+     .child
+     (m/Semantics
+      .label label
+      .button true
+      .selected active?
+      .child
+      (m/GestureDetector
+       .onTap #(when-not active? (nav/push-replacement! ctx route))
+       .behavior m/HitTestBehavior.opaque
+       .child
+       ;; heightFactor 1.0: bottomNavigationBar gives loose height constraints,
+       ;; a plain Center would stretch the bar to full screen height.
+       (m/Center
+        .heightFactor 1.0
+        .child (nav-icon ctx
+                         (if active? (or active-icon icon) icon)
+                         active?
+                         :badge-count (get badges badge))))))))
+
 (defn app-scaffold
   "The root container for top-level navigation screens.
    Optional :floating-action-button is hosted here (same Scaffold as the tab bar)
@@ -57,52 +97,15 @@
       .child
       (m/Container
        .decoration (m/BoxDecoration
-                    .color (.withOpacity (theme/nav-bar ctx) 0.8)
+                    .color (.withValues ^m/Color (theme/nav-bar ctx) .alpha 0.8)
                     .border (m/Border .top (theme/hairline ctx)))
        .child
        (m/SafeArea
         .child
         (m/Padding
-         .padding (m/EdgeInsets.symmetric .vertical 8.0 .horizontal 16.0)
+         .padding (m/EdgeInsets.symmetric .vertical 8.0 .horizontal 8.0)
          .child
          (m/Row
-          .mainAxisAlignment m/MainAxisAlignment.spaceBetween
           .children
-          [(m/GestureDetector
-            .onTap #(when-not (= current-route "/feed/home") (nav/push-replacement! ctx "/feed/home"))
-            .behavior m/HitTestBehavior.opaque
-            .child (nav-icon ctx m/Icons.home_rounded (= current-route "/feed/home")))
-
-           (m/GestureDetector
-            .onTap #(when-not (= current-route "/search") (nav/push-replacement! ctx "/search"))
-            .behavior m/HitTestBehavior.opaque
-            .child (nav-icon ctx m/Icons.search_rounded (= current-route "/search")))
-
-           (m/GestureDetector
-            .onTap #(when-not (= current-route "/chat/inbox") (nav/push-replacement! ctx "/chat/inbox"))
-            .behavior m/HitTestBehavior.opaque
-            .child (nav-icon ctx
-                             (if (= current-route "/chat/inbox")
-                               m/Icons.chat_bubble_rounded
-                               m/Icons.chat_bubble_outline_rounded)
-                             (= current-route "/chat/inbox")
-                             :badge-count unread-msgs))
-
-           (m/GestureDetector
-            .onTap #(when-not (= current-route "/notifications/view") (nav/push-replacement! ctx "/notifications/view"))
-            .behavior m/HitTestBehavior.opaque
-            .child (nav-icon ctx
-                             (if (= current-route "/notifications/view")
-                               m/Icons.notifications_rounded
-                               m/Icons.notifications_none_rounded)
-                             (= current-route "/notifications/view")
-                             :badge-count unread-notifs))
-
-           (m/GestureDetector
-            .onTap #(when-not (= current-route "/profile/view") (nav/push-replacement! ctx "/profile/view"))
-            .behavior m/HitTestBehavior.opaque
-            .child (nav-icon ctx
-                             (if (= current-route "/profile/view")
-                               m/Icons.person_rounded
-                               m/Icons.person_outline_rounded)
-                             (= current-route "/profile/view")))])))))))))
+          (let [badges {:msgs unread-msgs :notifs unread-notifs}]
+            (mapv #(nav-tab ctx current-route badges %) tabs)))))))))))

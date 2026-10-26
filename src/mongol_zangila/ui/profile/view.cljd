@@ -141,7 +141,7 @@
 (defn- profile-header
   "Identity, stats, bio and actions as adjacent vertical pillars.
    Stacking MongolText in a Column overflows the viewport; a Row does not."
-  [ctx profile-data !profile-data is-self? & {:keys [avatar-hero-tag]}]
+  [ctx profile-data !profile-data is-self? & {:keys [avatar-hero-tag avatar-url]}]
   (let [user-id (get profile-data "id")
         name (get profile-data "name" "")
         handle (get profile-data "handle" "")
@@ -171,7 +171,7 @@
         (m/Column
          .crossAxisAlignment m/CrossAxisAlignment.center
          .children
-         [(smart-avatar/smart-avatar ctx user-id (get profile-data "avatar_url")
+         [(smart-avatar/smart-avatar ctx user-id (or (get profile-data "avatar_url") avatar-url)
                                      :size 64.0
                                      :hero-tag avatar-hero-tag
                                      :on-tap (fn []))
@@ -404,7 +404,8 @@
                  (cond
                    (= i 0)
                    (profile-header ctx display-profile !profile-data is-self?
-                                   :avatar-hero-tag avatar-hero-tag)
+                                   :avatar-hero-tag avatar-hero-tag
+                                   :avatar-url avatar-url)
 
                    (and is-blocked? (= i 1))
                    (m/SizedBox

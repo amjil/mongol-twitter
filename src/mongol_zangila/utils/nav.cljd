@@ -3,11 +3,20 @@
    Wraps Flutter's Navigator API to provide a clean, Clojure-idiomatic 
    interface for routing, stack manipulation, and argument passing."
   (:require
-   ["package:flutter/material.dart" :as m]))
+   ["package:flutter/material.dart" :as m]
+   [clojure.string :as str]))
 
 ;; =============================================================================
 ;; 1. Forward Navigation
 ;; =============================================================================
+
+(defn profile-view-args
+  "Route args for /profile/view, including optional Hero flight metadata."
+  [user-id & {:keys [hero-tag avatar-url]}]
+  (let [valid-url? (and avatar-url (not (str/blank? avatar-url)))]
+    (cond-> {:user-id user-id}
+      hero-tag (assoc :avatar-hero-tag hero-tag)
+      valid-url? (assoc :avatar-url avatar-url))))
 
 (defn push!
   "Pushes a new named route onto the navigator stack.
