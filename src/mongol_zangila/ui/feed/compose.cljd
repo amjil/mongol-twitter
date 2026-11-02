@@ -1,9 +1,7 @@
 (ns mongol-zangila.ui.feed.compose
   "Vertical post and reply composition viewport.
-   Integrates the custom simple-editor for rich text authoring,
-   entity tagging (users/topics), media attachments, and 
-   structured payload serialization for the backend.
-   Layout is optimized for LTR vertical Mongolian script."
+   ⚡ Optimized: Eliminated root rebuild storms, added image upload states,
+   and integrated fluid IME keyboard wrappers."
   (:require
    ["package:flutter/material.dart" :as m]
    ["package:mongol/mongol.dart" :as mgl]
@@ -12,11 +10,11 @@
    ["dart:math" :as math]
    [cljd.flutter :as f]
    [clojure.string :as str]
-   
+
    ;; System Controllers & Infrastructure
    [mongol-zangila.controllers.publish-ctrl :as publish-ctrl]
    [mongol-zangila.infrastructure.db :as db]
-   
+
    ;; UI & Utilities
    [mongol-zangila.ui.theme :as theme]
    [mongol-zangila.ui.widgets.auth-components :as auth-ui]
@@ -25,10 +23,13 @@
    [mongol-zangila.ui.widgets.cached-image :as cached-image]
    [mongol-zangila.ui.widgets.quoted-post :as quoted-post-widget]
    [components.toast :as toast]
-   
+
    ;; Custom Editor & Search Components
    [rich-editor.components.simple-editor :as simple-editor]
-   [mongol-zangila.ui.widgets.tag-search :as tag-search]))
+   [mongol-zangila.ui.widgets.tag-search :as tag-search]
+
+   ;; IME keyboard animation wrapper
+   [mongol-zangila.ui.widgets.ime-wrapper :as ime]))
 
 ;; =============================================================================
 ;; 1. Per-mount editor session
@@ -71,11 +72,11 @@
         content (:content block "")
         spans (:content-spans block [])
         c-len (count content)
-        
+
         entities (->> spans
                       (map (fn [{:keys [start end attrs]}]
                              (let [entity-id (:entity-id attrs)
-                                   safe-bounds? (and (number? start) (number? end) 
+                                   safe-bounds? (and (number? start) (number? end)
                                                      (>= start 0) (<= start end) (<= end c-len))
                                    span-text (if safe-bounds? (subs content start end) "")
                                    entity-type (cond
@@ -95,33 +96,32 @@
 
 (defn- save-draft-logic!
   [ctx is-loading? !saved? !editor-state !media-urls draft-id outbox-id reply-to-id reply-to-name reply-to-author-id quote-id quote-author-name quote-post idempotency-key]
-  
   (if (or is-loading? @!saved?)
     (dc/Future.value true)
-    
+
     (let [_ (reset! !saved? true)
           serialized-data (serialize-post @!editor-state)
           content (get serialized-data "content" "")
           entities (get serialized-data "entities" [])
           media @!media-urls
-          
+
           clean-ws #(str/replace % #"[\s\u200B\u200C\u200D\uFEFF]+" "")
-          
+
           prefix (if reply-to-name (str "@" (str/replace-first reply-to-name #"^@" "")) "")
           trimmed-content (str/trim content)
-          
-          content-no-prefix (if (and (not (str/blank? prefix)) 
+
+          content-no-prefix (if (and (not (str/blank? prefix))
                                      (str/starts-with? trimmed-content prefix))
                               (subs trimmed-content (count prefix))
                               content)
-          
-          has-real-content? (or (not (str/blank? (clean-ws content-no-prefix))) 
+
+          has-real-content? (or (not (str/blank? (clean-ws content-no-prefix)))
                                 (not-empty media))]
-      
+
       (if has-real-content?
         (cond
           outbox-id
-          (let [payload (cond-> {"content" trimmed-content 
+          (let [payload (cond-> {"content" trimmed-content
                                  "entities" entities
                                  "idempotency_key" idempotency-key}
                           (not-empty media) (assoc "media" media)
@@ -133,14 +133,14 @@
                           quote-post (assoc "quote_post" quote-post))]
             (-> (db/update-outbox-payload! outbox-id payload)
                 (.then (fn [_] (toast/info ctx "Өөрчлөлт хадгалагдлаа.")))))
-          
+
           :else
           (let [quote-json (if quote-post (convert/jsonEncode quote-post) nil)]
-            (-> (db/upsert-draft! trimmed-content media entities 
+            (-> (db/upsert-draft! trimmed-content media entities
                                   reply-to-id reply-to-name (if reply-to-author-id (str reply-to-author-id) nil)
                                   quote-id quote-author-name quote-json idempotency-key)
                 (.then (fn [_] (toast/success ctx "Ноорогт хадгалагдлаа."))))))
-        
+
         (cond
           outbox-id (-> (db/delete-from-outbox! outbox-id) (.then (fn [_] true)))
           draft-id  (-> (db/delete-draft! draft-id) (.then (fn [_] true)))
@@ -150,7 +150,7 @@
 ;; 3. Sub-components: Staged Media Gallery & Quote Embed
 ;; =============================================================================
 
-(defn- vertical-media-gallery 
+(defn- vertical-media-gallery
   [media-urls !media-urls]
   (m/Expanded
    .child
@@ -169,7 +169,7 @@
           [(m/ClipRRect
             .borderRadius (m/BorderRadius.circular 8.0)
             .child (cached-image/cached-img url :width 44.0 :height 44.0 :fit m/BoxFit.cover))
-           
+
            (m/Positioned
             .top 2.0
             .right 2.0
@@ -185,9 +185,7 @@
 ;; 4. Main Composition Screen Widget
 ;; =============================================================================
 
-(defn compose-screen 
-  "The primary viewport for creating new posts, completely optimized for 
-   vertical block-based rich text editing with absolute coordinate entity tracking."
+(defn compose-screen
   [{:keys [reply-to-id reply-to-name reply-to-author-id quote-id quote-author-name quote-post
            draft-id outbox-id initial-content initial-media initial-entities initial-idempotency-key]
     :as args}]
@@ -196,6 +194,7 @@
         !media-urls (atom (vec (or initial-media [])))
         !saved? (atom false)
         !loading? (atom false)
+        !uploading-image? (atom false)
         !idk (atom (or initial-idempotency-key
                        (str "idk-" (.-millisecondsSinceEpoch (dc/DateTime.now)) "-"
                             (.nextInt (math/Random.) 1000000))))
@@ -207,9 +206,8 @@
     (f/widget
      :context ctx
 
-     ;; loading? watched only inside the send button — keeps editor focus stable
-     :watch [media-urls !media-urls
-             editor-state !editor-state]
+     ;; Do not watch !editor-state at root — avoids full-page rebuild on every keystroke
+     :watch [media-urls !media-urls]
 
      (m/WillPopScope
       .onWillPop (fn []
@@ -258,82 +256,99 @@
        .body
        (m/SafeArea
         .child
-        (simple-editor/simple-editor
-         !editor-state
+        (m/Column
+         .children
+         [
+          (m/Expanded
+           .child
+           (ime/dismiss-zone
+            (simple-editor/simple-editor
+             !editor-state
 
-         :editor-config
-         {:block-style
-          {:paragraph (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text ctx) .fontSize 16.0)
-           :heading-1 (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text ctx) .fontSize 20.0 .fontWeight m/FontWeight.bold)
-           :heading-2 (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text ctx) .fontSize 18.0 .fontWeight m/FontWeight.bold)
-           :list-item (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text ctx) .fontSize 16.0)
-           :blockquote (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text-2 ctx) .fontSize 15.0)}}
+             :editor-config
+             {:block-style
+              {:paragraph (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text ctx) .fontSize 16.0)
+               :heading-1 (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text ctx) .fontSize 20.0 .fontWeight m/FontWeight.bold)
+               :heading-2 (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text ctx) .fontSize 18.0 .fontWeight m/FontWeight.bold)
+               :list-item (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text ctx) .fontSize 16.0)
+               :blockquote (m/TextStyle .fontFamily "OyunQaganTig" .color (theme/text-2 ctx) .fontSize 15.0)}}
 
-         :leading
-         (m/Container
-          .width 60.0
-          .height (.-infinity dc/double)
-          .decoration (m/BoxDecoration
-                       .color (theme/surface ctx)
-                       .border (m/Border .right (m/BorderSide .color (theme/border ctx) .width 0.5)))
-          .padding (m/EdgeInsets.symmetric .vertical 16.0)
-          .child
-          (m/Column
-           .children
-           [(m/IconButton
-             .icon (m/Icon m/Icons.image_outlined .color theme/brand-blue)
-             .onPressed (fn []
-                          (media-attach/pick-and-upload! ctx #(swap! !media-urls conj %))
-                          nil))
-
-            (m/SizedBox .height 16.0)
-
-            (m/IconButton
-             .icon (m/Icon m/Icons.alternate_email_rounded .color (theme/text-2 ctx))
-             .onPressed (fn []
-                          (tag-search/show-tag-modal! ctx !editor-state simple-editor/insert-entity-at-cursor!
-                                                      :initial-kind :user)
-                          nil))
-
-            (m/SizedBox .height 16.0)
-
-            (m/IconButton
-             .icon (m/Icon m/Icons.tag_rounded .color (theme/text-2 ctx))
-             .onPressed (fn []
-                          (tag-search/show-tag-modal! ctx !editor-state simple-editor/insert-entity-at-cursor!
-                                                      :initial-kind :topic)
-                          nil))
-
-            (m/SizedBox .height 24.0)
-
-            (if (not-empty media-urls)
-              (vertical-media-gallery media-urls !media-urls)
-              (m/SizedBox.shrink))]))
-
-         :trailing
-         (m/Row
-          .mainAxisSize m/MainAxisSize.min
-          .children
-          [(if (str/blank? reply-to-name)
-             (m/SizedBox.shrink)
-             (m/Padding
-              .padding (m/EdgeInsets.only .right 12.0 .top 16.0 .bottom 16.0)
+             :leading
+             (m/Container
+              .width 60.0
+              .height (.-infinity dc/double)
+              .decoration (m/BoxDecoration
+                           .color (theme/surface ctx)
+                           .border (m/Border .right (m/BorderSide .color (theme/border ctx) .width 0.5)))
+              .padding (m/EdgeInsets.symmetric .vertical 16.0)
               .child
-              (mgl/MongolText (str "Хариулах: @" (str/replace-first reply-to-name #"^@" ""))
-                              .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 16.0 .color (theme/text-2 ctx)))))
-           (if (empty? quote-author-name)
-             (m/SizedBox.shrink)
-             (mgl/MongolText (str "Иш татах: @" (str/replace-first quote-author-name #"^@" ""))
-                             .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 16.0 .color (theme/text-2 ctx))))
-           (if quote-post
-             (quoted-post-widget/quoted-post-card
-              ctx quote-post
-              :margin (m/EdgeInsets.only .right 16.0 .top 16.0 .bottom 16.0)
-              :padding (m/EdgeInsets.all 16.0)
-              :bg-color (theme/bg ctx)
-              :show-handle? true
-              :show-divider? false
-              :author-font-size 14.0
-              :content-font-size 14.0
-              :max-lines 2)
-             (m/SizedBox.shrink))]))))))))
+              (m/Column
+               .children
+               [
+                (f/widget
+                 :watch [img-loading? !uploading-image?]
+                 (m/IconButton
+                  .icon (if img-loading?
+                          (m/SizedBox .width 20.0 .height 20.0
+                                      .child (m/CircularProgressIndicator .strokeWidth 2.0 .color theme/brand-blue))
+                          (m/Icon m/Icons.image_outlined .color theme/brand-blue))
+                  .onPressed (fn []
+                               (when-not img-loading?
+                                 (reset! !uploading-image? true)
+                                 (-> (media-attach/pick-and-upload! ctx #(swap! !media-urls conj %))
+                                     (.whenComplete #(reset! !uploading-image? false))))
+                               nil)))
+
+                (m/SizedBox .height 16.0)
+
+                (m/IconButton
+                 .icon (m/Icon m/Icons.alternate_email_rounded .color (theme/text-2 ctx))
+                 .onPressed (fn []
+                              (tag-search/show-tag-modal! ctx !editor-state simple-editor/insert-entity-at-cursor!
+                                                          :initial-kind :user)
+                              nil))
+
+                (m/SizedBox .height 16.0)
+
+                (m/IconButton
+                 .icon (m/Icon m/Icons.tag_rounded .color (theme/text-2 ctx))
+                 .onPressed (fn []
+                              (tag-search/show-tag-modal! ctx !editor-state simple-editor/insert-entity-at-cursor!
+                                                          :initial-kind :topic)
+                              nil))
+
+                (m/SizedBox .height 24.0)
+
+                (if (not-empty media-urls)
+                  (vertical-media-gallery media-urls !media-urls)
+                  (m/SizedBox.shrink))]))
+
+             :trailing
+             (m/Row
+              .mainAxisSize m/MainAxisSize.min
+              .children
+              [(if (str/blank? reply-to-name)
+                 (m/SizedBox.shrink)
+                 (m/Padding
+                  .padding (m/EdgeInsets.only .right 12.0 .top 16.0 .bottom 16.0)
+                  .child
+                  (mgl/MongolText (str "Хариулах: @" (str/replace-first reply-to-name #"^@" ""))
+                                  .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 16.0 .color (theme/text-2 ctx)))))
+               (if (empty? quote-author-name)
+                 (m/SizedBox.shrink)
+                 (mgl/MongolText (str "Иш татах: @" (str/replace-first quote-author-name #"^@" ""))
+                                 .style (m/TextStyle .fontFamily "OyunQaganTig" .fontSize 16.0 .color (theme/text-2 ctx))))
+               (if quote-post
+                 (quoted-post-widget/quoted-post-card
+                  ctx quote-post
+                  :margin (m/EdgeInsets.only .right 16.0 .top 16.0 .bottom 16.0)
+                  :padding (m/EdgeInsets.all 16.0)
+                  :bg-color (theme/bg ctx)
+                  :show-handle? true
+                  :show-divider? false
+                  :author-font-size 14.0
+                  :content-font-size 14.0
+                  :max-lines 2)
+                 (m/SizedBox.shrink))]))))
+
+          (ime/animated-keyboard {:widget-key (m/ValueKey. "compose-kb")})])))))))

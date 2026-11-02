@@ -5,16 +5,16 @@
    ["package:flutter_local_notifications/flutter_local_notifications.dart" :as fln]
    ["dart:core" :as dc]))
 
-;; 全局插件单例
+;; Global plugin singleton
 (defonce ^:private plugin (fln/FlutterLocalNotificationsPlugin.))
 
 (defn init!
   "Initializes the notification channels and OS-level permissions."
   []
-  (let [;; Android 必须指定一个默认图标。@mipmap/ic_launcher 是通用做法
+  (let [;; Android requires a default icon; @mipmap/ic_launcher is the usual choice
         android-init (fln/AndroidInitializationSettings. "@mipmap/ic_launcher")
 
-        ;; iOS 初始化配置，自动向用户请求通知权限
+        ;; iOS init — requests alert, badge, and sound permissions
         ios-init (fln/DarwinInitializationSettings.
                   .requestAlertPermission true
                   .requestBadgePermission true
