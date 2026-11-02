@@ -14,8 +14,9 @@
       :info-route "/chat/group-info"
       :info-args {:group-id group-id}
       :topic (chat-ctrl/group-topic group-id)
-      :initialize! (fn [ctx !messages !loading? current-user-id !chat-topic]
-                     (chat-ctrl/initialize-group-thread! ctx group-id !messages !loading? current-user-id !chat-topic))
+      :initialize! (fn [ctx !messages !loading? !older-cursor !has-more? current-user-id !chat-topic]
+                     (chat-ctrl/initialize-group-thread! ctx group-id !messages !loading? !older-cursor !has-more?
+                                                         current-user-id !chat-topic))
       :retry-id group-id
       :show-sender-info? true
       :on-send-text (fn [ctx !messages content entities]

@@ -64,7 +64,7 @@
 (defn home-screen []
   (let [!posts (atom [])
         !blocked-ids (atom #{}) ;; ⚡ Reactive blocklist state
-        !page (atom 1)
+        !cursor (atom nil)
         !has-more? (atom true)
         !initial-loading? (atom true) 
         !refresh-loading? (atom false)
@@ -83,7 +83,7 @@
                                                           (not @!pagination-loading?)
                                                           (not @!refresh-loading?)
                                                           @!has-more?)
-                                                 (feed-ctrl/load-page! ctx "/feed" !posts !page !has-more? !pagination-loading? false)))))
+                                                 (feed-ctrl/load-page! ctx "/feed" !posts !cursor !has-more? !pagination-loading? false)))))
                              ctrl)
                :dispose .dispose
                
@@ -91,7 +91,7 @@
                               (add-watch feed-ctrl/!feed-refresh-trigger key
                                          (fn [_ _ old-val new-val]
                                            (when (> new-val old-val)
-                                             (feed-ctrl/load-page! ctx "/feed" !posts !page !has-more? !refresh-loading? true))))
+                                             (feed-ctrl/load-page! ctx "/feed" !posts !cursor !has-more? !refresh-loading? true))))
                               key)
                :dispose cleanup-refresh-watch]
 
@@ -111,7 +111,7 @@
 
        (pft/PostFrameTrigger
         .onLayout (fn []
-                    (feed-ctrl/load-page! ctx "/feed" !posts !page !has-more? !initial-loading? true)
+                    (feed-ctrl/load-page! ctx "/feed" !posts !cursor !has-more? !initial-loading? true)
                     (-> (db/get-blocked-user-ids) (.then #(reset! !blocked-ids %)))
                     nil)
         .child
@@ -153,7 +153,7 @@
                {:on-refresh (fn []
                               ;; ⚡ Also refresh the blocklist on pull-to-refresh
                               (-> (db/get-blocked-user-ids) (.then #(reset! !blocked-ids %)))
-                              (feed-ctrl/load-page! ctx "/feed" !posts !page !has-more? !refresh-loading? true))
+                              (feed-ctrl/load-page! ctx "/feed" !posts !cursor !has-more? !refresh-loading? true))
                 
                 :scroll-controller scroll-ctrl
                 :background-color (theme/bg ctx)

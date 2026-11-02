@@ -155,6 +155,47 @@
           (.then handle-response)))))
 
 ;; =============================================================================
+;; 3b. Cursor pagination (omit `page`; optional `cursor` + `limit`)
+;; =============================================================================
+
+(defn cursor-url
+  "List URL for keyset pagination. Omit cursor on the first page."
+  [endpoint limit cursor]
+  (let [sep (if (str/includes? endpoint "?") "&" "?")
+        base (str endpoint sep "limit=" limit)
+        cursor-str (str (or cursor ""))]
+    (if (str/blank? cursor-str)
+      base
+      (str base "&cursor=" (dc/Uri.encodeQueryComponent cursor-str)))))
+
+(defn read-list-meta
+  "Returns [has-more? next-cursor] from a cursor list payload.
+   has-more? is false when the server omits a usable next cursor."
+  [res]
+  (let [meta (get res "meta")
+        has-more? (if (get meta "has_more") true false)
+        next-cursor (get meta "next_cursor")
+        next-cursor (when-not (str/blank? (str (or next-cursor "")))
+                      (str next-cursor))]
+    [(and has-more? (some? next-cursor)) next-cursor]))
+
+(defn- cursor-all-step
+  [endpoint limit cursor acc pages-left]
+  (-> (get-req (cursor-url endpoint limit cursor))
+      (.then (fn [res]
+               (let [rows (get res "data" [])
+                     next-acc (vec (concat acc rows))
+                     [more? next-cursor] (read-list-meta res)]
+                 (if (and more? (pos? pages-left) (not= next-cursor cursor))
+                   (cursor-all-step endpoint limit next-cursor next-acc (dec pages-left))
+                   {"data" next-acc}))))))
+
+(defn get-cursor-all
+  "Follows next_cursor until the list is exhausted. Caps at 40 pages."
+  [endpoint limit]
+  (cursor-all-step endpoint limit nil [] 40))
+
+;; =============================================================================
 ;; 4. Multipart Media Uploads (Images / Voice)
 ;; =============================================================================
 

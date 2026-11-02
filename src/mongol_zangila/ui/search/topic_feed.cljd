@@ -24,7 +24,7 @@
         clean-topic-name (str/replace-first safe-topic-name #"^#" "")
 
         !posts (atom [])
-        !page (atom 1)
+        !cursor (atom nil)
         !has-more? (atom true)
         !initial-loading? (atom true)
         !refresh-loading? (atom false)
@@ -48,7 +48,7 @@
                                                           (not @!pagination-loading?)
                                                           (not @!refresh-loading?)
                                                           @!has-more?)
-                                                 (feed-ctrl/load-page! ctx topic-endpoint !posts !page !has-more? !pagination-loading? false)))))
+                                                 (feed-ctrl/load-page! ctx topic-endpoint !posts !cursor !has-more? !pagination-loading? false)))))
                              ctrl)
                :dispose .dispose]
 
@@ -58,9 +58,9 @@
              refresh-loading? !refresh-loading?
              has-more? !has-more?]
 
-     (let [refresh! #(feed-ctrl/load-page! ctx topic-endpoint !posts !page !has-more? !refresh-loading? true)]
+     (let [refresh! #(feed-ctrl/load-page! ctx topic-endpoint !posts !cursor !has-more? !refresh-loading? true)]
        (pft/PostFrameTrigger
-        .onLayout #(feed-ctrl/load-page! ctx topic-endpoint !posts !page !has-more? !initial-loading? true)
+        .onLayout #(feed-ctrl/load-page! ctx topic-endpoint !posts !cursor !has-more? !initial-loading? true)
         .child
         (m/Scaffold
          .backgroundColor (theme/bg ctx)

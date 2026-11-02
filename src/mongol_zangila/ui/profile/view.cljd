@@ -308,7 +308,7 @@
         !refresh-profile? (atom false)
 
         !posts (atom [])
-        !page (atom 1)
+        !cursor (atom nil)
         !has-more? (atom true)
         !pagination-loading-posts? (atom false)
         !refresh-posts? (atom false)]
@@ -326,7 +326,7 @@
                                                           (not @!pagination-loading-posts?)
                                                           (not @!refresh-posts?)
                                                           @!has-more?)
-                                                 (profile-ctrl/load-user-posts! ctx user-id !posts !page !has-more? !pagination-loading-posts? false)))))
+                                                 (profile-ctrl/load-user-posts! ctx user-id !posts !cursor !has-more? !pagination-loading-posts? false)))))
                              ctrl)
                :dispose .dispose
                
@@ -334,7 +334,7 @@
                               (add-watch feed-ctrl/!feed-refresh-trigger key
                                          (fn [_ _ old-val new-val]
                                            (when (> new-val old-val)
-                                             (profile-ctrl/load-user-posts! ctx user-id !posts !page !has-more? !refresh-posts? true))))
+                                             (profile-ctrl/load-user-posts! ctx user-id !posts !cursor !has-more? !refresh-posts? true))))
                               key)
                :dispose cleanup-refresh-watch]
 
@@ -384,7 +384,7 @@
               {:on-refresh (fn []
                              (dc/Future.wait
                               [(profile-ctrl/load-profile! ctx user-id !profile-data !refresh-profile? true)
-                               (profile-ctrl/load-user-posts! ctx user-id !posts !page !has-more? !refresh-posts? true)]))
+                               (profile-ctrl/load-user-posts! ctx user-id !posts !cursor !has-more? !refresh-posts? true)]))
                
                :scroll-controller scroll-ctrl
                :background-color (theme/bg ctx)
@@ -446,7 +446,7 @@
        (pft/PostFrameTrigger
         .onLayout (fn []
                     (profile-ctrl/load-profile! ctx user-id !profile-data !initial-loading-profile?)
-                    (profile-ctrl/load-user-posts! ctx user-id !posts !page !has-more? !pagination-loading-posts? true)
+                    (profile-ctrl/load-user-posts! ctx user-id !posts !cursor !has-more? !pagination-loading-posts? true)
                     nil)
         .child
         

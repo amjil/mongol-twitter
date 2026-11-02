@@ -103,6 +103,7 @@
         !is-blocked? (atom false)
         !loading-more? (atom false)
         !has-more? (atom true)
+        !older-cursor (atom nil)
         current-user-id (get @state/current-user "id")
         cleanup-fn! (fn [_]
                       (when-let [t @!chat-topic]
@@ -119,7 +120,7 @@
                                                           (not @!loading-more?)
                                                           @!has-more?)
                                                  (reset! !loading-more? true)
-                                                 (-> (chat-ctrl/load-older-messages! ctx topic (count @!messages) !messages !has-more?)
+                                                 (-> (chat-ctrl/load-older-messages! ctx topic !messages !older-cursor !has-more?)
                                                      (.whenComplete #(reset! !loading-more? false)))))))
                              sc)
                :dispose .dispose
@@ -132,7 +133,7 @@
 
      (pft/PostFrameTrigger
       .onLayout (fn []
-                  (initialize! ctx !messages !loading? current-user-id !chat-topic)
+                  (initialize! ctx !messages !loading? !older-cursor !has-more? current-user-id !chat-topic)
                   (when partner-id
                     (-> (db/get-blocked-user-ids)
                         (.then #(reset! !is-blocked? (contains? % partner-id)))))

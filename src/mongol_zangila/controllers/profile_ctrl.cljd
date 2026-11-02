@@ -119,8 +119,9 @@
 ;; =============================================================================
 
 (defn load-user-posts!
-  "Fetches a paginated sequence of posts authored by the target user."
-  [ctx target-id !posts !page !has-more? !loading? is-refresh?]
+  "Fetches a cursor-paginated sequence of posts authored by the target user.
+   !cursor holds the opaque next_cursor (nil on the first page)."
+  [ctx target-id !posts !cursor !has-more? !loading? is-refresh?]
   
   (if (or @!loading? (not (or is-refresh? @!has-more?)))
     (dc/Future.value true)
@@ -128,7 +129,6 @@
     (do
       (reset! !loading? true)
       (when is-refresh?
-        (reset! !page 1)
         (reset! !has-more? true))
       
       (let [completer (async/Completer.)
@@ -136,13 +136,13 @@
                         (get @state/current-user "id")
                         target-id)
             endpoint (str "/users/" actual-id "/posts")
-            current-page (if is-refresh? 1 @!page)
-            url (str endpoint "?limit=15&page=" current-page)]
+            request-cursor (when-not is-refresh? @!cursor)
+            url (api/cursor-url endpoint 15 request-cursor)]
         
         (-> (api/get-req url)
             (.then (fn [res]
                      (let [fetched-posts (get res "data" [])
-                           is-full-page? (= (count fetched-posts) 15)]
+                           [more? next-cursor] (api/read-list-meta res)]
                        
                        (if is-refresh?
                          (reset! !posts fetched-posts)
@@ -152,8 +152,8 @@
                                                new-posts (remove #(existing-ids (get % "id")) fetched-posts)]
                                            (vec (concat existing new-posts))))))
                        
-                       (reset! !page (inc current-page))
-                       (reset! !has-more? is-full-page?)
+                       (reset! !cursor next-cursor)
+                       (reset! !has-more? more?)
                        (reset! !loading? false)
                        (.complete completer true))))
             

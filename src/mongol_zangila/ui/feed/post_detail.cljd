@@ -29,22 +29,50 @@
 ;; 1. Core Data Fetching Engine
 ;; =============================================================================
 
+(defn- append-replies [existing fetched]
+  (let [ids (set (map #(get % "id") existing))
+        fresh (remove #(contains? ids (get % "id")) fetched)]
+    (vec (concat existing fresh))))
+
 (defn- fetch-thread!
-  [ctx post-id !post-data !replies !loading? !error? & [is-refresh?]]
-  (when-not is-refresh?
-    (reset! !loading? true))
-  (reset! !error? false)
-  (-> (api/get-req (str "/posts/" post-id "/thread"))
-      (.then (fn [res]
-               (let [data (get res "data" {})]
-                 (reset! !post-data (get data "post"))
-                 (reset! !replies (get data "replies" []))
-                 (reset! !error? false)
-                 (reset! !loading? false))))
-      (.catchError (fn [err]
-                     (reset! !loading? false)
-                     (reset! !error? true)
-                     (toast/error ctx (str "Мэдээлэл татахад алдаа гарлаа: " err))))))
+  "mode is :initial, :refresh, or :more.
+   Replies use cursor pagination; :more appends the next page."
+  [ctx post-id !post-data !replies !cursor !has-more? !loading? !loading-more? !error? mode]
+  (let [append? (= mode :more)
+        cursor (when append? @!cursor)]
+    (cond
+      (and append? (or @!loading-more? (not @!has-more?) (nil? cursor) (= cursor "")))
+      (dc/Future.value nil)
+
+      :else
+      (do
+        (if append?
+          (reset! !loading-more? true)
+          (when (= mode :initial)
+            (reset! !loading? true)))
+        (when-not append?
+          (reset! !has-more? true))
+        (reset! !error? false)
+        (-> (api/get-req (api/cursor-url (str "/posts/" post-id "/thread") 20 cursor))
+            (.then (fn [res]
+                     (let [data (get res "data" {})
+                           page (get data "replies" [])
+                           [more? next-cursor] (api/read-list-meta res)]
+                       (reset! !post-data (get data "post"))
+                       (if append?
+                         (swap! !replies #(append-replies % page))
+                         (reset! !replies page))
+                       (reset! !cursor next-cursor)
+                       (reset! !has-more? more?)
+                       (reset! !error? false)
+                       (reset! !loading? false)
+                       (reset! !loading-more? false))))
+            (.catchError (fn [err]
+                           (reset! !loading? false)
+                           (reset! !loading-more? false)
+                           (when (nil? @!post-data)
+                             (reset! !error? true))
+                           (toast/error ctx (str "Мэдээлэл татахад алдаа гарлаа: " err)))))))))
 
 (defn- cleanup-refresh-watch [k]
   (remove-watch feed-ctrl/!feed-refresh-trigger k))
@@ -59,29 +87,46 @@
   
   (let [!post-data (atom nil)
         !replies (atom [])
+        !cursor (atom nil)
+        !has-more? (atom true)
         !loading? (atom true)
+        !loading-more? (atom false)
         !error? (atom false)]
     
     (f/widget
      :context ctx
      
-     :managed [scroll-ctrl (m/ScrollController.)
+     :managed [scroll-ctrl (let [sc (m/ScrollController.)]
+                             (.addListener sc
+                                           (fn []
+                                             (let [pos (.-position sc)]
+                                               (when (and (>= (.-pixels pos) (- (.-maxScrollExtent pos) 200.0))
+                                                          (not @!loading-more?)
+                                                          (not @!loading?)
+                                                          @!has-more?)
+                                                 (fetch-thread! ctx post-id !post-data !replies !cursor !has-more?
+                                                                !loading? !loading-more? !error? :more)))))
+                             sc)
                :dispose .dispose
                
                sync-watcher (let [key (keyword (str "detail-" post-id "-" (.-millisecondsSinceEpoch (dc/DateTime.now))))]
                               (add-watch feed-ctrl/!feed-refresh-trigger key
                                          (fn [_ _ old-val new-val]
                                            (when (> new-val old-val)
-                                             (fetch-thread! ctx post-id !post-data !replies !loading? !error? true))))
+                                             (fetch-thread! ctx post-id !post-data !replies !cursor !has-more?
+                                                            !loading? !loading-more? !error? :refresh))))
                               key)
                :dispose cleanup-refresh-watch]
                
      :watch [post-data !post-data
              replies !replies
              loading? !loading?
+             loading-more? !loading-more?
+             has-more? !has-more?
              load-error? !error?]
      
-     (let [reload! #(fetch-thread! ctx post-id !post-data !replies !loading? !error? false)]
+     (let [reload! #(fetch-thread! ctx post-id !post-data !replies !cursor !has-more?
+                                   !loading? !loading-more? !error? :initial)]
        (pft/PostFrameTrigger
         .onLayout reload!
         .child
@@ -128,53 +173,60 @@
                                    :subtitle "Энэ нийтлэл устгагдсан эсвэл танд харах эрх алга.")
            
            :else
-           (m/ListView.builder
-            .controller scroll-ctrl
-            .scrollDirection m/Axis.horizontal
-            .physics (m/AlwaysScrollableScrollPhysics.)
-            .itemCount (+ 2 (count replies))
-            .itemBuilder
-            (fn [_ i]
-             (cond
-               ;; 1. The Anchor Post
-               (= i 0)
-               (m/Container
-                .margin post-card/timeline-card-margin
-                .child (post-card/post-card 
-                        ctx post-data 
-                        :is-detail-view true
-                        :on-mutate (fn [mutator] (swap! !post-data mutator))
-                        :on-delete (fn []
-                                     (feed-ctrl/delete-post! ctx post-id nil)
-                                     (nav/pop! ctx))))
-               
-               ;; 2. Visual Separator
-               (= i 1)
-               (m/Container
-                .color (theme/bg ctx)
-                .padding (m/EdgeInsets.symmetric .horizontal 16.0 .vertical 16.0)
-                .alignment m/Alignment.topCenter
-                .child (mgl/MongolText (str (count replies) " сэтгэгдэл")
-                                       .style (m/TextStyle .fontFamily "OyunQaganTig" 
-                                                           .color (theme/text-2 ctx) 
-                                                           .fontWeight m/FontWeight.bold)))
-               
-               ;; 3. The Conversation Thread (Comments)
-               :else
-               (let [idx (- i 2)]
-                 (if (< idx (count replies))
-                   (let [reply-data (nth replies idx)]
-                     (m/Container
-                      .margin post-card/timeline-card-margin
-                      .child (post-card/post-card 
-                              ctx reply-data 
-                              :is-reply true
-                              :root-post-id post-id
-                              :on-mutate (fn [mutator]
-                                           (swap! !replies (fn [rs]
-                                                             (mapv #(if (= (get % "id") (get reply-data "id"))
-                                                                      (mutator %)
-                                                                      %)
-                                                                   rs))))
-                              :on-delete #(feed-ctrl/delete-post! ctx (get reply-data "id") !replies))))
-                   (m/SizedBox.shrink)))))))))))))
+           (let [reply-total (or (get post-data "reply_count") (count replies))
+                 show-more-spinner? (and has-more? loading-more?)]
+             (m/ListView.builder
+              .controller scroll-ctrl
+              .scrollDirection m/Axis.horizontal
+              .physics (m/AlwaysScrollableScrollPhysics.)
+              .itemCount (+ 2 (count replies) (if show-more-spinner? 1 0))
+              .itemBuilder
+              (fn [_ i]
+               (cond
+                 ;; 1. The Anchor Post
+                 (= i 0)
+                 (m/Container
+                  .margin post-card/timeline-card-margin
+                  .child (post-card/post-card 
+                          ctx post-data 
+                          :is-detail-view true
+                          :on-mutate (fn [mutator] (swap! !post-data mutator))
+                          :on-delete (fn []
+                                       (feed-ctrl/delete-post! ctx post-id nil)
+                                       (nav/pop! ctx))))
+                 
+                 ;; 2. Visual Separator
+                 (= i 1)
+                 (m/Container
+                  .color (theme/bg ctx)
+                  .padding (m/EdgeInsets.symmetric .horizontal 16.0 .vertical 16.0)
+                  .alignment m/Alignment.topCenter
+                  .child (mgl/MongolText (str reply-total " сэтгэгдэл")
+                                         .style (m/TextStyle .fontFamily "OyunQaganTig" 
+                                                             .color (theme/text-2 ctx) 
+                                                             .fontWeight m/FontWeight.bold)))
+
+                 (and show-more-spinner? (= i (+ 2 (count replies))))
+                 (m/Padding
+                  .padding (m/EdgeInsets.symmetric .horizontal 32.0)
+                  .child (m/Center .child (m/CircularProgressIndicator .strokeWidth 2.0 .color theme/brand-blue)))
+                 
+                 ;; 3. The Conversation Thread (Comments)
+                 :else
+                 (let [idx (- i 2)]
+                   (if (< idx (count replies))
+                     (let [reply-data (nth replies idx)]
+                       (m/Container
+                        .margin post-card/timeline-card-margin
+                        .child (post-card/post-card 
+                                ctx reply-data 
+                                :is-reply true
+                                :root-post-id post-id
+                                :on-mutate (fn [mutator]
+                                             (swap! !replies (fn [rs]
+                                                               (mapv #(if (= (get % "id") (get reply-data "id"))
+                                                                        (mutator %)
+                                                                        %)
+                                                                     rs))))
+                                :on-delete #(feed-ctrl/delete-post! ctx (get reply-data "id") !replies))))
+                     (m/SizedBox.shrink))))))))))))))

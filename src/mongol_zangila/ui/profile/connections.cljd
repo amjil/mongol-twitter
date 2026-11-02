@@ -33,8 +33,8 @@
   
   (reset! !loading? true)
   
-  (let [fetch-followers (api/get-req (str "/users/" target-user-id "/followers"))
-        fetch-following (api/get-req (str "/users/" target-user-id "/following"))]
+  (let [fetch-followers (api/get-cursor-all (str "/users/" target-user-id "/followers") 50)
+        fetch-following (api/get-cursor-all (str "/users/" target-user-id "/following") 50)]
     
     (-> (dc/Future.wait [fetch-followers fetch-following])
         (.then (fn [results]

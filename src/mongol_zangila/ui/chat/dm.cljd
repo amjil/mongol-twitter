@@ -11,8 +11,9 @@
     :info-route (when partner-id "/chat/dm-info")
     :info-args {:thread-id thread-id :partner-id partner-id :initial-name partner-name}
     :topic (chat-ctrl/thread-topic thread-id)
-    :initialize! (fn [ctx !messages !loading? current-user-id !chat-topic]
-                   (chat-ctrl/initialize-dm-thread! ctx thread-id !messages !loading? current-user-id !chat-topic))
+    :initialize! (fn [ctx !messages !loading? !older-cursor !has-more? current-user-id !chat-topic]
+                   (chat-ctrl/initialize-dm-thread! ctx thread-id !messages !loading? !older-cursor !has-more?
+                                                    current-user-id !chat-topic))
     :retry-id thread-id
     :partner-id partner-id
     :partner-name partner-name

@@ -129,7 +129,7 @@
 
 (defn load-inbox!
   "Fetches the user's active direct messages and group chats.
-   The backend returns the full inbox in a single response (no pagination).
+   Walks cursor pages so the inbox still arrives as one list.
    Returns a Future for pull-to-refresh integration."
   [ctx !inbox-items !loading? is-refresh?]
   (let [completer (async/Completer.)]
@@ -137,7 +137,7 @@
       (do
         (when-not is-refresh?
           (reset! !loading? true))
-        (-> (api/get-req "/chat/inbox")
+        (-> (api/get-cursor-all "/chat/inbox" 50)
             (.then (fn [res]
                      (let [fetched-threads (mapv clj-map (get res "data" []))]
                        (reset! !inbox-items (inbox-helpers/items-to-threads-map fetched-threads))
@@ -184,11 +184,14 @@
 
 (defn load-thread-messages!
   "Hydrates the message stream by blending remote server data with local SQLite caches."
-  [ctx topic !messages !loading? api-path]
+  [ctx topic !messages !loading? !older-cursor !has-more? api-path]
   (reset! !loading? true)
-  (-> (api/get-req api-path)
+  (-> (api/get-req (api/cursor-url api-path 50 nil))
       (.then (fn [res]
-               (let [server-data (get res "data" [])]
+               (let [server-data (get res "data" [])
+                     [more? next-cursor] (api/read-list-meta res)]
+                 (reset! !older-cursor next-cursor)
+                 (reset! !has-more? more?)
                  (cache-messages-if-enabled! topic server-data)
                  (if @storage/!offline-mode?
                    (-> (db/get-cached-messages topic)
@@ -238,7 +241,7 @@
 
 (defn initialize-dm-thread!
   "Ignites the Direct Message room."
-  [ctx thread-id !messages !loading? current-user-id !chat-topic]
+  [ctx thread-id !messages !loading? !older-cursor !has-more? current-user-id !chat-topic]
   (let [topic (thread-topic thread-id)
         api-path (str "/chat/threads/" thread-id "/messages")]
     (reset! !chat-topic topic)
@@ -246,12 +249,12 @@
     
     (mark-thread-read! thread-id)
     
-    (load-thread-messages! ctx topic !messages !loading? api-path)
+    (load-thread-messages! ctx topic !messages !loading? !older-cursor !has-more? api-path)
     (bind-realtime-listener! topic !messages)))
 
 (defn initialize-group-thread!
   "Ignites the Group Chat room."
-  [ctx group-id !messages !loading? current-user-id !chat-topic]
+  [ctx group-id !messages !loading? !older-cursor !has-more? current-user-id !chat-topic]
   (let [topic (group-topic group-id)
         api-path (str "/chat/groups/" group-id "/messages")]
     (reset! !chat-topic topic)
@@ -259,7 +262,7 @@
     
     (mark-group-read! group-id)
     
-    (load-thread-messages! ctx topic !messages !loading? api-path)
+    (load-thread-messages! ctx topic !messages !loading? !older-cursor !has-more? api-path)
     (bind-realtime-listener! topic !messages)))
 
 ;; =============================================================================
@@ -478,52 +481,46 @@
     (str/starts-with? topic "group:") (str "/chat/groups/" (subs topic 6) "/messages")
     :else nil))
 
-(defn- oldest-server-message-id [messages]
-  (->> messages
-       reverse
-       (map #(get % "id"))
-       (remove #(or (nil? %) (str/starts-with? (str %) "temp-")))
-       first))
-
 (defn load-older-messages!
-  "Fetches the next page of historical messages from the server, falling back to local Drift."
-  [ctx topic current-offset !messages !has-more?]
+  "Fetches older messages via cursor; offline fallback uses local Drift offset."
+  [ctx topic !messages !older-cursor !has-more?]
   (let [limit 50
         api-path (topic->messages-path topic)
-        before-id (oldest-server-message-id @!messages)
-        apply-page! (fn [older-msgs]
-                      (if (empty? older-msgs)
-                        (reset! !has-more? false)
-                        (do
-                          (cache-messages-if-enabled! topic older-msgs)
-                          (swap! !messages
-                                 (fn [msgs]
-                                   (let [existing (set (map #(get % "id") msgs))
-                                         fresh (->> older-msgs
-                                                    (remove #(contains? existing (get % "id")))
-                                                    (map clj-map))]
-                                     (vec (concat msgs fresh)))))
-                          (when (< (count older-msgs) limit)
-                            (reset! !has-more? false)))))]
+        cursor @!older-cursor
+        apply-res! (fn [res]
+                     (let [older-msgs (get res "data" [])
+                           [more? next-cursor] (api/read-list-meta res)]
+                       (if (empty? older-msgs)
+                         (reset! !has-more? false)
+                         (do
+                           (cache-messages-if-enabled! topic older-msgs)
+                           (swap! !messages
+                                  (fn [msgs]
+                                    (let [existing (set (map #(get % "id") msgs))
+                                          fresh (->> older-msgs
+                                                     (remove #(contains? existing (get % "id")))
+                                                     (map clj-map))]
+                                      (vec (concat msgs fresh)))))
+                           (reset! !older-cursor next-cursor)
+                           (reset! !has-more? more?)))))]
     (cond
-      (nil? before-id)
-      (do (reset! !has-more? false)
-          (dc/Future.value nil))
+      (or (not @!has-more?) (nil? cursor) (= cursor ""))
+      (dc/Future.value nil)
 
       (and api-path (not= @state/network-status :offline))
-      (-> (api/get-req (str api-path "?before=" before-id "&limit=" limit))
-          (.then (fn [res] (apply-page! (get res "data" []))))
+      (-> (api/get-req (api/cursor-url api-path limit cursor))
+          (.then apply-res!)
           (.catchError (fn [err]
                          (dc/print (str "Failed to load older messages: " err))
                          (if @storage/!offline-mode?
-                           (-> (db/fetch-thread-messages topic limit current-offset)
-                               (.then apply-page!))
+                           (-> (db/fetch-thread-messages topic limit (count @!messages))
+                               (.then (fn [rows] (apply-res! {"data" rows "meta" {"has_more" false}}))))
                            (dc/Future.value nil)))))
 
       :else
       (if @storage/!offline-mode?
-        (-> (db/fetch-thread-messages topic limit current-offset)
-            (.then apply-page!)
+        (-> (db/fetch-thread-messages topic limit (count @!messages))
+            (.then (fn [rows] (apply-res! {"data" rows "meta" {"has_more" false}})))
             (.catchError (fn [err]
                            (dc/print (str "Failed to load older messages: " err)))))
         (dc/Future.value nil)))))

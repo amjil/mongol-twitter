@@ -108,8 +108,8 @@
       (toast/error ctx "Хэрэглэгчийн мэдээлэл олдсонгүй."))
     (do
       (reset! !loading? true)
-      (-> (dc/Future.wait [(api/get-req "/chat/inbox")
-                           (api/get-req (str "/users/" self-id "/following"))
+      (-> (dc/Future.wait [(api/get-cursor-all "/chat/inbox" 50)
+                           (api/get-cursor-all (str "/users/" self-id "/following") 50)
                            (db/get-blocked-user-ids)])
           (.then (fn [results]
                    (let [inbox-res (first results)

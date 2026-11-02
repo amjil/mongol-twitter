@@ -8,34 +8,34 @@
    [components.toast :as toast]))
 
 (defn load-notifications!
-  "Fetches paginated notifications.
+  "Fetches cursor-paginated notifications.
+   !cursor holds the opaque next_cursor (nil on the first page).
    Completes with true on success and false on failure so callers can
    skip mark-all-read! and show an error state."
-  [ctx !notifications !page !has-more? !loading-state? is-refresh?]
+  [ctx !notifications !cursor !has-more? !loading-state? is-refresh?]
   (when is-refresh?
-    (reset! !page 1)
     (reset! !has-more? true))
 
   (reset! !loading-state? true)
 
-  (-> (api/get-req (str "/notifications?page=" @!page))
-      (.then (fn [res]
-               (let [new-notes (try (vec (get res "data" []))
-                                    (catch dc/dynamic _ []))]
-                 (if is-refresh?
-                   (reset! !notifications new-notes)
-                   (swap! !notifications #(vec (concat % new-notes))))
+  (let [request-cursor (when-not is-refresh? @!cursor)]
+    (-> (api/get-req (api/cursor-url "/notifications" 20 request-cursor))
+        (.then (fn [res]
+                 (let [new-notes (try (vec (get res "data" []))
+                                      (catch dc/dynamic _ []))
+                       [more? next-cursor] (api/read-list-meta res)]
+                   (if is-refresh?
+                     (reset! !notifications new-notes)
+                     (swap! !notifications #(vec (concat % new-notes))))
 
-                 (if (< (count new-notes) 20)
-                   (reset! !has-more? false)
-                   (swap! !page inc))
-
-                 (reset! !loading-state? false)
-                 true)))
-      (.catchError (fn [err]
-                     (reset! !loading-state? false)
-                     (toast/error ctx (str "Мэдэгдэл татахад алдаа гарлаа: " err) :fade)
-                     false))))
+                   (reset! !cursor next-cursor)
+                   (reset! !has-more? more?)
+                   (reset! !loading-state? false)
+                   true)))
+        (.catchError (fn [err]
+                       (reset! !loading-state? false)
+                       (toast/error ctx (str "Мэдэгдэл татахад алдаа гарлаа: " err) :fade)
+                       false)))))
 
 (defn mark-all-read!
   "⚡ Optimistically flushes the global unread count to 0 instantly,

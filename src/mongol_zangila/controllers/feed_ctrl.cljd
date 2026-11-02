@@ -1,13 +1,11 @@
 (ns mongol-zangila.controllers.feed-ctrl
   "Domain controller for social feed and topic timelines.
    Home feed uses GET /feed (global timeline, cold-start MVP — not following-only).
-   Manages page-based pagination, data fetching, and network status synchronization."
+   Manages cursor pagination, data fetching, and network status synchronization."
   (:require
    ["dart:async" :as async]
    ["dart:core" :as dc]
    ["dart:math" :as math]
-   [clojure.string :as str]
-   
    [mongol-zangila.infrastructure.api :as api]
    [mongol-zangila.infrastructure.db :as db]
    [mongol-zangila.state :as state]
@@ -29,8 +27,9 @@
 ;; 2. Feed Fetching Logic
 ;; =============================================================================
 
-(defn load-page! 
-  [ctx endpoint !posts !page !has-more? !loading? is-refresh?]
+(defn load-page!
+  "!cursor holds the opaque next_cursor (nil on the first page)."
+  [ctx endpoint !posts !cursor !has-more? !loading? is-refresh?]
   (cond
     ;; Screens start !initial-loading? as true so the first frame can spin.
     ;; Only skip when a request is actually in flight (we already have posts,
@@ -48,18 +47,16 @@
     (do
       (reset! !loading? true)
       (when is-refresh?
-        (reset! !page 1)
         (reset! !has-more? true))
       
       (let [completer (async/Completer.)
-            current-page (if is-refresh? 1 @!page)
-            query-sep (if (str/includes? endpoint "?") "&" "?")
-            url (str endpoint query-sep "limit=15&page=" current-page)]
+            request-cursor (when-not is-refresh? @!cursor)
+            url (api/cursor-url endpoint 15 request-cursor)]
         
         (let [commit-page!
               (fn [res blocked-ids]
                 (let [fetched-posts (get res "data" [])
-                      is-full-page? (= (count fetched-posts) 15)
+                      [more? next-cursor] (api/read-list-meta res)
                       blocked (or blocked-ids #{})
                       clean-posts (remove (fn [p]
                                             (let [author-id (get-in p ["author" "id"])]
@@ -72,8 +69,8 @@
                                     (let [existing-ids (set (map #(get % "id") existing))
                                           new-posts (remove #(existing-ids (get % "id")) clean-posts)]
                                       (vec (concat existing new-posts))))))
-                  (reset! !page (inc current-page))
-                  (reset! !has-more? is-full-page?)
+                  (reset! !cursor next-cursor)
+                  (reset! !has-more? more?)
                   (reset! !loading? false)
                   (.complete completer true)))]
           (-> (api/get-req url)

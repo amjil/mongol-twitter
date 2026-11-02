@@ -158,7 +158,7 @@
   (let [!notifications (atom [])
         !loading? (atom true)
         !error? (atom false)
-        !page (atom 1)
+        !cursor (atom nil)
         !has-more? (atom true)
         !loading-more? (atom false)
         !refresh-loading? (atom false)]
@@ -174,7 +174,7 @@
                                                           (not @!loading-more?)
                                                           (not @!refresh-loading?)
                                                           @!has-more?)
-                                                 (-> (note-ctrl/load-notifications! ctx !notifications !page !has-more? !loading-more? false)
+                                                 (-> (note-ctrl/load-notifications! ctx !notifications !cursor !has-more? !loading-more? false)
                                                      (.then (fn [ok] (apply-load-result! ok false !error? !notifications))))))))
                              sc)
                :dispose .dispose]
@@ -187,7 +187,7 @@
 
      (let [reload! (fn [!loading-atom]
                      (reset! !error? false)
-                     (-> (note-ctrl/load-notifications! ctx !notifications !page !has-more? !loading-atom true)
+                     (-> (note-ctrl/load-notifications! ctx !notifications !cursor !has-more? !loading-atom true)
                          (.then (fn [ok] (apply-load-result! ok true !error? !notifications)))))]
 
        (pft/PostFrameTrigger

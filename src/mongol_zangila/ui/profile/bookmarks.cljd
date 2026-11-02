@@ -32,7 +32,7 @@
    ⚡ Upgraded: Integrates generic feed pagination and horizontal infinite scroll."
   []
   (let [!posts (atom [])
-        !page (atom 1)
+        !cursor (atom nil)
         !has-more? (atom true)
         !initial-loading? (atom true)
         !refresh-loading? (atom false)
@@ -53,7 +53,7 @@
                                                           (not @!pagination-loading?)
                                                           (not @!refresh-loading?)
                                                           @!has-more?)
-                                                 (feed-ctrl/load-page! ctx endpoint !posts !page !has-more? !pagination-loading? false)))))
+                                                 (feed-ctrl/load-page! ctx endpoint !posts !cursor !has-more? !pagination-loading? false)))))
                              ctrl)
                :dispose .dispose]
      
@@ -64,7 +64,7 @@
      
      (pft/PostFrameTrigger
       .onLayout (fn []
-                  (feed-ctrl/load-page! ctx endpoint !posts !page !has-more? !initial-loading? true))
+                  (feed-ctrl/load-page! ctx endpoint !posts !cursor !has-more? !initial-loading? true))
       .child
       (m/Scaffold
        .backgroundColor (theme/bg ctx)
@@ -84,7 +84,7 @@
                                            .color (theme/text ctx)))
         .actions [(m/IconButton
                    .icon (m/Icon m/Icons.refresh_rounded .color theme/brand-blue)
-                   .onPressed #(feed-ctrl/load-page! ctx endpoint !posts !page !has-more? !refresh-loading? true))])
+                   .onPressed #(feed-ctrl/load-page! ctx endpoint !posts !cursor !has-more? !refresh-loading? true))])
        
        ;; --- Main Body: The Bookmarks Feed ---
        .body
